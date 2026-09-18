@@ -111,11 +111,11 @@ O gateway SHALL permitir recuperar uma única troca pelo seu identificador, com 
 
 ### Requirement: Armazenamento plugável do histórico
 
-O gateway SHALL armazenar o histórico no backend selecionado por variável de ambiente, entre memória, arquivo NDJSON e SQLite local. Sem seleção explícita, o gateway MUST usar memória. O comportamento observável de registro, consulta e navegação MUST ser o mesmo em todos os backends. Quando o backend selecionado não pode ser inicializado, o gateway MUST recusar iniciar com uma mensagem que identifique o backend e a causa, em vez de silenciosamente cair para outro.
+O gateway SHALL armazenar o histórico no backend selecionado pela configuração — variável de ambiente, `gateway.json` ou API de administração —, entre memória, arquivo NDJSON e SQLite local. Sem seleção explícita, o gateway MUST usar memória. O comportamento observável de registro, consulta e navegação MUST ser o mesmo em todos os backends. Quando o backend selecionado não pode ser inicializado, o gateway MUST recusar iniciar com uma mensagem que identifique o backend e a causa, em vez de silenciosamente cair para outro.
 
 #### Scenario: Memória é o padrão
 
-- **WHEN** o gateway inicia sem variável de ambiente selecionando o backend
+- **WHEN** o gateway inicia sem nenhuma configuração selecionando o backend
 - **THEN** o histórico é mantido em memória, com capacidade limitada e descarte das trocas mais antigas ao atingi-la
 
 #### Scenario: Histórico sobrevive ao reinício em backend persistente

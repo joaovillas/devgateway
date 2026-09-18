@@ -6,7 +6,7 @@ Mantém a configuração do processo em `gateway.json` e cada rota em seu própr
 
 ### Requirement: Configuração do processo em gateway.json
 
-O gateway SHALL carregar de `gateway.json` a configuração do processo: portas de tráfego e de administração, seed, backend e parâmetros de armazenamento do histórico, exposição e registro do histórico, limites de captura e o diretório de rotas. Todas as chaves MUST estar em inglês. Quando o arquivo não existe, o gateway MUST iniciar com os valores padrão e registrar um aviso identificando o caminho procurado.
+O gateway SHALL carregar de `gateway.json` a configuração do processo: portas de tráfego e de administração, seed, backend e parâmetros de armazenamento do histórico, exposição e registro do histórico, limites de captura, modo aprendizado e o diretório de rotas. Todas as chaves MUST estar em inglês. Quando o arquivo não existe, o gateway MUST iniciar com os valores padrão e registrar um aviso identificando o caminho procurado.
 
 #### Scenario: Configuração do processo carregada
 
@@ -106,7 +106,7 @@ O gateway SHALL aceitar variáveis de ambiente para a configuração do processo
 
 ### Requirement: Recarga sem reinício
 
-O gateway SHALL recarregar a configuração sob comando, sem encerrar o processo nem derrubar conexões em andamento. Quando a configuração recarregada é inválida, o gateway MUST preservar a configuração anterior em vigor e reportar o erro. Alterações de porta MUST NOT ser aplicadas por recarga, e a tentativa MUST ser reportada como exigindo reinício.
+O gateway SHALL aplicar qualquer alteração de configuração — recarga dos arquivos ou alteração pela API — sem encerrar o processo nem derrubar conexões em andamento, inclusive alterações de porta e de backend do histórico. Quando a configuração nova é inválida ou não pode ser aplicada, o gateway MUST preservar a configuração anterior em vigor e reportar o erro.
 
 #### Scenario: Recarga aplica a nova configuração
 
@@ -123,14 +123,29 @@ O gateway SHALL recarregar a configuração sob comando, sem encerrar o processo
 - **WHEN** há requisições em curso e uma recarga válida é aplicada
 - **THEN** as requisições em curso são concluídas sob a configuração que as iniciou
 
-#### Scenario: Mudança de porta exige reinício
+#### Scenario: Porta trocada a quente
 
-- **WHEN** `gateway.json` passa a declarar outra porta de tráfego e a recarga é solicitada
-- **THEN** o gateway mantém a porta atual e informa que a alteração exige reinício
+- **WHEN** a porta de tráfego é alterada para uma porta livre com requisições em curso na porta atual
+- **THEN** o gateway passa a atender na porta nova, deixa de aceitar conexões na antiga e conclui as requisições em curso, sem reiniciar o processo
+
+#### Scenario: Porta nova indisponível preserva a atual
+
+- **WHEN** a porta de tráfego é alterada para uma porta já ocupada
+- **THEN** a alteração é recusada informando a porta e a causa, e o gateway segue atendendo na porta atual
+
+#### Scenario: Backend do histórico trocado a quente
+
+- **WHEN** o backend do histórico é alterado de memória para SQLite com o gateway em execução
+- **THEN** o SQLite é inicializado antes da troca, as trocas seguintes passam a ser registradas nele e o histórico anterior não é migrado
+
+#### Scenario: Backend novo indisponível preserva o atual
+
+- **WHEN** o backend do histórico é alterado para um que não pode ser inicializado
+- **THEN** a alteração é recusada informando o backend e a causa, e o backend atual segue em uso
 
 ### Requirement: API de administração
 
-O gateway SHALL expor uma API de administração que permita consultar e alterar rotas e overrides, consultar a configuração efetiva do processo e consultar o histórico de tráfego. Uma alteração de rota MUST reescrever apenas o documento daquela rota, deixando os demais intactos. Escritas concorrentes MUST ser serializadas de modo que nenhuma seja perdida, e a escrita de cada documento MUST ser atômica.
+O gateway SHALL expor uma API de administração que permita consultar e alterar tudo o que `gateway.json` e os documentos de rota configuram — rotas, overrides e configuração do processo — e consultar o histórico de tráfego. Uma alteração de rota MUST reescrever apenas o documento daquela rota, deixando os demais intactos, e uma alteração do processo MUST ser gravada em `gateway.json`. Um valor definido por variável de ambiente MUST NOT ser alterável pela API, e a recusa MUST nomear a variável responsável. Escritas concorrentes MUST ser serializadas de modo que nenhuma seja perdida, e a escrita de cada documento MUST ser atômica.
 
 #### Scenario: Alteração atinge apenas o documento da rota
 
@@ -146,6 +161,16 @@ O gateway SHALL expor uma API de administração que permita consultar e alterar
 
 - **WHEN** duas alterações em rotas diferentes são submetidas simultaneamente
 - **THEN** ambas são aplicadas e os dois documentos refletem as alterações
+
+#### Scenario: Configuração do processo alterada pela API
+
+- **WHEN** o seed é alterado pela API
+- **THEN** o novo seed passa a valer sem reinício e `gateway.json` passa a declará-lo
+
+#### Scenario: Valor do ambiente é travado
+
+- **WHEN** a porta de tráfego vem de variável de ambiente e a API recebe uma alteração dessa porta
+- **THEN** a alteração é recusada nomeando a variável de ambiente responsável, e `gateway.json` não é modificado
 
 #### Scenario: Alteração inválida é recusada sem tocar o disco
 

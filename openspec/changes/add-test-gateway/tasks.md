@@ -15,6 +15,7 @@
 - [x] 2.6 Implementar a precedência ambiente sobre arquivo sobre padrão e a consulta de origem efetiva de cada valor, e verificar pelos três cenários da requirement correspondente
 - [x] 2.7 Implementar o snapshot imutável atrás de `atomic.Pointer` com índices pré-computados, e verificar por teste de concorrência com `-race` que leituras simultâneas à troca nunca observam estado parcial
 - [x] 2.8 Implementar a inicialização com portas separadas e recusa de portas iguais, e verificar pelos dois cenários da requirement de separação de portas e pelo cenário "Portas iguais" da validação
+- [ ] 2.9 Acrescentar ao documento de rota o campo `enabled` do override (padrão ligado), o bloco `source` de origem (aprendido ou derivado, troca de origem, corpo incompleto) e a troca de `preserveHost` por `rewriteHost`, e ao `gateway.json` a chave `learning.enabled` com variável de ambiente, e verificar por teste de ida e volta e pelos cenários de validação
 
 ## 3. Roteamento reverso
 
@@ -23,6 +24,7 @@
 - [x] 3.3 Implementar os cabeçalhos de encaminhamento com acúmulo de `X-Forwarded-For` e preservação opcional do `Host`, e verificar pelos três cenários da requirement de encaminhamento de cabeçalhos
 - [x] 3.4 Implementar as respostas de falha do upstream (`502` sem conexão, `504` por tempo limite, `404` sem rota) com corpo diagnóstico, e verificar pelos cenários correspondentes
 - [x] 3.5 Verificar a transparência do tráfego com um teste de ponta a ponta que exercita método e corpo preservados, status repassado e resposta `text/event-stream` chegando incrementalmente
+- [ ] 3.6 Tornar o encaminhamento transparente — `Host` original por padrão com `rewriteHost` opcional, `X-Forwarded-Host` e `X-Forwarded-Proto` preservados quando já presentes, cabeçalhos arbitrários e repetidos repassados — e acrescentar o cabeçalho `X-Gateway` na ida e na volta, e verificar pelos seis cenários da requirement de encaminhamento de cabeçalhos e pelos cenários da requirement de identificação do gateway
 
 ## 4. Armazenamento do histórico
 
@@ -31,6 +33,7 @@
 - [ ] 4.3 Implementar o backend NDJSON com escrita append e leitura indexada, e verificar pela bateria de contrato e pelo cenário de sobrevivência ao reinício
 - [ ] 4.4 Implementar o backend SQLite com driver puro em Go, e verificar pela bateria de contrato, pelo cenário de sobrevivência ao reinício e por `go build` com `CGO_ENABLED=0` concluindo
 - [ ] 4.5 Implementar a seleção do backend por variável de ambiente com memória como padrão e recusa de iniciar quando o backend falha, e verificar pelos cenários "Memória é o padrão" e "Backend indisponível impede a inicialização"
+- [ ] 4.6 Implementar a troca a quente do backend do histórico (inicializa o novo, troca, fecha o antigo, sem migrar), e verificar pelos cenários "Backend do histórico trocado a quente" e "Backend novo indisponível preserva o atual"
 
 ## 5. Captura de tráfego
 
@@ -52,17 +55,21 @@
 - [ ] 6.8 Implementar a queda de conexão via `http.Hijacker` com degradação documentada em HTTP/2, e verificar pelo cenário "Queda encerra sem resposta" e pelo cenário de queda da spec `traffic-capture`
 - [ ] 6.9 Implementar a expiração por tempo de vida e por contagem de aplicações, com ambos consultáveis, e verificar pelos quatro cenários da requirement de expiração
 - [ ] 6.10 Implementar o cabeçalho de identificação da intervenção e a marcação na troca capturada, e verificar pelos dois cenários da requirement de identificação e pelos três cenários da requirement de distinção da spec `traffic-capture`
+- [ ] 6.11 Implementar o liga/desliga do override, com desligados fora da seleção e da precedência, e verificar pelos três cenários da requirement de override ligado e desligado
+- [ ] 6.12 Implementar o modo aprendizado — detecção de método e path desconhecidos após resposta do upstream, geração do override desligado com resposta completa e origem, gravação atômica do documento e reconstrução do snapshot fora do caminho da requisição — e verificar pelos seis cenários da requirement de aprendizado de endpoints
 
 ## 7. API de administração
 
 - [ ] 7.1 Implementar os endpoints de leitura e escrita de rotas e overrides, e verificar por testes de API que cada recurso é criado, alterado, lido e removido
 - [ ] 7.2 Implementar a persistência por documento com escrita atômica e mutex de escrita, e verificar pelos quatro cenários da requirement de API de administração, incluindo a comparação byte a byte dos documentos não tocados
-- [ ] 7.3 Implementar a recarga sob comando preservando a configuração anterior em caso de erro e recusando alterar portas, e verificar pelos quatro cenários da requirement de recarga sem reinício
+- [ ] 7.3 Implementar a recarga sob comando preservando a configuração anterior em caso de erro, e verificar pelos cenários de recarga, requisições em curso e recarga inválida da requirement de recarga sem reinício
 - [ ] 7.4 Implementar os endpoints do histórico — listagem com filtros, leitura por identificador, navegação por cursor e limpeza — e verificar por teste de API que cada um respeita a configuração de exposição
 - [ ] 7.5 Implementar o endpoint de configuração efetiva com a origem de cada valor, e verificar pelo cenário "Origem efetiva consultável"
 - [ ] 7.6 Implementar a derivação de override a partir de uma troca capturada, incluindo a recusa para troca inexistente e o tratamento de corpo truncado, e verificar pelos três cenários da requirement de derivação
 - [ ] 7.7 Implementar o fluxo SSE de trocas novas com agregação de no máximo uma atualização por segundo, e verificar por teste que um cliente conectado recebe as trocas em ordem e que a conexão sobrevive a períodos sem tráfego
 - [ ] 7.8 Escrever a referência da API e verificar que cada operação das specs tem um exemplo executável por `curl`
+- [ ] 7.9 Implementar os endpoints de leitura e escrita da configuração do processo com gravação em `gateway.json`, recusa nomeando a variável para valores do ambiente e liga/desliga do modo aprendizado, e verificar pelos cenários "Configuração do processo alterada pela API" e "Valor do ambiente é travado"
+- [ ] 7.10 Implementar o supervisor de listeners com troca a quente das portas de tráfego e administração, e verificar pelos cenários "Porta trocada a quente" e "Porta nova indisponível preserva a atual"
 
 ## 8. Interface web
 
@@ -74,9 +81,11 @@
 - [ ] 8.6 Implementar a criação de override a partir de uma troca exibida, com revisão antes de valer, e verificar pelos dois cenários da requirement correspondente
 - [ ] 8.7 Implementar o consumo do fluxo SSE com sinalização de desconexão e reconexão automática, e verificar pelos dois cenários da requirement de atualização em tempo real
 - [ ] 8.8 Implementar o aviso de perda de comentários antes da primeira escrita num documento de rota que os contenha, e verificar que o aviso aparece uma vez e não reaparece após a confirmação
+- [ ] 8.9 Implementar a edição com paridade — controles de todos os campos de rota, override e processo com o documento YAML ou JSON ao lado, atualizado ao vivo e editável, e valores do ambiente travados — e verificar pelos quatro cenários da requirement de edição com paridade
+- [ ] 8.10 Implementar o liga/desliga do override e do modo aprendizado, a distinção dos overrides aprendidos e o acesso à troca de origem, e verificar pelos três cenários da requirement correspondente
 
 ## 9. Distribuição e documentação
 
 - [ ] 9.1 Produzir binários por plataforma e a imagem Docker no mesmo build que embute o frontend, e verificar que a imagem sobe e atende nas duas portas
-- [ ] 9.2 Escrever o README com instalação, `gateway.json` e documento de rota de exemplo, as variáveis de ambiente, o critério dos dois formatos, e os limites assumidos (perda de comentários na escrita, determinismo por ordem de chegada, queda de conexão em HTTP/2), e verificar que um leitor consegue subir o gateway seguindo apenas o documento
-- [ ] 9.3 Montar um ambiente de exemplo com dois serviços de brinquedo e documentos de rota prontos, e verificar de ponta a ponta que passthrough, override forçado, override probabilístico, latência em intervalo e waterfall funcionam sobre ele
+- [ ] 9.2 Escrever o README com instalação, `gateway.json` e documento de rota de exemplo, as variáveis de ambiente, o critério dos dois formatos, e os limites assumidos (perda de comentários na escrita e no aprendizado, determinismo por ordem de chegada, queda de conexão em HTTP/2, aprendizado de paths com identificadores, troca de backend sem migração), e verificar que um leitor consegue subir o gateway seguindo apenas o documento
+- [ ] 9.3 Montar um ambiente de exemplo com dois serviços de brinquedo e documentos de rota prontos, e verificar de ponta a ponta que passthrough, override forçado, override probabilístico, latência em intervalo, waterfall, modo aprendizado e troca de porta a quente funcionam sobre ele

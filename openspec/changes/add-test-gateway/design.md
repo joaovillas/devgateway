@@ -49,13 +49,13 @@ Toda requisição na porta de tráfego percorre exatamente esta sequência:
 
 1. Resolver a rota (host, depois padrão de path mais específico).
 2. Abrir o registro de captura e iniciar a cronometragem.
-3. Resolver o override aplicável: entre os que selecionam a requisição, o mais específico.
+3. Resolver o override aplicável: entre os ligados que selecionam a requisição, o mais específico.
 4. Se há override, sortear em ordem fixa — aplicação, queda, atraso — de uma única fonte de aleatoriedade.
 5. Se a aplicação não foi sorteada: seguir para o upstream como se o override não existisse.
 6. Se houve queda: encerrar a conexão e fechar o registro.
 7. Se o override declara `respond`: sintetizar a resposta. Caso contrário, encaminhar ao upstream.
 8. Aplicar o atraso sorteado **depois** de a resposta estar pronta e antes de escrevê-la ao cliente.
-9. Fechar o registro com os tempos decompostos.
+9. Fechar o registro com os tempos decompostos e, com o modo aprendizado ligado, aprender o endpoint fora do caminho da requisição.
 
 *Por quê o atraso no passo 8 e não antes do upstream:* atrasar depois mantém o tempo real do upstream e o tempo injetado como grandezas independentes e diretamente mensuráveis. Atrasar antes obrigaria a subtrair um valor do outro para exibir o waterfall, e a subtração erra sempre que o upstream oscila. O custo é que a latência total passa a ser a soma, e não a máxima — que é justamente o comportamento esperado por quem pede "essa rota demora 2s a mais".
 
@@ -131,11 +131,29 @@ O frontend é React + TypeScript construído com Vite para `web/dist`, embutido 
 
 *Por quê o placeholder versionado:* sem ele, `go build` quebra em qualquer máquina que não tenha rodado o build do frontend antes — incluindo CI e a máquina de quem só quer mexer no backend.
 
-### Duas portas, sem paths reservados
+### Duas portas, sem paths reservados, trocadas a quente
 
 Tráfego e administração ficam em portas distintas (padrão `8080` e `8081`), e o processo recusa iniciar se forem iguais.
 
 *Por quê:* qualquer path reservado na porta de tráfego seria um prefixo que o usuário não poderia usar nas próprias rotas. É a mesma separação que o Smocker adota, e pelo mesmo motivo.
+
+*Troca a quente:* os listeners ficam num supervisor, fora do snapshot. Mudar uma porta abre o listener novo primeiro; só se ele abrir o servidor antigo recebe `Shutdown`, que para de aceitar conexões e deixa as requisições em curso terminarem. Se o listener novo falhar, nada muda e o erro é reportado. A troca do backend do histórico segue o mesmo protocolo: inicializa o novo, troca o ponteiro, fecha o antigo. O histórico não é migrado entre backends — migrar exigiria reescrever volumes arbitrários no caminho da requisição de configuração, e a pergunta "onde estão minhas trocas antigas?" tem resposta simples: no backend anterior, intacto.
+
+### Transparência: repassar tudo, acrescentar um cabeçalho
+
+O gateway repassa método, path, query, corpo, todos os cabeçalhos e o `Host` como chegaram, e só acrescenta os `X-Forwarded-*` (preservando valores já presentes) e um único cabeçalho próprio, `X-Gateway`, na ida e na volta. Os cabeçalhos hop-by-hop são a única remoção, porque o HTTP proíbe repassá-los; o `Upgrade` de WebSocket e os trailers continuam funcionando pelo `ReverseProxy`.
+
+*Por quê:* o gateway existe para testar o cliente contra o serviço real; qualquer alteração silenciosa invalida o teste. O `Host` original por padrão segue a mesma lógica; a rota declara `rewriteHost` quando o upstream exige o próprio host, como servidores com virtual host.
+
+*Um cabeçalho só:* `X-Gateway` carrega a rota e, quando há intervenção, o override e o tipo (`route=payments; override=payments/flaky; intervention=synthesized`). Vários cabeçalhos `X-Gateway-*` seriam mais fáceis de ler um a um, mas multiplicariam o que o gateway injeta no tráfego.
+
+### Aprendizado grava overrides desligados
+
+Com o modo aprendizado ligado, cada método e path novo respondido pelo upstream vira um override `enabled: false` no documento da rota, com a resposta real pré-preenchida e um bloco `source` registrando a troca de origem.
+
+*Por quê:* o endpoint aprendido já é o ponto de partida do gesto que o usuário quer fazer em seguida — ligar caos ou customizar a resposta. Guardá-lo como uma lista paralela de "endpoints conhecidos" criaria um segundo conceito ao lado do override, exatamente a separação que este projeto recusa. Desligado por padrão, ele não altera o tráfego até o usuário decidir.
+
+*Como:* o aprendizado roda depois de a resposta ser entregue, fora do caminho da requisição, e grava pelo mesmo mecanismo da API — escrita atômica do documento sob o mutex de escrita, seguida de reconstrução do snapshot. Uma combinação é conhecida quando já há override com o mesmo path exato e método; curingas não contam, para que endpoints sob um curinga também sejam aprendidos.
 
 ## Risks / Trade-offs
 
@@ -143,6 +161,9 @@ Tráfego e administração ficam em portas distintas (padrão `8080` e `8081`), 
 - **Determinismo depende da ordem de chegada** → Documentar junto à configuração do seed. Requisições concorrentes podem receber números de sequência em ordem distinta entre execuções; a reprodutibilidade estrita exige envio serial.
 - **Queda de conexão se comporta de forma diferente em HTTP/2** → Registrar na captura qual comportamento ocorreu, para que o desenvolvedor nunca precise adivinhar.
 - **Comentários do documento de rota se perdem ao escrever pela API** → Escrita atômica por documento, aviso no README e alerta na interface antes da primeira escrita destrutiva. O dano fica contido a uma rota.
+- **Aprendizado de paths com identificadores gera um override por identificador** (`/users/1`, `/users/2`...) → Assumido: o usuário consolida num override de curinga e remove os aprendidos. Documentar no README e mostrar na interface a contagem de aprendidos por rota.
+- **Aprendizado reescreve o documento da rota** → Herda a perda de comentários da escrita pela API; o aviso da interface e do README vale também aqui.
+- **Troca de backend não migra o histórico** → Registrado na resposta da API e na interface no momento da troca.
 - **Três backends de armazenamento triplicam a superfície de teste** → Uma única bateria de testes de contrato roda contra as três implementações; nenhuma ganha teste próprio salvo para o que é específico dela.
 - **Driver SQLite puro em Go é mais lento que o baseado em CGO** → Irrelevante no volume alvo, e é o preço de manter o binário estático e a compilação cruzada.
 - **Dois formatos de configuração podem confundir** → O critério é simples e vai no README: processo em JSON, rotas em YAML. Um formato por tipo de leitor.
@@ -160,5 +181,6 @@ Entrega: binários por plataforma e imagem Docker, ambos produzidos pelo mesmo b
 ## Open Questions
 
 - **Terminação TLS na porta de tráfego.** Hoje o gateway fala HTTP em claro com o cliente e pode falar HTTPS com o upstream. Aceitar HTTPS do cliente exigiria gestão de certificado e provavelmente uma autoridade local. Não altera nenhuma spec desta mudança e pode ser acrescentado depois como configuração da porta.
+- **Consolidação automática no aprendizado.** Detectar segmentos variáveis (`/users/123` → `/users/*`) reduziria o ruído, mas erra em paths legítimos parecidos. Fica para depois, sem alterar o formato gravado.
 - **Autenticação na porta de administração.** O uso alvo é local. Se o gateway passar a ser compartilhado por um time numa rede interna, será preciso decidir entre token estático e proxy autenticador à frente. Nenhuma das duas opções muda a API nem as specs atuais.
 - **Retenção no backend persistente.** Em memória o anel resolve. Em NDJSON e SQLite, o histórico cresce sem limite até alguém apagar. Decidir depois entre rotação por tamanho, por idade ou nenhuma — não altera o contrato de leitura já especificado.

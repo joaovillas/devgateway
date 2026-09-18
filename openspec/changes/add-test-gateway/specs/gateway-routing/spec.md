@@ -49,22 +49,51 @@ O gateway SHALL permitir que uma rota exija um host específico, casando com o c
 
 ### Requirement: Encaminhamento de cabeçalhos
 
-O gateway SHALL acrescentar `X-Forwarded-For`, `X-Forwarded-Proto` e `X-Forwarded-Host` às requisições encaminhadas. Por padrão o gateway MUST substituir o cabeçalho `Host` pelo host do upstream; uma rota MAY optar por preservar o `Host` original.
+O gateway SHALL repassar todos os cabeçalhos de entrada, inclusive o `Host` original, e MUST NOT remover nem alterar nenhum deles, salvo os cabeçalhos hop-by-hop que o protocolo HTTP proíbe repassar. O gateway SHALL acrescentar `X-Forwarded-For`, `X-Forwarded-Proto` e `X-Forwarded-Host`, preservando valores que já cheguem preenchidos. Uma rota MAY optar por substituir o `Host` pelo host do upstream.
 
 #### Scenario: Cabeçalhos de encaminhamento acrescentados
 
-- **WHEN** uma requisição é encaminhada para um upstream
+- **WHEN** uma requisição sem cabeçalhos de encaminhamento é encaminhada para um upstream
 - **THEN** o upstream recebe `X-Forwarded-For` com o endereço do cliente, `X-Forwarded-Proto` com o esquema original e `X-Forwarded-Host` com o host original
 
-#### Scenario: Host original preservado sob demanda
+#### Scenario: Host original repassado por padrão
 
-- **WHEN** a rota declara preservação do host e chega uma requisição com `Host: payments.local`
-- **THEN** o upstream recebe `Host: payments.local` em vez do host do upstream
+- **WHEN** a rota não declara substituição do host e chega uma requisição com `Host: payments.local`
+- **THEN** o upstream recebe `Host: payments.local`
+
+#### Scenario: Host substituído sob demanda
+
+- **WHEN** a rota declara substituição do host
+- **THEN** o upstream recebe o host do seu próprio endereço no cabeçalho `Host`
 
 #### Scenario: X-Forwarded-For acumula a cadeia
 
 - **WHEN** a requisição já chega com `X-Forwarded-For` preenchido
 - **THEN** o gateway acrescenta o endereço do cliente ao valor existente em vez de substituí-lo
+
+#### Scenario: X-Forwarded-Host e X-Forwarded-Proto preservados
+
+- **WHEN** a requisição já chega com `X-Forwarded-Host` e `X-Forwarded-Proto` preenchidos
+- **THEN** o upstream recebe esses valores como chegaram
+
+#### Scenario: Cabeçalhos arbitrários repassados
+
+- **WHEN** a requisição chega com cabeçalhos customizados, repetidos e de autorização
+- **THEN** o upstream recebe todos eles, com os mesmos valores e na mesma quantidade
+
+### Requirement: Cabeçalho de identificação do gateway
+
+O gateway SHALL acrescentar um único cabeçalho próprio, `X-Gateway`, à requisição encaminhada ao upstream e à resposta entregue ao cliente, identificando a rota casada. Quando um override intervém, o mesmo cabeçalho na resposta MUST também identificar o override e o tipo de intervenção. O gateway MUST NOT acrescentar nenhum outro cabeçalho além deste e dos de encaminhamento.
+
+#### Scenario: Identificação sem intervenção
+
+- **WHEN** uma requisição é encaminhada pela rota `payments` sem intervenção
+- **THEN** o upstream recebe e o cliente recebe `X-Gateway` identificando a rota `payments`, sem override nem intervenção
+
+#### Scenario: Identificação com intervenção
+
+- **WHEN** o override `flaky` da rota `payments` sintetiza a resposta
+- **THEN** o cliente recebe `X-Gateway` identificando a rota, o override `payments/flaky` e a intervenção `synthesized`
 
 ### Requirement: Tratamento de falha do upstream
 
@@ -87,7 +116,7 @@ O gateway SHALL responder `502` quando não conseguir estabelecer conexão com o
 
 ### Requirement: Transparência do tráfego encaminhado
 
-O gateway SHALL encaminhar qualquer método HTTP, preservando corpo, cabeçalhos de entrada e códigos de status de saída sem alteração, salvo os cabeçalhos de encaminhamento e as intervenções declaradas por override. Respostas em streaming MUST ser repassadas de forma incremental, sem aguardar o corpo completo.
+O gateway SHALL encaminhar qualquer método HTTP, preservando path, query, corpo, cabeçalhos de entrada e, na volta, status, cabeçalhos e corpo da resposta sem alteração, salvo os cabeçalhos acrescentados pelo próprio gateway, a remoção de prefixo declarada pela rota e as intervenções declaradas por override. Respostas em streaming MUST ser repassadas de forma incremental, sem aguardar o corpo completo.
 
 #### Scenario: Método e corpo preservados
 

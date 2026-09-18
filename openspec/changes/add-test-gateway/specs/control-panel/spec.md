@@ -44,7 +44,7 @@ A interface SHALL apresentar a configuração como um mapa navegável que relaci
 
 ### Requirement: Controle direto do override na rota
 
-A interface SHALL permitir ajustar probabilidade, latência e queda de conexão diretamente sobre o override, por controle contínuo, aplicando a alteração imediatamente, sem etapa separada de confirmação ou salvamento. Quando o override possui tempo de vida ou limite de aplicações, a interface MUST exibir o restante de cada um.
+A interface SHALL permitir ajustar probabilidade, latência e queda de conexão diretamente sobre o override, no painel da rota selecionada no mapa, por controle contínuo, aplicando a alteração imediatamente, sem etapa separada de confirmação ou salvamento. Quando o override possui tempo de vida ou limite de aplicações, a interface MUST exibir o restante de cada um.
 
 #### Scenario: Ajuste aplicado imediatamente
 
@@ -60,6 +60,49 @@ A interface SHALL permitir ajustar probabilidade, latência e queda de conexão 
 
 - **WHEN** um override é desligado pela interface
 - **THEN** as requisições seguintes voltam a ser encaminhadas ao upstream e o destaque da rota é removido
+
+### Requirement: Edição com paridade aos documentos
+
+A interface SHALL permitir consultar e alterar tudo o que `gateway.json` e os documentos de rota configuram, exclusivamente por meio da API de administração. Ao editar uma rota, um override ou a configuração do processo, a interface MUST exibir ao lado o documento correspondente, atualizado a cada alteração, e MUST aceitar edição direta desse documento. Valores definidos por variável de ambiente MUST aparecer travados, indicando a variável responsável.
+
+#### Scenario: Controle e documento em sincronia
+
+- **WHEN** a latência de um override é alterada no controle visual
+- **THEN** o documento YAML exibido ao lado passa a declarar a nova latência, e o arquivo em disco também
+
+#### Scenario: Edição direta do documento
+
+- **WHEN** o documento exibido é editado diretamente com um valor válido
+- **THEN** os controles visuais refletem o novo valor e a alteração passa a valer
+
+#### Scenario: Documento inválido é recusado
+
+- **WHEN** o documento exibido é editado com um valor inválido
+- **THEN** a interface mostra a mensagem de validação apontando o campo e nada é gravado
+
+#### Scenario: Valor do ambiente travado
+
+- **WHEN** o backend do histórico vem de variável de ambiente
+- **THEN** o controle correspondente aparece travado e indica o nome da variável
+
+### Requirement: Liga e desliga do override e do aprendizado
+
+A interface SHALL permitir ligar e desligar cada override e o modo aprendizado em um único gesto. Ajustar probabilidade, latência ou queda de um override desligado MUST ligá-lo no mesmo gesto. Os overrides aprendidos MUST ser distinguíveis dos declarados e MUST levar à troca de origem quando ela ainda estiver no histórico.
+
+#### Scenario: Override aprendido vira caos em um gesto
+
+- **WHEN** um override aprendido e desligado tem a probabilidade ajustada para 30%
+- **THEN** ele passa a valer ligado com 30%, sem outra ação
+
+#### Scenario: Modo aprendizado alternado na interface
+
+- **WHEN** o modo aprendizado é ligado na interface e chega uma requisição para um path novo
+- **THEN** o override aprendido aparece na rota sem recarregar a página
+
+#### Scenario: Troca de origem acessível
+
+- **WHEN** um override aprendido é aberto
+- **THEN** a interface oferece a navegação para a troca capturada que o originou
 
 ### Requirement: Inspeção de tráfego com waterfall
 

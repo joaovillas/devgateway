@@ -183,17 +183,70 @@ O gateway SHALL aceitar um seed para as decisões probabilísticas. Com o mesmo 
 
 ### Requirement: Identificação da intervenção
 
-Toda resposta sintetizada ou atrasada por um override SHALL carregar um cabeçalho que identifica o override responsável e o tipo de intervenção aplicada. A troca correspondente MUST ser registrada como interceptada.
+Toda resposta sintetizada ou atrasada por um override SHALL identificar, no cabeçalho `X-Gateway` definido pela spec `gateway-routing`, o override responsável e o tipo de intervenção aplicada. A troca correspondente MUST ser registrada como interceptada.
 
 #### Scenario: Resposta interceptada é identificável
 
 - **WHEN** um override sintetiza uma resposta `503`
-- **THEN** a resposta carrega um cabeçalho indicando o override responsável e que a resposta foi sintetizada pelo gateway
+- **THEN** o cabeçalho `X-Gateway` da resposta indica o override responsável e que a resposta foi sintetizada pelo gateway
 
 #### Scenario: Resposta do upstream não é marcada
 
 - **WHEN** o upstream responde `500` por conta própria e nenhum override interceptou a requisição
-- **THEN** a resposta não carrega o cabeçalho de intervenção
+- **THEN** o cabeçalho `X-Gateway` da resposta identifica apenas a rota, sem override nem intervenção
+
+### Requirement: Override ligado e desligado
+
+Um override SHALL poder ser declarado desligado. Um override desligado MUST NOT participar da seleção nem da precedência, e as requisições que ele selecionaria MUST seguir como se ele não existisse. A ausência do campo MUST equivaler a ligado. Desligar e religar um override MUST preservar todos os seus demais campos.
+
+#### Scenario: Override desligado não intercepta
+
+- **WHEN** um override que sintetiza `503` está desligado e chega uma requisição que ele seleciona
+- **THEN** a requisição é encaminhada ao upstream
+
+#### Scenario: Desligado não esconde o menos específico
+
+- **WHEN** um override de path exato está desligado e um override de curinga que também casa está ligado
+- **THEN** o override de curinga é aplicado
+
+#### Scenario: Religar restaura o comportamento
+
+- **WHEN** o override desligado é religado sem outra alteração
+- **THEN** as requisições seguintes voltam a ser respondidas por ele com a mesma resposta declarada
+
+### Requirement: Aprendizado de endpoints
+
+O gateway SHALL oferecer um modo aprendizado, desligado por padrão e alterável em tempo de execução. Com o modo desligado, o gateway MUST apenas aplicar a configuração existente, sem gravar nada além do histórico. Com o modo ligado, cada combinação de método e path ainda não conhecida numa rota, cuja requisição foi encaminhada e respondida pelo upstream, MUST ser gravada no documento dessa rota como um override desligado, com critério de path exato e método, e resposta declarada pré-preenchida com o status, todos os cabeçalhos e o corpo observados — excluídos apenas `Date`, `Content-Length` e cabeçalhos hop-by-hop. O override gravado MUST registrar a troca de origem e se o corpo foi truncado na captura. Uma combinação é conhecida quando a rota já possui override, ligado ou desligado, com o mesmo path exato e o mesmo método.
+
+#### Scenario: Endpoints novos são aprendidos
+
+- **WHEN** o modo aprendizado está ligado e chegam `GET /api/teste` e depois `GET /api/teste2` por uma rota com upstream
+- **THEN** o documento da rota passa a conter dois overrides desligados, um para cada path, cada um com a resposta real que o upstream devolveu
+
+#### Scenario: Endpoint aprendido não intercepta
+
+- **WHEN** um endpoint foi aprendido e a mesma requisição chega de novo
+- **THEN** ela é encaminhada ao upstream normalmente, porque o override aprendido está desligado
+
+#### Scenario: Endpoint conhecido não é duplicado
+
+- **WHEN** o modo aprendizado está ligado e `GET /api/teste` chega pela segunda vez
+- **THEN** o documento da rota continua com um único override para `GET /api/teste`
+
+#### Scenario: Modo desligado não grava
+
+- **WHEN** o modo aprendizado está desligado e chegam requisições para paths novos
+- **THEN** nenhum documento de rota é modificado e as trocas constam apenas no histórico
+
+#### Scenario: Somente respostas do upstream são aprendidas
+
+- **WHEN** o modo aprendizado está ligado e a requisição é respondida por override, por `404` sem rota ou por `502` do gateway
+- **THEN** nenhum override é aprendido a partir dela
+
+#### Scenario: Corpo truncado sinalizado
+
+- **WHEN** o modo aprendizado está ligado e a resposta observada excede o limite de captura
+- **THEN** o override aprendido registra que o corpo está incompleto
 
 ### Requirement: Derivação de override a partir de troca capturada
 
