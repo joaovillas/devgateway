@@ -23,6 +23,8 @@ const EVENTS: EventName[] = [
 
 /** Sem nenhum evento por este tempo, a conexão é dada como perdida (heartbeat a cada 15 s). */
 const SILENCE_MS = 45_000;
+/** Conexão que não abre nem falha (processo suspenso, porta que aceita e não responde). */
+const CONNECT_MS = 10_000;
 const BACKOFF_MIN_MS = 1_000;
 const BACKOFF_MAX_MS = 15_000;
 
@@ -93,6 +95,8 @@ export class EventStream {
     this.setState({ kind: "connecting", attempt: this.attempt });
     const es = new EventSource(this.url);
     this.es = es;
+    // Sem este vigia, uma conexão pendurada em "connecting" nunca falharia.
+    this.armSilence(CONNECT_MS, `/api/events não respondeu em ${CONNECT_MS / 1000} s`);
 
     es.onopen = () => {
       this.attempt = 0;
@@ -118,12 +122,9 @@ export class EventStream {
     }
   }
 
-  private armSilence(): void {
+  private armSilence(ms = SILENCE_MS, reason = `nenhum evento em ${SILENCE_MS / 1000} s`): void {
     window.clearTimeout(this.silenceTimer);
-    this.silenceTimer = window.setTimeout(
-      () => this.fail(`nenhum evento em ${SILENCE_MS / 1000} s`),
-      SILENCE_MS,
-    );
+    this.silenceTimer = window.setTimeout(() => this.fail(reason), ms);
   }
 
   private fail(reason: string): void {

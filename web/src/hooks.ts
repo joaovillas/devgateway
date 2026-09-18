@@ -36,7 +36,9 @@ export function useResource<T>(
     }
     const ctl = new AbortController();
     fetcherRef.current(ctl.signal).then(
-      (data) => setState({ kind: "ready", data }),
+      (data) => {
+        if (!ctl.signal.aborted) setState({ kind: "ready", data });
+      },
       (e: unknown) => {
         if (ctl.signal.aborted) return;
         setState({ kind: "error", error: toApiError(e) });
@@ -46,7 +48,9 @@ export function useResource<T>(
   }, [keyString, tick]);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
-  return [state, reload];
+  // No render em que a chave acabou de mudar, o estado ainda é o da chave
+  // anterior (o efeito que o zera roda depois): não devolve dado de outra coisa.
+  return [lastKey.current === keyString ? state : { kind: "loading" }, reload];
 }
 
 export function useConnection(stream: EventStream): ConnectionState {

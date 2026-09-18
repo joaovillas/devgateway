@@ -46,6 +46,8 @@ export function isApiError(e: unknown, code?: string): e is ApiError {
 export interface VersionedText {
   text: string;
   etag: string | null;
+  /** Falso quando o arquivo ainda não existe em disco (X-Gateway-File-Exists: false). */
+  exists: boolean;
 }
 
 interface RequestOptions {
@@ -129,7 +131,11 @@ async function none(path: string, opts?: RequestOptions): Promise<void> {
 
 async function versioned(path: string, signal?: AbortSignal): Promise<VersionedText> {
   const res = await send(path, { signal });
-  return { text: await res.text(), etag: res.headers.get("ETag") };
+  return {
+    text: await res.text(),
+    etag: res.headers.get("ETag"),
+    exists: res.headers.get("X-Gateway-File-Exists") !== "false",
+  };
 }
 
 const seg = encodeURIComponent;
@@ -239,11 +245,11 @@ export const api = {
     }),
   getExchange: (id: string, signal?: AbortSignal) => json<Exchange>(`/exchanges/${seg(id)}`, { signal }),
   /** Vizinha mais antiga; rejeita com ApiError "no_more" no fim. */
-  olderExchange: (id: string, filter?: ExchangeFilter) =>
-    json<Exchange>(`/exchanges/${seg(id)}/older`, { query: filterQuery(filter) }),
+  olderExchange: (id: string, filter?: ExchangeFilter, signal?: AbortSignal) =>
+    json<Exchange>(`/exchanges/${seg(id)}/older`, { query: filterQuery(filter), signal }),
   /** Vizinha mais nova; rejeita com ApiError "no_more" no fim. */
-  newerExchange: (id: string, filter?: ExchangeFilter) =>
-    json<Exchange>(`/exchanges/${seg(id)}/newer`, { query: filterQuery(filter) }),
+  newerExchange: (id: string, filter?: ExchangeFilter, signal?: AbortSignal) =>
+    json<Exchange>(`/exchanges/${seg(id)}/newer`, { query: filterQuery(filter), signal }),
   clearExchanges: () => none("/exchanges", { method: "DELETE" }),
 
   // Upstreams
