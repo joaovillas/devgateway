@@ -18,33 +18,53 @@ O gateway SHALL servir a interface web a partir do próprio executável, na port
 - **WHEN** a interface é aberta com rotas e overrides já configurados
 - **THEN** ela exibe essas rotas e overrides sem exigir nenhuma ação de sincronização
 
-### Requirement: Mapa de topologia
+### Requirement: Lista de serviços
 
-A interface SHALL apresentar a configuração como um mapa navegável que relaciona cliente, rota e upstream. Rotas com override ativo MUST ser visualmente distinguíveis das demais, e selecionar um elemento do mapa MUST filtrar a inspeção de tráfego para aquele elemento.
+A interface SHALL apresentar a configuração como uma lista de serviços, em que cada serviço corresponde a uma rota e mostra seu nome, a entrada (o casamento de host e path pelo qual o app chama o gateway) e o destino (o upstream para onde o gateway redireciona). A lista MUST continuar legível e operável com ao menos 50 serviços, com busca por nome, entrada ou destino. A ação de cadastrar um novo serviço MUST estar sempre visível, qualquer que seja a seleção. Serviços com regra ativa MUST ser visualmente distinguíveis dos demais, e selecionar um serviço ou um destino MUST filtrar a inspeção de tráfego para ele.
 
-#### Scenario: Topologia exibida como grafo
+#### Scenario: Serviços listados com entrada e destino
 
-- **WHEN** existem três rotas apontando para dois upstreams
-- **THEN** o mapa exibe as três rotas e os dois upstreams com as ligações entre eles
+- **WHEN** existem três serviços apontando para dois destinos
+- **THEN** a lista exibe os três serviços, cada um com sua entrada e seu destino
 
-#### Scenario: Rota com override ativo é destacada
+#### Scenario: Muitos serviços
 
-- **WHEN** uma rota possui override ativo
-- **THEN** ela é exibida com destaque visual que a diferencia das demais, indicando o tipo de intervenção e a probabilidade aplicada
+- **WHEN** existem 50 serviços e o nome de um deles é digitado na busca
+- **THEN** a lista passa a mostrar só os serviços que casam com o texto, sem sobreposição nem perda de legibilidade
+
+#### Scenario: Novo serviço sempre alcançável
+
+- **WHEN** um serviço está selecionado
+- **THEN** a ação de cadastrar um novo serviço continua visível e abre o cadastro sem exigir desfazer a seleção
+
+#### Scenario: Serviço com regra ativa é destacado
+
+- **WHEN** um serviço possui regra ativa
+- **THEN** ele é exibido com destaque visual que o diferencia dos demais, indicando o tipo de intervenção e a probabilidade aplicada
 
 #### Scenario: Seleção filtra o tráfego
 
-- **WHEN** uma rota é selecionada no mapa
-- **THEN** a inspeção de tráfego passa a exibir somente as trocas dessa rota
+- **WHEN** um serviço é selecionado na lista
+- **THEN** a inspeção de tráfego passa a exibir somente as trocas desse serviço
 
-#### Scenario: Upstream indisponível é sinalizado
+#### Scenario: Destino indisponível é sinalizado
 
-- **WHEN** um upstream vem recusando conexões nas requisições recentes
-- **THEN** o mapa sinaliza esse upstream como indisponível
+- **WHEN** um destino vem recusando conexões nas requisições recentes
+- **THEN** a lista sinaliza o destino dos serviços afetados como indisponível
+
+### Requirement: Vocabulário do usuário
+
+A interface SHALL nomear os conceitos pelo que o desenvolvedor reconhece, e não pelos termos internos do gateway: "seu app" para quem chama, "serviço" para cada rota cadastrada, "entrada" para o casamento de host e path, "destino" para o upstream e "regra" para cada override. Os documentos em disco e a API de administração MAY manter os termos internos (rota, upstream, override).
+
+#### Scenario: Termos internos fora da tela
+
+- **WHEN** a interface é aberta com serviços e regras configurados
+- **THEN** nenhum rótulo, título ou botão visível usa "rota", "upstream" ou "override" como nome desses conceitos
+
 
 ### Requirement: Controle direto do override na rota
 
-A interface SHALL permitir ajustar probabilidade, latência e queda de conexão diretamente sobre o override, no painel da rota selecionada no mapa, por controle contínuo, aplicando a alteração imediatamente, sem etapa separada de confirmação ou salvamento. Quando o override possui tempo de vida ou limite de aplicações, a interface MUST exibir o restante de cada um.
+A interface SHALL permitir ajustar probabilidade, latência e queda de conexão diretamente sobre o override, no painel do serviço selecionado na lista, por controle contínuo, aplicando a alteração imediatamente, sem etapa separada de confirmação ou salvamento. Quando o override possui tempo de vida ou limite de aplicações, a interface MUST exibir o restante de cada um.
 
 #### Scenario: Ajuste aplicado imediatamente
 

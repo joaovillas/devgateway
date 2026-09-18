@@ -16,9 +16,6 @@
   --panel-raised: #1b212b;
   --seam: #262e3a;
   --seam-strong: #354050;
-  /* Grade de pontos de 1px: a textura do campo do mapa */
-  --grid-dot: #2a3340;
-  --grid-step: 12px;
 
   /* Tinta: contraste sobre --panel ≥ 4.5:1 até --ink-3 */
   --ink: #d8dee7;
@@ -45,7 +42,7 @@
   --text-caps: 0.9375rem; /* 15px: versalete (all-small-caps encolhe para a altura-x) */
   --text-sm: 0.75rem; /* 12px: mono de dados */
   --text-md: 0.8125rem; /* 13px: texto de interface */
-  --text-lg: 0.9375rem; /* 15px: nome da rota em foco */
+  --text-lg: 0.9375rem; /* 15px: nome do serviço em foco */
 
   /* Espaço */
   --s-1: 2px;

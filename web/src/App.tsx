@@ -12,18 +12,18 @@ import { StaleContext } from "./live";
 import { EMPTY_FILTER, toExchangeFilter, type ListFilter } from "./exchangeFilter";
 import { useConnection, useResource, type Load } from "./hooks";
 import { useSelection, type Selection } from "./selection";
-import { withLiveState } from "./topology";
+import { withLiveState } from "./services";
 import { TopBar } from "./components/TopBar";
-import { MapPanel } from "./components/MapPanel";
+import { ServicesPanel } from "./components/ServicesPanel";
 import { TrafficPanel } from "./components/TrafficPanel";
 import { RoutePanel, type ControlView } from "./components/RoutePanel";
 import type { OpenedExchange } from "./components/ExchangeDetail";
 
 const VIEW_KEY = "gateway.painel.controles";
 
-/** A aba lembrada entre sessões: rota ou processo. A troca aberta não sobrevive a um F5. */
+/** A aba lembrada entre sessões: serviço ou processo. A troca aberta não sobrevive a um F5. */
 function readView(): ControlView {
-  // Um link para uma rota (#rota=...) abre os controles dela, não a aba lembrada.
+  // Um link para um serviço (#rota=...) abre os controles dele, não a aba lembrada.
   if (window.location.hash.startsWith("#rota=")) return "route";
   try {
     return window.localStorage.getItem(VIEW_KEY) === "process" ? "process" : "route";
@@ -51,6 +51,8 @@ export function App() {
   // Troca aberta no detalhe (aba "troca"), com a rota dela.
   const [opened, setOpened] = useState<(OpenedExchange & { route?: string }) | null>(null);
   const [listFilter, setListFilter] = useState<ListFilter>(EMPTY_FILTER);
+  // Cadastro de serviço aberto no painel da direita, com ou sem seleção.
+  const [creating, setCreating] = useState(false);
   // Estado vivo dos overrides vindo do evento `overrides` (e das respostas de
   // PATCH e reset). Uma releitura das rotas já traz o estado atual, então só o
   // que chegou antes de ela ser pedida é descartado.
@@ -80,14 +82,23 @@ export function App() {
     }
   }, []);
 
-  // Selecionar uma rota no mapa traz os controles dela para a frente.
+  // Selecionar um serviço na lista traz os controles dele para a frente e
+  // fecha o cadastro que estivesse aberto.
   const setSelection = useCallback(
     (s: Selection) => {
       setSelectionRaw(s);
-      if (s?.kind === "route") setView("route");
+      if (s?.kind === "route") {
+        setCreating(false);
+        setView("route");
+      }
     },
     [setSelectionRaw, setView],
   );
+  const startCreate = useCallback(() => {
+    setCreating(true);
+    setView("route");
+  }, [setView]);
+  const cancelCreate = useCallback(() => setCreating(false), []);
 
   useEffect(() => {
     stream.start();
@@ -161,7 +172,15 @@ export function App() {
     setOpened(null);
     setViewRaw((v) => (v === "exchange" ? readView() : v));
   }, []);
-  // Seletor de rota da lista de tráfego: filtra como o mapa, sem trocar a aba do detalhe.
+  // Serviço criado: relê a lista (o evento config também chegaria) e o seleciona.
+  const onCreated = useCallback(
+    (name: string) => {
+      reloadRoutes();
+      setSelection({ kind: "route", name });
+    },
+    [reloadRoutes, setSelection],
+  );
+  // Seletor de serviço da lista de tráfego: filtra como a lista de serviços, sem trocar a aba do detalhe.
   const filterRoute = useCallback(
     (name: string | null) => setSelectionRaw(name ? { kind: "route", name } : null),
     [setSelectionRaw],
@@ -199,13 +218,14 @@ export function App() {
       />
       <main className="columns">
         <div className="column column--left">
-          <MapPanel
+          <ServicesPanel
             routes={routes}
             upstreams={upstreams}
-            trafficPort={status.kind === "ready" ? status.data.ports.traffic : undefined}
             selection={selection}
             onSelect={setSelection}
             onRetry={reloadRoutes}
+            creating={creating && view === "route"}
+            onCreate={startCreate}
           />
           <TrafficPanel
             stream={stream}
@@ -240,6 +260,10 @@ export function App() {
             onSettings={onSettings}
             onOverrideState={onOverrideState}
             guardScope={status.kind === "ready" ? status.data.routesDir : ""}
+            creating={creating}
+            onCreate={startCreate}
+            onCreated={onCreated}
+            onCancelCreate={cancelCreate}
           />
         </div>
       </main>

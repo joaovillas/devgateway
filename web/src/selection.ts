@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 
 /**
- * O que está selecionado no mapa. Uma rota abre os controles
- * dela; um upstream só filtra o tráfego e destaca as rotas que apontam para ele.
+ * O que está selecionado na lista de serviços. Um serviço (rota) abre os
+ * controles dele; um destino (upstream) só filtra o tráfego e destaca os
+ * serviços que apontam para ele.
  */
 export type Selection = { kind: "route"; name: string } | { kind: "upstream"; name: string } | null;
 

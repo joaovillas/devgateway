@@ -30,7 +30,7 @@ interface TrafficPanelProps {
   connection: ConnectionState;
   status: Load<Status>;
   routes: Load<RouteResource[]>;
-  /** Seleção do mapa: rota ou upstream. */
+  /** Seleção da lista de serviços: serviço (rota) ou destino (upstream). */
   selection: Selection;
   /** Troca de rota pelo seletor da lista, sem mudar o que o painel de detalhe mostra. */
   onRoute: (name: string | null) => void;
@@ -146,7 +146,7 @@ export function TrafficPanel(props: TrafficPanelProps) {
   const legend = (
     <span className="legend" aria-hidden="true">
       <span>
-        <i style={{ background: "var(--time-upstream)" }} /> upstream
+        <i style={{ background: "var(--time-upstream)" }} /> destino
       </span>
       <span>
         <i style={{ background: "var(--injected)" }} /> injetado
@@ -263,7 +263,7 @@ export function TrafficPanel(props: TrafficPanelProps) {
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 
-/** Filtros do contrato: rota (ou o upstream do mapa), método, status, intervenção e path. */
+/** Filtros do contrato: serviço (ou o destino da lista de serviços), método, status, intervenção e path. */
 function FilterBar({ routes, selection, onRoute, listFilter: f, onListFilter }: TrafficPanelProps) {
   const [path, setPath] = useState(f.path);
   // Filtro limpo de fora (botão "limpar"): o campo acompanha.
@@ -282,14 +282,14 @@ function FilterBar({ routes, selection, onRoute, listFilter: f, onListFilter }: 
     <div className="filters" role="search" aria-label="Filtrar o tráfego">
       {selection?.kind === "upstream" ? (
         <span className="chip chip--override">
-          upstream {selection.name.replace(/^https?:\/\//, "")}
-          <button type="button" onClick={() => onRoute(null)} aria-label={`Remover o filtro do upstream ${selection.name}`}>
+          destino {selection.name.replace(/^https?:\/\//, "")}
+          <button type="button" onClick={() => onRoute(null)} aria-label={`Remover o filtro do destino ${selection.name}`}>
             <CloseIcon />
           </button>
         </span>
       ) : (
         <label className="filters__item">
-          <span className="filters__label">rota</span>
+          <span className="filters__label">serviço</span>
           <select
             className={"input input--sm select" + (routeName ? " select--on" : "")}
             value={routeName}
@@ -465,7 +465,7 @@ function TrafficTable({
           <th scope="col">path</th>
           {showRoute ? (
             <th scope="col" className="traffic__route">
-              rota
+              serviço
             </th>
           ) : null}
           <th scope="col" className="num">
@@ -515,7 +515,7 @@ function TrafficTable({
               </td>
               {showRoute ? (
                 <td className={"traffic__route" + (e.route ? "" : " dim")} title={e.route ?? undefined}>
-                  {e.route ?? "sem rota"}
+                  {e.route ?? "sem serviço"}
                 </td>
               ) : null}
               <td
@@ -529,7 +529,7 @@ function TrafficTable({
                         ? " status--upstream-error"
                         : "")
                 }
-                title={gatewayError ? "erro do próprio gateway" : upstreamError ? "erro do upstream" : undefined}
+                title={gatewayError ? "erro do próprio gateway" : upstreamError ? "erro do destino" : undefined}
               >
                 {/* Estreito, a coluna de intervenção sai: o status que o gateway
                     sintetizou ou derrubou vira uma etiqueta em caixa, e o nome da
@@ -562,7 +562,7 @@ function TrafficTable({
 function Waterfall({ ex, max }: { ex: Exchange; max: number }) {
   const t = ex.timing;
   const pct = (v: number) => `${(v / max) * 100}%`;
-  const label = `upstream ${ms(t.upstreamMs)}, injetado ${ms(t.injectedMs)}, gateway ${ms(t.gatewayMs)}`;
+  const label = `destino ${ms(t.upstreamMs)}, injetado ${ms(t.injectedMs)}, gateway ${ms(t.gatewayMs)}`;
   return (
     <div className="fall" role="img" aria-label={label} title={label}>
       {t.upstreamMs > 0 ? <span className="fall__seg fall__seg--upstream" style={{ width: pct(t.upstreamMs) }} /> : null}

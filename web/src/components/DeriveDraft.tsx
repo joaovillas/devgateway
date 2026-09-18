@@ -141,12 +141,12 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
   return (
     <form className="draft" onSubmit={submit} aria-labelledby={`${ids}-t`}>
       <p className="draft__title" id={`${ids}-t`}>
-        Rascunho de override em <span className="mono">{route}</span>
+        Rascunho de regra em <span className="mono">{route}</span>
         <span className="draft__state">não gravado</span>
       </p>
       <p className="hint">
-        Preenchido com esta requisição e esta resposta. Revise e edite; ele só passa a valer quando for criado, e entra no
-        fim da lista da rota, gravado em <span className="mono" title={res?.file}>{res ? shortPath(res.file) : `routes/${route}.yaml`}</span>.
+        Preenchido com esta requisição e esta resposta. Revise e edite; ela só passa a valer quando for criada, e entra no
+        fim da lista do serviço, gravada em <span className="mono" title={res?.file}>{res ? shortPath(res.file) : `routes/${route}.yaml`}</span>.
       </p>
 
       {incomplete || stage.warnings.length ? (
@@ -154,7 +154,7 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
           {incomplete ? (
             <p>
               <strong>Corpo incompleto:</strong> a resposta foi cortada na captura, então o corpo abaixo não é o que o
-              upstream mandou por inteiro. Complete-o antes de criar, ou crie assim sabendo que a resposta sai cortada.
+              destino mandou por inteiro. Complete-o antes de criar, ou crie assim sabendo que a resposta sai cortada.
             </p>
           ) : null}
           {stage.warnings.length ? (
@@ -171,7 +171,7 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
         <Row
           label="nome"
           htmlFor={`${ids}-n`}
-          hint={nameTaken ? <span className="field__problem">já existe um override com esse nome em {route}</span> : undefined}
+          hint={nameTaken ? <span className="field__problem">já existe uma regra com esse nome em {route}</span> : undefined}
         >
           <input
             ref={nameRef}
@@ -279,22 +279,22 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
         </Row>
         <Row label="ao criar">
           <span className="inline">
-            <Switch checked={enabled} label="Ligar o override ao criar" onChange={setEnabled} />
+            <Switch checked={enabled} label="Ligar a regra ao criar" onChange={setEnabled} />
             <span className="dim">
-              {enabled ? "passa a valer na hora para as requisições seguintes" : "nasce desligado"}
+              {enabled ? "passa a valer na hora para as requisições seguintes" : "nasce desligada"}
             </span>
           </span>
         </Row>
       </div>
 
-      {error ? <ErrorNote error={error} onDismiss={() => setError(null)} what="O override não foi criado" /> : null}
+      {error ? <ErrorNote error={error} onDismiss={() => setError(null)} what="A regra não foi criada" /> : null}
       <p className="inline draft__actions">
         <button
           type="submit"
           className="button button--primary"
           disabled={sending || !res || !draft.name.trim() || nameTaken || !statusOk}
         >
-          {sending ? "Criando…" : incomplete ? `Criar em ${route} com o corpo incompleto` : `Criar override em ${route}`}
+          {sending ? "Criando…" : incomplete ? `Criar em ${route} com o corpo incompleto` : `Criar regra em ${route}`}
         </button>
         <button type="button" className="button" onClick={onCancel} disabled={sending}>
           Descartar o rascunho

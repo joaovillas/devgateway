@@ -240,8 +240,16 @@ export function ExchangeDetail({ opened, filter, onOpen, onClose, routes, guard,
   );
 }
 
+/** "regra charge-declined do serviço payments", a partir do override "payments/charge-declined". */
+function ruleName(x: Exchange): string {
+  const o = x.override ?? "";
+  const route = x.route ?? "";
+  const name = route && o.startsWith(route + "/") ? o.slice(route.length + 1) : o;
+  return route ? `regra ${name} do serviço ${route}` : `regra ${name}`;
+}
+
 function outcomeText(x: Exchange): { text: string; fault: boolean } {
-  const by = x.override ? ` por ${x.override}` : "";
+  const by = x.override ? ` pela ${ruleName(x)}` : "";
   switch (x.outcome) {
     case "synthesized":
       return { text: `resposta sintetizada${by}`, fault: true };
@@ -254,7 +262,7 @@ function outcomeText(x: Exchange): { text: string; fault: boolean } {
       return { text: "erro do próprio gateway", fault: false };
     default:
       return {
-        text: (x.status ?? 0) >= 500 ? "erro do upstream, repassado sem intervenção" : "respondida pelo upstream",
+        text: (x.status ?? 0) >= 500 ? "erro do destino, repassado sem intervenção" : "respondida pelo destino",
         fault: false,
       };
   }
@@ -281,17 +289,17 @@ function Summary({ x, onShowRoute }: { x: Exchange; onShowRoute: (name: string) 
       <p className="xd__meta dim">
         {x.route ? (
           <>
-            rota{" "}
+            serviço{" "}
             <button type="button" className="text-button text-button--inline mono" onClick={() => onShowRoute(x.route!)}>
               {x.route}
             </button>
           </>
         ) : (
-          "nenhuma rota casou"
+          "nenhum serviço casou com a entrada"
         )}
         {x.upstream ? (
           <>
-            {" · "}upstream <span className="mono">{x.upstream}</span>
+            {" · "}destino <span className="mono">{x.upstream}</span>
           </>
         ) : null}
         {" · "}troca <span className="mono" title={x.id}>…{x.id.slice(-8)}</span>
@@ -301,7 +309,7 @@ function Summary({ x, onShowRoute }: { x: Exchange; onShowRoute: (name: string) 
   );
 }
 
-/** Ação de criar override, ou a razão de não poder, e o resultado da última criação. */
+/** Ação de criar regra (override), ou a razão de não poder, e o resultado da última criação. */
 function DeriveBlock({
   x,
   routes,
@@ -320,10 +328,10 @@ function DeriveBlock({
   if (created) {
     return (
       <p className="xd__done" role="status">
-        Override <span className="mono">{created.name}</span> criado em <span className="mono">{created.route}</span>,{" "}
-        {created.enabled ? "já valendo" : "desligado"}.{" "}
+        Regra <span className="mono">{created.name}</span> criada no serviço <span className="mono">{created.route}</span>,{" "}
+        {created.enabled ? "já valendo" : "desligada"}.{" "}
         <button type="button" className="link-button" onClick={() => onShowRoute(created.route)}>
-          Ajustar na rota
+          Ajustar no serviço
         </button>
       </p>
     );
@@ -331,20 +339,20 @@ function DeriveBlock({
   if (drafting) return null;
   const known = routes.kind === "ready" && x.route ? routes.data.some((r) => r.route.name === x.route) : true;
   const reason = !x.route
-    ? "Nenhuma rota casou esta troca, e um override mora sempre numa rota."
+    ? "Nenhum serviço casou com esta troca, e uma regra mora sempre num serviço."
     : !known
-      ? `A rota ${x.route} não existe mais.`
+      ? `O serviço ${x.route} não existe mais.`
       : x.outcome === "synthesized"
-        ? "A resposta desta troca foi sintetizada por um override: não há resposta do upstream para copiar."
+        ? "A resposta desta troca foi sintetizada por uma regra: não há resposta do destino para copiar."
         : x.outcome === "dropped"
           ? "A conexão desta troca foi derrubada: não há resposta para copiar."
           : x.outcome === "gateway"
-            ? "Esta troca terminou em erro do gateway: não há resposta do upstream para copiar."
+            ? "Esta troca terminou em erro do gateway: não há resposta do destino para copiar."
             : null;
   return (
     <div className="xd__derive">
       <button type="button" className="button" onClick={onDraft} disabled={reason !== null} aria-describedby={reason ? "xd-derive-why" : undefined}>
-        <PlusIcon /> Criar override a partir desta troca
+        <PlusIcon /> Criar regra a partir desta troca
       </button>
       {reason ? (
         <span className="dim" id="xd-derive-why">
@@ -414,7 +422,7 @@ function TimeLanes({ x }: { x: Exchange }) {
   const lanes = [
     {
       key: "upstream",
-      label: "upstream",
+      label: "destino",
       value: t.upstreamMs,
       start: 0,
       empty:
@@ -496,7 +504,7 @@ function TimeLanes({ x }: { x: Exchange }) {
       </table>
       {t.injectedMs > 0 ? (
         <p className="hint">
-          O atraso é aplicado depois que a resposta fica pronta, então soma ao tempo do upstream em vez de se sobrepor a
+          O atraso é aplicado depois que a resposta fica pronta, então soma ao tempo do destino em vez de se sobrepor a
           ele.
         </p>
       ) : null}
@@ -611,7 +619,7 @@ function BodyView({ d }: { d: DecodedBody }) {
 function Routing({ x }: { x: Exchange }) {
   const headId = useId();
   const rows: [string, string | undefined][] = [
-    ["override", x.override],
+    ["regra", x.override],
     ["intervenções", (x.interventions ?? []).length ? (x.interventions ?? []).join(", ") : "nenhuma"],
     ["resultado", x.outcome],
     ["queda", x.dropMode],

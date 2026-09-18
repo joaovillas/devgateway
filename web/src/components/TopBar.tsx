@@ -142,7 +142,7 @@ function LearningItem({ learning, onLearning }: { learning: Load<LearningView>; 
         title={
           l.locked
             ? `Travado pela variável de ambiente ${envName ?? "GATEWAY_LEARNING"}`
-            : "Ligado, cada path novo vira um override aprendido e desligado na rota"
+            : "Ligado, cada path novo vira uma regra aprendida, desligada, no serviço que o recebeu"
         }
         onChange={(next) => {
           setPending(next);
@@ -162,7 +162,7 @@ function LearningItem({ learning, onLearning }: { learning: Load<LearningView>; 
           <LockIcon /> <span className="mono">{envName ?? "GATEWAY_LEARNING"}</span>
         </span>
       ) : null}
-      {total > 0 ? <span className="dim">{total} {total === 1 ? "aprendido" : "aprendidos"}</span> : null}
+      {total > 0 ? <span className="dim">{total} {total === 1 ? "regra aprendida" : "regras aprendidas"}</span> : null}
       {error ? (
         <span className="bar__alert" role="alert" title={error.message}>
           não mudou: {error.message}

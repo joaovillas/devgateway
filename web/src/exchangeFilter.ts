@@ -2,8 +2,8 @@ import type { Exchange, ExchangeFilter } from "./api";
 import type { Selection } from "./selection";
 
 /**
- * Filtros da lista de tráfego além da seleção do mapa (que dá a rota ou o
- * upstream). Os mesmos valores vão para GET /api/exchanges, para a navegação
+ * Filtros da lista de tráfego além da seleção da lista de serviços (que dá a
+ * rota ou o upstream). Os mesmos valores vão para GET /api/exchanges, para a navegação
  * item a item (older/newer) e para o fluxo ao vivo, que é filtrado aqui.
  */
 export type StatusClass = "all" | "2xx" | "3xx" | "4xx" | "5xx";
@@ -29,7 +29,7 @@ const STATUS_RANGE: Record<Exclude<StatusClass, "all">, [number, number]> = {
   "5xx": [500, 599],
 };
 
-/** O filtro no formato da API (exchange.Filter), somando a seleção do mapa. */
+/** O filtro no formato da API (exchange.Filter), somando a seleção da lista de serviços. */
 export function toExchangeFilter(sel: Selection, f: ListFilter): ExchangeFilter {
   const out: ExchangeFilter = {};
   if (sel?.kind === "route") out.route = sel.name;
@@ -66,8 +66,8 @@ export function intervened(e: Exchange): boolean {
 /** Texto curto do filtro ativo, para mensagens como "não há trocas mais antigas com …". */
 export function describeFilter(f: ExchangeFilter): string {
   const parts: string[] = [];
-  if (f.route) parts.push(`rota ${f.route}`);
-  if (f.upstream) parts.push(`upstream ${f.upstream.replace(/^https?:\/\//, "")}`);
+  if (f.route) parts.push(`serviço ${f.route}`);
+  if (f.upstream) parts.push(`destino ${f.upstream.replace(/^https?:\/\//, "")}`);
   if (f.method) parts.push(f.method);
   if (f.path) parts.push(`path com “${f.path}”`);
   if (f.statusMin !== undefined) parts.push(`status ${String(f.statusMin)[0]}xx`);

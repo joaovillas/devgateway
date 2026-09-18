@@ -87,8 +87,9 @@ button {
   min-height: 0;
 }
 
-/* O mapa ocupa a altura do que desenha (até metade da coluna) e o resto vai
-   para o tráfego: cada linha a mais de trocas vale mais que grafite vazio. */
+/* A lista de serviços ocupa a altura do que mostra (até metade da coluna,
+   depois rola) e o resto vai para o tráfego: cada linha a mais de trocas
+   vale mais que grafite vazio. */
 .column--left {
   grid-template-rows: fit-content(50%) minmax(0, 1fr);
 }
@@ -98,7 +99,7 @@ button {
 }
 
 /* Estreito: os painéis empilham e a página rola; cada painel ocupa a altura
-   do que mostra, e só o tráfego mantém rolagem própria. */
+   do que mostra, e só o tráfego e a lista de serviços mantêm rolagem própria. */
 @media (max-width: 900px) {
   html,
   body,
@@ -125,6 +126,12 @@ button {
   }
   .panel[aria-labelledby="traffic-title"] .panel__body {
     max-height: 70vh;
+    overflow: auto;
+  }
+  /* Com 50 serviços, a lista empilhada empurraria o tráfego para longe: ela
+     também rola sozinha, com o cabeçalho de colunas colado no alto. */
+  .panel[aria-labelledby="services-title"] .panel__body {
+    max-height: 45vh;
     overflow: auto;
   }
 }
@@ -328,257 +335,270 @@ button {
   color: var(--ink);
 }
 
-/* ---------- Mapa ---------- */
+/* ---------- Serviços ---------- */
 
-.map {
-  display: grid;
-  grid-template-columns: 104px minmax(20px, 1fr) minmax(128px, 3.2fr) minmax(20px, 1fr) minmax(112px, 2.6fr);
-  grid-template-rows: 22px var(--map-h);
-  min-height: 100%;
-  padding: var(--s-4);
-  /* O campo do mapa é uma superfície: a grade de pontos de 1px do console,
-     na cor da costura, sob os nós. Textura, não cor de estado. */
-  background-image: radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 1px);
-  background-size: var(--grid-step) var(--grid-step);
-  background-position: calc(var(--s-4) - 1px) calc(var(--s-4) - 1px);
+/* Busca e "+ serviço" moram no cabeçalho do painel: fixos, qualquer que
+   seja a rolagem ou a seleção. */
+.search {
+  position: relative;
+  display: inline-flex;
+  flex: 0 1 220px;
+  min-width: 96px;
+}
+.search__input {
+  padding-right: 22px;
+}
+.search__input::-webkit-search-cancel-button {
+  display: none;
+}
+.search__kbd {
+  position: absolute;
+  right: var(--s-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-3);
+  pointer-events: none;
+}
+.search__input:focus-visible + .search__kbd {
+  display: none;
+}
+.svc__new kbd {
+  color: var(--ink-3);
+  opacity: 1;
+}
+.svc__new.is-on {
+  border-color: var(--override);
 }
 
-.map__colhead {
+/* Linha, cabeçalho e colunas: serviço (ponto, nome, entrada), destino e regra.
+   As larguras fixas do destino e da regra alinham as colunas entre linhas sem
+   tabela, e o nome tem teto para a entrada não ser esmagada. */
+.svc {
+  --svc-dest: minmax(0, 13rem);
+  --svc-rule: 8.5rem;
+}
+.svc__head,
+.svc__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--svc-dest) var(--svc-rule);
+  align-items: center;
+  column-gap: var(--s-4);
+  padding-inline: var(--s-4);
+}
+.svc__main {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 11rem) minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--s-3);
+  min-width: 0;
+  height: var(--row-h);
+  text-align: left;
+}
+
+.svc__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: var(--row-h);
+  background: var(--panel);
+  border-bottom: 1px solid var(--seam);
   font-size: var(--text-caps);
+  font-weight: 600;
   font-variant-caps: all-small-caps;
   letter-spacing: 0.08em;
   color: var(--ink-3);
-  line-height: 1;
+  white-space: nowrap;
+}
+.svc__head .svc__main {
+  height: auto;
+}
+.svc__rulehead {
+  text-align: right;
 }
 
-.map__col {
-  position: relative;
-  height: var(--map-h);
-  min-width: 0;
+.svc__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-.map__col > .node {
-  position: absolute;
-  left: 0;
-  right: 0;
+.svc__row {
+  border-bottom: 1px solid var(--seam);
+  cursor: pointer;
+  transition: background-color 120ms var(--ease-out);
 }
-
-.map__edges {
-  display: block;
-  width: 100%;
-  height: var(--map-h);
-  overflow: visible;
-}
-
-.map__edges path {
-  stroke: var(--seam-strong);
-  stroke-width: 1;
-  fill: none;
-  vector-effect: non-scaling-stroke;
-  transition: stroke 160ms var(--ease-out), opacity 160ms var(--ease-out);
-}
-
-.map__edges .is-selected {
-  stroke: var(--override);
-}
-
-.map__edges .is-down {
-  stroke: var(--fault);
-  stroke-dasharray: 3 3;
-}
-
-.map__edges .is-dim {
-  opacity: 0.3;
-}
-
-.node {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  height: var(--map-row);
-  padding-inline: var(--s-3);
-  border: 1px solid var(--seam-strong);
-  border-radius: var(--radius);
+.svc__row:hover {
   background: var(--panel-raised);
-  min-width: 0;
-  text-align: left;
-  overflow: hidden;
-  transition: opacity 160ms var(--ease-out), border-color 160ms var(--ease-out),
-    background-color 160ms var(--ease-out);
+}
+/* Selecionado: o mesmo azul da troca aberta no tráfego, fundo e dois traços. */
+.svc__row.is-selected {
+  background: var(--override-dim);
+  box-shadow: inset 0 1px 0 var(--override), inset 0 -1px 0 var(--override);
 }
 
-.node__name {
-  flex: 0 1 auto;
-  min-width: 0;
+.svc__main:focus-visible,
+.svc__dest:focus-visible {
+  outline: 1px solid var(--override);
+  outline-offset: -1px;
+}
+
+.svc__name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ink);
-}
-
-.node--route .node__name {
   font-weight: 600;
-  flex-shrink: 0;
-  max-width: 55%;
 }
-
-.node__meta {
-  flex: 1 1 0;
-  min-width: 0;
-  color: var(--ink-3);
+.svc__entry {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--ink-2);
 }
 
-.node--upstream .node__meta {
-  flex: 0 1 auto;
-  margin-left: auto;
-  text-align: right;
+.dot--none {
+  background: transparent;
 }
 
-.node__meta.is-fault {
+/* Destino: botão próprio, porque clicar nele filtra o tráfego por destino. */
+.svc__dest {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  height: 20px;
+  padding-inline: var(--s-2);
+  margin-inline: calc(-1 * var(--s-2));
+  border-radius: var(--radius);
+  color: var(--ink-2);
+  text-align: left;
+  white-space: nowrap;
+}
+.svc__dest:hover {
+  color: var(--ink);
+  background: var(--panel);
+}
+.svc__dest.is-on {
+  color: var(--override);
+  box-shadow: inset 0 0 0 1px var(--override);
+}
+.svc__arrow {
+  flex: none;
+  color: var(--ink-3);
+}
+.svc__host {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.svc__down {
+  flex: none;
   color: var(--fault);
 }
-
-.node__short {
-  display: none;
+.svc__dest--none {
+  color: var(--ink-3);
+  font-size: var(--text-md);
 }
 
-.node__tag {
-  flex: none;
+/* Regra ativa: efeito e probabilidade, na cor do que ela faz, com a
+   probabilidade também como fração de um traço de 2px sob o selo. */
+.svc__rule {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.svc__tag {
+  position: relative;
+  padding-bottom: 3px;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums slashed-zero;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.node__tag--synth,
-.node__tag--drop {
+.svc__tag--synth,
+.svc__tag--drop {
   color: var(--fault);
 }
-.node__tag--delay {
+.svc__tag--delay {
   color: var(--injected);
 }
-
-/* A probabilidade aplicada, como fração da largura do nó. */
-.node__meter {
+/* Trilho de costura e, sobre ele, a fração aplicada: um medidor, não um sublinhado. */
+.svc__tag::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--seam-strong);
+}
+.svc__meter {
   position: absolute;
   left: 0;
   bottom: 0;
   height: 2px;
+  background: currentColor;
 }
-.node__meter--synth,
-.node__meter--drop {
-  background: var(--fault);
-}
-.node__meter--delay {
-  background: var(--injected);
-}
-
-button.node:hover {
-  border-color: var(--ink-3);
-}
-
-.node--intervened,
-button.node--intervened:hover {
-  border-color: var(--override);
-}
-
-.node--selected,
-button.node--selected:hover {
-  border-color: var(--override);
-  background: var(--override-dim);
-}
-
-.node--down,
-button.node--down:hover {
-  border-color: var(--fault);
-}
-
-.node--client {
-  background: transparent;
-}
-
-/* Fora da seleção, o nó recua pelo tom, não pela opacidade: fundo do painel,
-   costura fina e tinta --ink-3 (4.5:1 sobre --panel), para continuar legível
-   e clicável. As cores de estado viram cinza; o que está fora do foco não
-   disputa atenção com o caminho selecionado. */
-.node.is-dim {
-  background: var(--panel);
-  border-color: var(--seam);
-}
-.node.is-dim .node__name,
-.node.is-dim .node__meta,
-.node.is-dim .node__meta.is-fault,
-.node.is-dim .node__tag {
+.svc__tag.is-stale {
   color: var(--ink-3);
 }
-.node.is-dim .node__meter {
-  background: var(--seam-strong);
+
+/* Com um destino selecionado, os serviços que não vão para ele recuam pelo
+   tom (tinta --ink-3, legível) e perdem a cor de estado. */
+.svc__row.is-dim .svc__name,
+.svc__row.is-dim .svc__entry,
+.svc__row.is-dim .svc__dest,
+.svc__row.is-dim .svc__down,
+.svc__row.is-dim .svc__tag {
+  color: var(--ink-3);
+  font-weight: 400;
 }
-.node.is-dim .dot {
+.svc__row.is-dim .dot {
   opacity: 0.6;
 }
-.node.is-dim:hover,
-.node.is-dim:focus-visible {
-  border-color: var(--seam-strong);
-}
-.node.is-dim:hover .node__name,
-.node.is-dim:focus-visible .node__name {
-  color: var(--ink-2);
+
+.svc__notice {
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--seam);
 }
 
-.node:focus-visible {
-  outline: 1px solid var(--override);
-  outline-offset: 1px;
+/* Cadastro de serviço no painel da direita. */
+.newsvc {
+  padding: var(--s-1) var(--s-4) var(--s-5);
+}
+.newsvc__known .text-button.is-on {
+  color: var(--override);
 }
 
-.node--ghost {
-  border-style: dashed;
-  background: transparent;
-  color: var(--ink-3);
-}
-
+/* Estreito: a entrada sai da linha (continua na dica e no leitor de tela), e
+   destino e regra encolhem; o "fora" fica em texto, sem depender da cor. */
 @media (max-width: 640px) {
-  .map {
-    grid-template-columns: 52px minmax(10px, 1fr) minmax(0, 6fr) minmax(10px, 1fr) minmax(0, 3.6fr);
-    padding: var(--s-3);
+  .svc {
+    --svc-dest: minmax(0, 9rem);
+    --svc-rule: 6.5rem;
   }
-  .node--route .node__meta,
-  .node--upstream .node__meta,
-  .node--client .node__name {
+  .svc__head,
+  .svc__row {
+    column-gap: var(--s-3);
+    padding-inline: var(--s-3);
+  }
+  .svc__main {
+    grid-template-columns: 7px minmax(0, 1fr);
+  }
+  .svc__entry {
     display: none;
   }
-  /* Upstream estreito: o nome vira a porta, que é o que os diferencia, e o
-     indisponível mantém uma palavra, para não depender só da cor. */
-  .node .node__long {
+  .search {
+    flex-basis: 120px;
+  }
+  .svc__new kbd,
+  .search__kbd {
     display: none;
   }
-  .node .node__short {
-    display: inline;
-  }
-  .node--upstream .node__meta.is-fault {
-    display: block;
-    flex: none;
-  }
-  .node__stale {
+  .svc__subx {
     display: none;
-  }
-  .node--client .node__meta {
-    flex: none;
-    color: var(--ink-2);
-  }
-  .node {
-    padding-inline: var(--s-2);
-    gap: var(--s-2);
-  }
-  .node--route .node__name {
-    max-width: none;
-    flex-shrink: 1;
-  }
-  .node__tag {
-    margin-left: auto;
   }
 }
 
@@ -1712,6 +1732,11 @@ kbd {
 .traffic tbody tr {
   cursor: pointer;
 }
+/* A troca aberta no detalhe: seleção, então azul. */
+.traffic tr.is-open td {
+  background: var(--override-dim);
+  box-shadow: inset 0 1px 0 var(--override), inset 0 -1px 0 var(--override);
+}
 .traffic tbody tr:focus-visible {
   outline: none;
 }
@@ -1740,9 +1765,6 @@ kbd {
 /* Sem conexão: números vivos da última atualização, marcados como parados. */
 .ov__live.is-stale,
 .ov__live.is-stale .ov__on {
-  color: var(--ink-3);
-}
-.node__tag.is-stale {
   color: var(--ink-3);
 }
 

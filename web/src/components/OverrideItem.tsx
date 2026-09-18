@@ -6,7 +6,7 @@ import { WriteCancelled } from "../commentsGuard";
 import { clock, formatDuration, ms, overrideSelector, parseDuration, seconds } from "../format";
 import { toApiError, useResource } from "../hooks";
 import { mergeDiff, type MergePatch } from "../patch";
-import { isActive } from "../topology";
+import { isActive } from "../services";
 import { usePatchWriter } from "../writer";
 import {
   DurationField,
@@ -114,15 +114,15 @@ export function OverrideItem({ route, doc, override, state, at, now, guard, onSh
       <div className="ov__head">
         <Switch
           checked={enabled}
-          label={`Override ${o.name}`}
+          label={`Regra ${o.name}`}
           onChange={(v) => w.change({ enabled: v })}
         />
         <span className="ov__name" id={`${ids}-name`}>
           {o.name}
         </span>
         {o.source ? (
-          <span className={`prov prov--${o.source.kind}`} title={o.source.kind === "learned" ? "Criado pelo modo aprendizado a partir de uma troca real" : "Derivado de uma troca capturada"}>
-            {o.source.kind === "learned" ? "aprendido" : "derivado"}
+          <span className={`prov prov--${o.source.kind}`} title={o.source.kind === "learned" ? "Criada pelo modo aprendizado a partir de uma troca real" : "Derivada de uma troca capturada"}>
+            {o.source.kind === "learned" ? "aprendida" : "derivada"}
           </span>
         ) : null}
         <LiveState enabled={enabled} active={active} state={state} now={now} at={at} busy={w.busy ? (guard.asking === doc.file ? "esperando a confirmação" : "gravando") : null} stale={stale} onReset={reset} />
@@ -243,7 +243,7 @@ export function OverrideItem({ route, doc, override, state, at, now, guard, onSh
             </span>
           ) : (
             <button type="button" className="text-button" onClick={() => setConfirmDelete(true)}>
-              remover override
+              remover regra
             </button>
           )}
         </div>
@@ -260,7 +260,7 @@ function Effect({ o }: { o: Override }) {
     const l = typeof o.latency === "string" ? o.latency : `${o.latency.min}–${o.latency.max}`;
     parts.push(<span key="l" className="tone-injected mono">+{l}</span>);
   }
-  if (!o.drop && !o.respond) parts.push(<span key="u" className="dim">upstream</span>);
+  if (!o.drop && !o.respond) parts.push(<span key="u" className="dim">destino</span>);
   return (
     <>
       {parts.map((p, i) => (
@@ -295,7 +295,7 @@ function LiveState({
 }) {
   const parts = [];
   if (!enabled) {
-    parts.push(<span key="s">desligado</span>);
+    parts.push(<span key="s">desligada</span>);
   } else if (state && !active) {
     const why =
       state.expired === "applications" || (state.maxApplications !== null && state.applications >= state.maxApplications)
@@ -312,7 +312,7 @@ function LiveState({
   } else {
     parts.push(
       <span key="s" className="ov__on">
-        ativo
+        ativa
       </span>,
     );
     if (state?.ttlRemainingMs != null) {
@@ -361,7 +361,7 @@ function SourceLine({
   return (
     <div className="src">
       <p className="src__line">
-        {source.kind === "learned" ? "aprendido" : "derivado"} da troca{" "}
+        {source.kind === "learned" ? "aprendida" : "derivada"} da troca{" "}
         <span className="mono" title={source.exchange}>
           …{source.exchange.slice(-8)}
         </span>
@@ -376,7 +376,7 @@ function SourceLine({
   );
 }
 
-/** A troca que originou o override, lida do histórico se ainda estiver lá. */
+/** A troca que originou a regra (override), lida do histórico se ainda estiver lá. */
 function ExchangePeek({ id, onShowExchange }: { id: string; onShowExchange: (id: string) => void }) {
   const [ex] = useResource((s) => api.getExchange(id, s), [id]);
   if (ex.kind === "loading") return <p className="src__peek dim">lendo a troca…</p>;
@@ -434,7 +434,7 @@ function OverrideForm({
       <Row label="nome" htmlFor={`${ids}-name-in`}>
         <TextField
           id={`${ids}-name-in`}
-          label="Nome do override"
+          label="Nome da regra"
           mono
           size="sm"
           value={o.name}
@@ -519,7 +519,7 @@ function OverrideForm({
             label="Sintetizar resposta"
             onChange={(v) => change({ respond: v ? { status: 503 } : null })}
           />
-          <span className="dim">{r ? "o gateway responde no lugar do upstream" : "encaminha ao upstream"}</span>
+          <span className="dim">{r ? "o gateway responde no lugar do destino" : "redireciona ao destino"}</span>
         </span>
       </Row>
       {r ? (

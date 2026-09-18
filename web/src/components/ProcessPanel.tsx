@@ -33,7 +33,7 @@ const LABELS: Record<string, { label: string; hint?: string }> = {
   "history.expose": { label: "exposição do histórico" },
   "capture.maxBodyBytes": { label: "corpo capturado, máximo", hint: "em bytes; o excesso é truncado" },
   "learning.enabled": { label: "modo aprendizado" },
-  routesDir: { label: "diretório de rotas" },
+  routesDir: { label: "diretório dos serviços" },
 };
 
 export function ProcessBody({
@@ -300,8 +300,8 @@ function ReloadFromDisk() {
       <span className="dim">para quando gateway.json ou routes/ foram editados fora do painel</span>
       {result ? (
         <p className="proc__notes" aria-live="polite">
-          {result.routes} rotas carregadas.
-          {result.changed.routes.length ? ` Rotas alteradas: ${result.changed.routes.join(", ")}.` : " Nenhuma rota mudou."}
+          {result.routes} {result.routes === 1 ? "serviço carregado" : "serviços carregados"}.
+          {result.changed.routes.length ? ` Serviços alterados: ${result.changed.routes.join(", ")}.` : " Nenhum serviço mudou."}
           {result.changed.settings.length ? ` Configurações: ${result.changed.settings.join(", ")}.` : ""}
           {result.warnings.map((w, i) => (
             <span key={i} className="dim">
