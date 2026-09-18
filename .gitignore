@@ -24,3 +24,7 @@ Thumbs.db
 
 # Build local
 /bin/
+
+# Impeccable: preferências locais e referências baixadas
+.impeccable/config.local.json
+.impeccable/ref/
