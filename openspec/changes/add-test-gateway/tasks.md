@@ -18,11 +18,11 @@
 
 ## 3. Roteamento reverso
 
-- [ ] 3.1 Implementar a resolução de rota por lista ordenada com curinga de sufixo e path exato (host antes de path, mais específico antes de menos), e verificar pelos cenários de precedência das requirements de roteamento por curinga e por host
-- [ ] 3.2 Implementar o encaminhamento sobre `httputil.ReverseProxy` com remoção opcional de prefixo, e verificar pelos cenários de remoção e preservação de prefixo
-- [ ] 3.3 Implementar os cabeçalhos de encaminhamento com acúmulo de `X-Forwarded-For` e preservação opcional do `Host`, e verificar pelos três cenários da requirement de encaminhamento de cabeçalhos
-- [ ] 3.4 Implementar as respostas de falha do upstream (`502` sem conexão, `504` por tempo limite, `404` sem rota) com corpo diagnóstico, e verificar pelos cenários correspondentes
-- [ ] 3.5 Verificar a transparência do tráfego com um teste de ponta a ponta que exercita método e corpo preservados, status repassado e resposta `text/event-stream` chegando incrementalmente
+- [x] 3.1 Implementar a resolução de rota por lista ordenada com curinga de sufixo e path exato (host antes de path, mais específico antes de menos), e verificar pelos cenários de precedência das requirements de roteamento por curinga e por host
+- [x] 3.2 Implementar o encaminhamento sobre `httputil.ReverseProxy` com remoção opcional de prefixo, e verificar pelos cenários de remoção e preservação de prefixo
+- [x] 3.3 Implementar os cabeçalhos de encaminhamento com acúmulo de `X-Forwarded-For` e preservação opcional do `Host`, e verificar pelos três cenários da requirement de encaminhamento de cabeçalhos
+- [x] 3.4 Implementar as respostas de falha do upstream (`502` sem conexão, `504` por tempo limite, `404` sem rota) com corpo diagnóstico, e verificar pelos cenários correspondentes
+- [x] 3.5 Verificar a transparência do tráfego com um teste de ponta a ponta que exercita método e corpo preservados, status repassado e resposta `text/event-stream` chegando incrementalmente
 
 ## 4. Armazenamento do histórico
 
