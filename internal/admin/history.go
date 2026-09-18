@@ -144,6 +144,7 @@ func (h *Handler) clearExchanges(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal", "falha ao limpar o histórico: "+err.Error())
 		return
 	}
+	h.events.publish("history", historyEvent{Cause: "cleared", Backend: h.history.Backend()})
 	w.WriteHeader(http.StatusNoContent)
 }
 

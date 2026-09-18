@@ -23,6 +23,16 @@ func NewRouteDoc(file string, r Route) RouteDoc {
 	return RouteDoc{File: file, Route: r, index: &nodeIndex{file: file}}
 }
 
+// Locate produz um erro de validação para o campo do documento, com a
+// posição do campo quando o documento veio de um texto (ParseRouteDoc).
+func (d RouteDoc) Locate(field, msg string) *Error {
+	x := d.index
+	if x == nil {
+		x = &nodeIndex{file: d.File}
+	}
+	return x.locate(issue{field: field, msg: msg})
+}
+
 // IsRouteFile informa se o nome tem extensão de documento de rota.
 func IsRouteFile(name string) bool {
 	ext := strings.ToLower(filepath.Ext(name))
@@ -114,7 +124,9 @@ func collisions(routes []*CompiledRoute) Errors {
 	byName := map[string]*CompiledRoute{}
 	byMatch := map[RouteMatch]*CompiledRoute{}
 	locate := func(r *CompiledRoute, field, format string, args ...any) *Error {
-		return r.index.locate(issuef(field, format, args...))
+		e := r.index.locate(issuef(field, format, args...))
+		e.Conflict = true
+		return e
 	}
 	for _, r := range routes {
 		if prev, ok := byName[r.Doc.Name]; ok {

@@ -251,6 +251,24 @@ func (s Settings) Effective() []EffectiveValue {
 // LoadSettings monta a configuração do processo: padrão, depois gateway.json,
 // depois o ambiente. Um gateway.json ausente gera aviso, não erro.
 func LoadSettings(configPath string, getenv func(string) (string, bool)) (Settings, []string, error) {
+	data, err := os.ReadFile(configPath)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return loadSettings(configPath, nil, false, getenv)
+	case err != nil:
+		return Settings{}, nil, fmt.Errorf("lendo %s: %w", configPath, err)
+	}
+	return loadSettings(configPath, data, true, getenv)
+}
+
+// SettingsFrom monta a configuração do processo como LoadSettings, mas com
+// data no lugar do conteúdo de configPath, sem ler o disco. Serve a quem
+// valida um gateway.json antes de gravá-lo.
+func SettingsFrom(configPath string, data []byte, getenv func(string) (string, bool)) (Settings, []string, error) {
+	return loadSettings(configPath, data, true, getenv)
+}
+
+func loadSettings(configPath string, data []byte, exists bool, getenv func(string) (string, bool)) (Settings, []string, error) {
 	var s Settings
 	s.Sources = map[string]Source{}
 	for _, f := range settingFields {
@@ -260,14 +278,11 @@ func LoadSettings(configPath string, getenv func(string) (string, bool)) (Settin
 
 	var warnings []string
 	x := &nodeIndex{file: configPath}
-	data, err := os.ReadFile(configPath)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
+	if !exists {
 		warnings = append(warnings, fmt.Sprintf("%s não encontrado; usando valores padrão", configPath))
-	case err != nil:
-		return s, nil, fmt.Errorf("lendo %s: %w", configPath, err)
-	default:
+	} else {
 		var g GatewayFile
+		var err error
 		if err := jsonSyntax(configPath, data); err != nil {
 			return s, nil, err
 		}

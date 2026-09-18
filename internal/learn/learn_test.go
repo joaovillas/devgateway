@@ -18,7 +18,7 @@ import (
 
 func setup(t *testing.T) (string, *config.Live, *Learner) {
 	t.Helper()
-	dir := t.TempDir()
+	dir := tempDir(t)
 	doc := filepath.Join(dir, "api.yaml")
 	if err := os.WriteFile(doc, []byte("schemaVersion: 1\nname: api\nupstream: http://localhost:9\nmatch:\n  path: /api/*\n"), 0o644); err != nil {
 		t.Fatal(err)

@@ -295,3 +295,17 @@ func TestRespondHeaderWithoutValuesRejected(t *testing.T) {
 		t.Fatalf("o override deveria ser válido: %v", err)
 	}
 }
+
+func TestHasComments(t *testing.T) {
+	for doc, want := range map[string]bool{
+		"# topo\nname: a\n":                         true,
+		"name: a # na linha\n":                      true,
+		"name: a\nmatch:\n  # dentro\n  path: /x\n": true,
+		"name: a\nmatch:\n  path: /x\n":             false,
+		"name: 'a # não é comentário'\n":            false,
+	} {
+		if got := HasComments([]byte(doc)); got != want {
+			t.Errorf("HasComments(%q) = %v, esperado %v", doc, got, want)
+		}
+	}
+}

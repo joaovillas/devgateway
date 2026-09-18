@@ -38,3 +38,16 @@ func BackendName(s config.Settings) string {
 	}
 	return s.HistoryBackend
 }
+
+// Reopens informa se a passagem da configuração old para next exige abrir
+// outro backend do histórico: o backend mudou, a capacidade do backend em
+// memória mudou, ou o arquivo de um backend persistente mudou.
+func Reopens(old, next config.Settings) bool {
+	if BackendName(old) != BackendName(next) {
+		return true
+	}
+	if BackendName(next) == config.BackendMemory {
+		return old.HistoryCapacity != next.HistoryCapacity
+	}
+	return old.HistoryPath != next.HistoryPath
+}

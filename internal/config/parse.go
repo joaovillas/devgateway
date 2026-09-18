@@ -20,6 +20,9 @@ type Error struct {
 	Line   int
 	Column int
 	Msg    string
+	// Conflict marca uma colisão com outro documento (nome ou casamento
+	// repetido, arquivo já existente), distinta de um valor inválido.
+	Conflict bool
 }
 
 func (e *Error) Error() string {
@@ -38,6 +41,16 @@ func (e *Error) Error() string {
 
 // Errors agrupa vários problemas encontrados numa mesma carga.
 type Errors []*Error
+
+// HasConflict informa se algum dos problemas é uma colisão entre documentos.
+func (es Errors) HasConflict() bool {
+	for _, e := range es {
+		if e.Conflict {
+			return true
+		}
+	}
+	return false
+}
 
 func (es Errors) Error() string {
 	msgs := make([]string, len(es))
@@ -354,6 +367,52 @@ func parseRoute(file string, data []byte) (Route, *nodeIndex, error) {
 		return r, nil, err
 	}
 	return r, x, nil
+}
+
+// ParseRouteDoc interpreta um documento de rota guardando a posição de cada
+// campo, para que os erros da validação posterior (BuildRoutes) apontem linha
+// e coluna no texto dado.
+func ParseRouteDoc(file string, data []byte) (RouteDoc, error) {
+	r, x, err := parseRoute(file, data)
+	if err != nil {
+		return RouteDoc{}, err
+	}
+	return RouteDoc{File: file, Route: r, index: x}, nil
+}
+
+// DecodeJSON interpreta data, que precisa ser JSON, no destino v com as
+// mesmas regras de forma dos documentos: campos desconhecidos são recusados
+// e cada erro nomeia o campo e sua posição no texto. label identifica o
+// texto nas mensagens.
+func DecodeJSON(label string, data []byte, v any) error {
+	if err := jsonSyntax(label, data); err != nil {
+		return err
+	}
+	_, err := decodeDocument(label, data, v)
+	return err
+}
+
+// HasComments informa se o documento YAML contém comentários, que a
+// reescrita por MarshalRoute perderia. Um documento ilegível é tratado como
+// sem comentários.
+func HasComments(data []byte) bool {
+	var root yaml.Node
+	if yaml.Unmarshal(data, &root) != nil {
+		return false
+	}
+	var walk func(n *yaml.Node) bool
+	walk = func(n *yaml.Node) bool {
+		if n.HeadComment != "" || n.LineComment != "" || n.FootComment != "" {
+			return true
+		}
+		for _, c := range n.Content {
+			if walk(c) {
+				return true
+			}
+		}
+		return false
+	}
+	return walk(&root)
 }
 
 // MarshalRoute serializa um documento de rota em YAML.

@@ -60,6 +60,20 @@ func (l Loader) Load() (*Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
+	return l.withRoutes(s, warnings)
+}
+
+// LoadWith constrói um snapshot como Load, mas com data no lugar do conteúdo
+// de gateway.json, sem gravá-lo. O diretório de rotas é lido do disco.
+func (l Loader) LoadWith(data []byte) (*Snapshot, error) {
+	s, warnings, err := SettingsFrom(l.ConfigPath, data, l.Getenv)
+	if err != nil {
+		return nil, err
+	}
+	return l.withRoutes(s, warnings)
+}
+
+func (l Loader) withRoutes(s Settings, warnings []string) (*Snapshot, error) {
 	docs, w, err := ReadRoutesDir(s.RoutesDir)
 	if err != nil {
 		return nil, err

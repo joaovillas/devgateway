@@ -31,7 +31,11 @@ func quietLog() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, n
 // startWith sobe o processo com um gateway.json em portas livres e as rotas dadas.
 func startWith(t *testing.T, gatewayJSON string, routes map[string]string) *App {
 	t.Helper()
-	dir := t.TempDir()
+	// Os t.TempDir do teste, criados depois daqui (como o arquivo de um
+	// backend do histórico), só são removidos depois do encerramento do
+	// processo, que fecha esses arquivos.
+	t.TempDir()
+	dir := tempDir(t)
 	writeFile(t, filepath.Join(dir, "gateway.json"), gatewayJSON)
 	for name, doc := range routes {
 		writeFile(t, filepath.Join(dir, "routes", name), doc)

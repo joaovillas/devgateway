@@ -1,16 +1,10 @@
-package app
+package learn
 
 import (
 	"os"
 	"testing"
 	"time"
-
-	"github.com/gamerjp64/gateway/internal/config"
 )
-
-func loaderFor(path string) config.Loader {
-	return config.Loader{ConfigPath: path, Getenv: os.LookupEnv}
-}
 
 // tempDir é um t.TempDir cuja remoção insiste por alguns segundos. No
 // Windows, um arquivo recém-substituído por rename pode ficar marcado para
@@ -18,7 +12,7 @@ func loaderFor(path string) config.Loader {
 // diretório só esvazia quando ele o solta.
 func tempDir(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("", "gateway-test-")
+	dir, err := os.MkdirTemp("", "gateway-learn-test-")
 	if err != nil {
 		t.Fatal(err)
 	}

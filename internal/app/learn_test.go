@@ -48,7 +48,7 @@ type learnEnv struct {
 // gateway.json dado; extra acrescenta documentos de rota.
 func startLearning(t *testing.T, gatewayJSON, upstream string, extra map[string]string) *learnEnv {
 	t.Helper()
-	dir := t.TempDir()
+	dir := tempDir(t)
 	writeFile(t, filepath.Join(dir, "gateway.json"), gatewayJSON)
 	doc := filepath.Join(dir, "routes", "api.yaml")
 	writeFile(t, doc, "# rota da API\nschemaVersion: 1\nname: api\nupstream: "+upstream+"\nmatch:\n  path: /api/*\n")

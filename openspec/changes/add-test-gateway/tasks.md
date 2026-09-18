@@ -60,16 +60,16 @@
 
 ## 7. API de administração
 
-- [ ] 7.1 Implementar os endpoints de leitura e escrita de rotas e overrides, e verificar por testes de API que cada recurso é criado, alterado, lido e removido
-- [ ] 7.2 Implementar a persistência por documento com escrita atômica e mutex de escrita, e verificar pelos quatro cenários da requirement de API de administração, incluindo a comparação byte a byte dos documentos não tocados
-- [ ] 7.3 Implementar a recarga sob comando preservando a configuração anterior em caso de erro, e verificar pelos cenários de recarga, requisições em curso e recarga inválida da requirement de recarga sem reinício
-- [ ] 7.4 Implementar os endpoints do histórico — listagem com filtros, leitura por identificador, navegação por cursor e limpeza — e verificar por teste de API que cada um respeita a configuração de exposição
-- [ ] 7.5 Implementar o endpoint de configuração efetiva com a origem de cada valor, e verificar pelo cenário "Origem efetiva consultável"
-- [ ] 7.6 Implementar a derivação de override a partir de uma troca capturada, incluindo a recusa para troca inexistente e o tratamento de corpo truncado, e verificar pelos três cenários da requirement de derivação
-- [ ] 7.7 Implementar o fluxo SSE de trocas novas com agregação de no máximo uma atualização por segundo, e verificar por teste que um cliente conectado recebe as trocas em ordem e que a conexão sobrevive a períodos sem tráfego
-- [ ] 7.8 Escrever a referência da API e verificar que cada operação das specs tem um exemplo executável por `curl`
-- [ ] 7.9 Implementar os endpoints de leitura e escrita da configuração do processo com gravação em `gateway.json`, recusa nomeando a variável para valores do ambiente e liga/desliga do modo aprendizado, e verificar pelos cenários "Configuração do processo alterada pela API" e "Valor do ambiente é travado"
-- [ ] 7.10 Implementar o supervisor de listeners com troca a quente das portas de tráfego e administração, e verificar pelos cenários "Porta trocada a quente" e "Porta nova indisponível preserva a atual"
+- [x] 7.1 Implementar os endpoints de leitura e escrita de rotas e overrides, e verificar por testes de API que cada recurso é criado, alterado, lido e removido
+- [x] 7.2 Implementar a persistência por documento com escrita atômica e mutex de escrita, e verificar pelos quatro cenários da requirement de API de administração, incluindo a comparação byte a byte dos documentos não tocados
+- [x] 7.3 Implementar a recarga sob comando preservando a configuração anterior em caso de erro, e verificar pelos cenários de recarga, requisições em curso e recarga inválida da requirement de recarga sem reinício
+- [x] 7.4 Implementar os endpoints do histórico — listagem com filtros, leitura por identificador, navegação por cursor e limpeza — e verificar por teste de API que cada um respeita a configuração de exposição
+- [x] 7.5 Implementar o endpoint de configuração efetiva com a origem de cada valor, e verificar pelo cenário "Origem efetiva consultável"
+- [x] 7.6 Implementar a derivação de override a partir de uma troca capturada, incluindo a recusa para troca inexistente e o tratamento de corpo truncado, e verificar pelos três cenários da requirement de derivação
+- [x] 7.7 Implementar o fluxo SSE de trocas novas com agregação de no máximo uma atualização por segundo, e verificar por teste que um cliente conectado recebe as trocas em ordem e que a conexão sobrevive a períodos sem tráfego
+- [x] 7.8 Escrever a referência da API e verificar que cada operação das specs tem um exemplo executável por `curl`
+- [x] 7.9 Implementar os endpoints de leitura e escrita da configuração do processo com gravação em `gateway.json`, recusa nomeando a variável para valores do ambiente e liga/desliga do modo aprendizado, e verificar pelos cenários "Configuração do processo alterada pela API" e "Valor do ambiente é travado"
+- [x] 7.10 Implementar o supervisor de listeners com troca a quente das portas de tráfego e administração, e verificar pelos cenários "Porta trocada a quente" e "Porta nova indisponível preserva a atual"
 
 ## 8. Interface web
 
