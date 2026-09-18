@@ -63,22 +63,22 @@ A interface SHALL permitir ajustar probabilidade, latência e queda de conexão 
 
 ### Requirement: Edição com paridade aos documentos
 
-A interface SHALL permitir consultar e alterar tudo o que `gateway.json` e os documentos de rota configuram, exclusivamente por meio da API de administração. Ao editar uma rota, um override ou a configuração do processo, a interface MUST exibir ao lado o documento correspondente, atualizado a cada alteração, e MUST aceitar edição direta desse documento. Valores definidos por variável de ambiente MUST aparecer travados, indicando a variável responsável.
+A interface SHALL permitir consultar e alterar tudo o que `gateway.json` e os documentos de rota configuram, exclusivamente por meio da API de administração e somente por controles visuais. A interface MUST NOT exibir nem exigir a edição do conteúdo YAML ou JSON dos documentos: eles continuam sendo a fonte de verdade em disco, editáveis no editor do usuário, mas a interface opera sobre os valores. Valores definidos por variável de ambiente MUST aparecer travados, indicando a variável responsável.
 
-#### Scenario: Controle e documento em sincronia
+#### Scenario: Controle grava no arquivo
 
 - **WHEN** a latência de um override é alterada no controle visual
-- **THEN** o documento YAML exibido ao lado passa a declarar a nova latência, e o arquivo em disco também
+- **THEN** o arquivo em disco passa a declarar a nova latência, sem que a interface exiba o documento
 
-#### Scenario: Edição direta do documento
+#### Scenario: Edição externa refletida
 
-- **WHEN** o documento exibido é editado diretamente com um valor válido
-- **THEN** os controles visuais refletem o novo valor e a alteração passa a valer
+- **WHEN** um documento de rota é editado fora da interface com um valor válido e a configuração é recarregada
+- **THEN** os controles visuais refletem o novo valor sem recarregar a página
 
-#### Scenario: Documento inválido é recusado
+#### Scenario: Valor inválido é recusado
 
-- **WHEN** o documento exibido é editado com um valor inválido
-- **THEN** a interface mostra a mensagem de validação apontando o campo e nada é gravado
+- **WHEN** um controle recebe um valor que a validação recusa
+- **THEN** a interface mostra a mensagem de validação junto do controle e nada é gravado
 
 #### Scenario: Valor do ambiente travado
 

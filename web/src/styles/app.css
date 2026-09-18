@@ -94,7 +94,7 @@ button {
 }
 
 .column--right {
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 /* Estreito: os painéis empilham e a página rola; cada painel ocupa a altura
@@ -1518,207 +1518,6 @@ kbd {
   padding: var(--s-3) var(--s-4);
 }
 
-/* ---------- Documento ---------- */
-
-.docwrap {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Barra de estado, avisos e erro ficam à vista enquanto o texto rola. */
-.dochead {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--panel);
-}
-
-.docbar {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  min-height: 32px;
-  padding: var(--s-1) var(--s-4);
-  background: var(--panel);
-  border-bottom: 1px solid var(--seam);
-}
-.docbar--dirty {
-  background: var(--panel-raised);
-}
-.docbar__state {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.docbar--dirty .docbar__state {
-  color: var(--ink);
-}
-.docbar__changed {
-  color: var(--ink-2);
-}
-.docbar__lang {
-  margin-left: auto;
-}
-
-.docerr {
-  padding: var(--s-3) var(--s-4);
-  border-bottom: 1px solid var(--seam);
-}
-.docerr__actions {
-  margin: var(--s-2) 0 0;
-  gap: var(--s-2) var(--s-5);
-  flex-wrap: wrap;
-}
-
-.doc {
-  flex: 1;
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  margin: 0;
-  padding: var(--s-3) 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  line-height: 1.6;
-  tab-size: 2;
-}
-
-.doc__gutter {
-  padding-inline: var(--s-4) var(--s-3);
-  color: var(--ink-3);
-  text-align: right;
-  user-select: none;
-  border-right: 1px solid var(--seam);
-}
-.doc__gutter > div {
-  position: relative;
-}
-/* Linha que mudou na última gravação: um traço azul na margem, sem animação. */
-.doc__gutter .is-changed {
-  color: var(--ink);
-}
-.doc__gutter .is-changed::before {
-  content: "";
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  right: calc(-1 * var(--s-3) - 2px);
-  width: 2px;
-  background: var(--override);
-}
-.doc__gutter .is-bad {
-  color: var(--fault);
-  font-weight: 700;
-}
-
-/* Realce e textarea na mesma célula: os dois com a mesma fonte, o mesmo
-   recuo e a mesma altura de linha, e a célula rola na horizontal pelos dois. */
-.doc__code {
-  display: grid;
-  min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-.doc__hl,
-.doc__text {
-  grid-area: 1 / 1;
-  margin: 0;
-  padding: 0 var(--s-4);
-  border: 0;
-  font: inherit;
-  line-height: inherit;
-  letter-spacing: normal;
-  white-space: pre;
-  tab-size: inherit;
-}
-.doc__hl {
-  color: var(--ink);
-  pointer-events: none;
-}
-.doc__line {
-  display: block;
-}
-/* Linha que acabou de mudar em disco (o controle ao lado gravou): um
-   fundo azul que se apaga, junto do traço da margem. */
-.doc__line.is-changed {
-  animation: arrive 1.6s var(--ease-out);
-}
-.hl-key {
-  color: var(--ink-2);
-}
-.hl-value {
-  color: var(--ink);
-}
-.hl-punct,
-.hl-comment {
-  color: var(--ink-3);
-}
-.doc__text {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  background: transparent;
-  color: transparent;
-  resize: none;
-  overflow: hidden;
-  field-sizing: content;
-  caret-color: var(--override);
-}
-.doc__text::selection {
-  color: transparent;
-  background: var(--override-dim);
-}
-.doc__text:focus-visible {
-  outline: none;
-}
-.doc:focus-within .doc__gutter {
-  border-right-color: var(--override);
-}
-
-.notice {
-  padding: var(--s-3) var(--s-4);
-  border-bottom: 1px solid var(--seam);
-  color: var(--ink-2);
-}
-
-/* A troca aberta no detalhe: seleção, então azul. */
-.traffic tr.is-open td {
-  background: var(--override-dim);
-  box-shadow: inset 0 1px 0 var(--override), inset 0 -1px 0 var(--override);
-}
-
-.bar__on {
-  color: var(--ink);
-}
-.bar__lock {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  color: var(--ink-2);
-}
-
-@media (max-width: 640px) {
-  .row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s-1);
-  }
-  .setting {
-    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
-    grid-template-areas:
-      "label origin"
-      "ctl ctl"
-      "hint hint";
-  }
-  .kv__row,
-  .kv__row:has(> :nth-child(3):last-child) {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  }
-  .kv__row > :nth-child(3):not(:last-child) {
-    grid-column: 1 / 3;
-  }
-}
-
 /* ---------- Tempo real e histórico ---------- */
 
 .live {
@@ -1758,8 +1557,7 @@ kbd {
   background: repeating-linear-gradient(135deg, var(--ink-2) 0 1px, transparent 1px 3px);
 }
 
-/* Os dois momentos animados da tela: a troca que acabou de chegar pelo fluxo
-   e, no documento, a linha que o controle ao lado acabou de mudar. */
+/* O único momento animado da tela: a troca que acabou de chegar pelo fluxo. */
 .traffic tr.is-new td {
   animation: arrive 1.6s var(--ease-out);
 }
@@ -1955,10 +1753,6 @@ kbd {
 }
 
 /* ---------- Detalhe da troca ---------- */
-
-.column--right.column--detail {
-  grid-template-rows: minmax(0, 2fr) minmax(0, 1fr);
-}
 
 .xd {
   padding-bottom: var(--s-5);
@@ -2297,9 +2091,6 @@ kbd {
   .traffic-scroll {
     max-height: 70vh;
   }
-  .column--right.column--detail {
-    grid-template-rows: auto;
-  }
 }
 
 /* Estreito: a lista deixa de lado a rota e encurta o waterfall; a troca
@@ -2389,13 +2180,6 @@ kbd {
 .xd__bar ~ .guard,
 .panel__body > .guard {
   z-index: 3;
-}
-
-/* Notas do servidor sobre a última gravação do gateway.json, sob a barra do documento. */
-.dochead > .proc__notes {
-  margin: 0;
-  padding: var(--s-3) var(--s-4) var(--s-3) calc(var(--s-4) + var(--s-5));
-  border-bottom: 1px solid var(--seam);
 }
 
 /* A porta de administração mudou: o painel desta origem parou de vez. */

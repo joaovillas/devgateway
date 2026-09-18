@@ -50,7 +50,7 @@ export function ExchangeDetail({ opened, filter, onOpen, onClose, routes, guard,
   }, [id]);
 
   // Troca aberta só pelo id (a origem de um override, por exemplo): lida a
-  // troca, quem a abriu fica sabendo da rota dela, que decide o documento ao lado.
+  // troca, quem a abriu fica sabendo da rota dela.
   useEffect(() => {
     // Só a troca do id atual: a que ficou de uma abertura anterior não volta.
     if (ex.kind === "ready" && !data && ex.data.id === id) onOpen({ id: ex.data.id, data: ex.data });
@@ -321,7 +321,7 @@ function DeriveBlock({
     return (
       <p className="xd__done" role="status">
         Override <span className="mono">{created.name}</span> criado em <span className="mono">{created.route}</span>,{" "}
-        {created.enabled ? "já valendo" : "desligado"}. O documento ao lado mostra as linhas novas.{" "}
+        {created.enabled ? "já valendo" : "desligado"}.{" "}
         <button type="button" className="link-button" onClick={() => onShowRoute(created.route)}>
           Ajustar na rota
         </button>

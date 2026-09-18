@@ -38,9 +38,7 @@ export function MapPanel({ routes, upstreams, trafficPort, selection, onSelect, 
     body = (
       <Empty title="Nenhuma rota configurada">
         <p>
-          Crie um documento em <span className="mono">routes/</span> e recarregue com{" "}
-          <span className="mono">POST /api/reload</span>, ou crie a rota pela API com{" "}
-          <span className="mono">POST /api/routes</span>.
+          Crie a primeira em <strong>nova rota</strong>, no painel ao lado.
         </p>
       </Empty>
     );

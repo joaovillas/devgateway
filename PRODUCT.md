@@ -31,14 +31,14 @@ Um único conceito, o override, substitui a separação entre mock e caos. Forç
 
 ## Capabilities and Constraints
 
-- **Paridade com os arquivos (requisito do usuário).** Tudo o que se configura editando `gateway.json` ou os YAML de rota MUST ser configurável também pelo painel, e vice-versa. Os dois caminhos são equivalentes.
+- **Paridade com os arquivos (requisito do usuário).** O painel nunca mostra o YAML nem o JSON: opera só por controles visuais. Tudo o que se configura editando `gateway.json` ou os YAML de rota MUST ser configurável também pelo painel, e vice-versa. Os dois caminhos são equivalentes.
 - Rotas: nome, upstream, casamento por host e/ou path (exato ou curinga de sufixo), remoção de prefixo, preservação do Host e timeout.
 - Overrides: seleção por path (exato, curinga ou regex), método, cabeçalhos, query e corpo (operadores equals, regex, json e contains). Também declaram resposta (status, cabeçalhos e corpo), probabilidade, latência (fixa ou em intervalo), queda de conexão, TTL e limite de aplicações.
 - Precedência por especificidade entre rotas e entre overrides. Seed determinístico por ordem de chegada.
 - Histórico com backend memória, NDJSON ou SQLite. Exposição e registro podem ser desligados de forma independente. Há consulta com filtros, leitura por id e navegação item a item.
 - Precedência de configuração: ambiente > `gateway.json` > padrão. A origem de cada valor é consultável.
-- Limites assumidos: a escrita pela API reescreve o documento da rota e perde comentários e ordem de chaves. A mudança de porta exige reinício. Em HTTP/2, a queda de conexão vira cancelamento do stream.
-- **Em aberto:** como o painel edita valores de `gateway.json` que vêm do ambiente (o ambiente vence o arquivo) e valores que só valem após reinício, como as portas. A spec `control-panel` ainda não cobre a edição do processo.
+- Limites assumidos: a escrita pela API reescreve o documento da rota e perde comentários e ordem de chaves. Em HTTP/2, a queda de conexão vira cancelamento do stream.
+- Tudo muda em execução, inclusive portas e backend do histórico. Valores que vêm do ambiente aparecem travados no painel, com a variável indicada.
 
 ## Brand Commitments
 
@@ -51,7 +51,7 @@ Não há usuários, depoimentos, métricas nem capturas reais. Os exemplos de co
 ## Product Principles
 
 1. **Um conceito, um gesto.** Mock e caos são o mesmo override. A interface nunca os separa em lugares diferentes.
-2. **Arquivo e tela são equivalentes.** O que se faz num se faz no outro, e o painel deixa claro o que vai para qual documento.
+2. **Arquivo e tela são equivalentes, sem se misturar.** O que se faz num se faz no outro; o arquivo é para o editor, a tela é só controles, e o painel nunca exibe o documento.
 3. **Mostrar o caminho, não só o log.** A topologia e a decomposição do tempo explicam o que aconteceu. Uma lista sozinha não basta.
 4. **Não tirar o desenvolvedor do fluxo.** Leitura em relance, ajuste imediato sem etapa de salvar e nada que exija sincronizar ou recarregar.
 5. **Nunca esconder por que algo é assim.** Origem de cada valor, override responsável, histórico desabilitado e desconexão aparecem sempre explícitos.

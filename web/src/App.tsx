@@ -17,7 +17,6 @@ import { TopBar } from "./components/TopBar";
 import { MapPanel } from "./components/MapPanel";
 import { TrafficPanel } from "./components/TrafficPanel";
 import { RoutePanel, type ControlView } from "./components/RoutePanel";
-import { DocumentPanel, type DocTarget } from "./components/DocumentPanel";
 import type { OpenedExchange } from "./components/ExchangeDetail";
 
 const VIEW_KEY = "gateway.painel.controles";
@@ -49,7 +48,7 @@ export function App() {
   const [selection, setSelectionRaw] = useSelection();
   const [docVersion, setDocVersion] = useState(0);
   const [view, setViewRaw] = useState<ControlView>(readView);
-  // Troca aberta no detalhe (aba "troca"), com a rota dela para o documento ao lado.
+  // Troca aberta no detalhe (aba "troca"), com a rota dela.
   const [opened, setOpened] = useState<(OpenedExchange & { route?: string }) | null>(null);
   const [listFilter, setListFilter] = useState<ListFilter>(EMPTY_FILTER);
   // Estado vivo dos overrides vindo do evento `overrides` (e das respostas de
@@ -167,27 +166,6 @@ export function App() {
     (name: string | null) => setSelectionRaw(name ? { kind: "route", name } : null),
     [setSelectionRaw],
   );
-  const exchangeRoute = opened ? (opened.route ?? opened.data?.route) : undefined;
-  const selectedRoute =
-    routes.kind === "ready" && selectedRouteName
-      ? routes.data.find((r) => r.route.name === selectedRouteName)
-      : undefined;
-
-  const docTarget: DocTarget =
-    view === "process"
-      ? { kind: "process" }
-      : view === "exchange"
-        ? exchangeRoute
-          ? {
-              kind: "route",
-              name: exchangeRoute,
-              route: routes.kind === "ready" ? routes.data.find((r) => r.route.name === exchangeRoute) : undefined,
-            }
-          : null
-        : selectedRouteName
-        ? { kind: "route", name: selectedRouteName, route: selectedRoute }
-        : null;
-
   const currentAdmin = status.kind === "ready" ? status.data.ports.admin : undefined;
   const onSettings = useCallback(
     (r: SettingsPatchResult) => {
@@ -243,7 +221,7 @@ export function App() {
             onOpen={(ex: Exchange) => openExchange({ id: ex.id, route: ex.route })}
           />
         </div>
-        <div className={"column column--right" + (view === "exchange" ? " column--detail" : "")}>
+        <div className={"column column--right"}>
           <RoutePanel
             view={view}
             onView={setView}
@@ -263,7 +241,6 @@ export function App() {
             onOverrideState={onOverrideState}
             guardScope={status.kind === "ready" ? status.data.routesDir : ""}
           />
-          <DocumentPanel target={docTarget} version={docVersion} onSettings={onSettings} />
         </div>
       </main>
       <datalist id="http-methods">

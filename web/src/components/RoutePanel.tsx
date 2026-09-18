@@ -180,8 +180,7 @@ function CommentsPrompt({ guard }: { guard: CommentsGuard }) {
       </p>
       <p id={`${titleId}-d`}>
         Gravar pelo painel reescreve o arquivo inteiro: os comentários e a ordem das chaves se perdem. Esta pergunta
-        aparece uma vez por arquivo. Para manter os comentários, edite o documento ao lado, que é gravado como
-        escrito.
+        aparece uma vez por arquivo. Para manter os comentários, edite o arquivo no seu editor e recarregue.
       </p>
       <p className="guard__actions">
         <button ref={confirmRef} type="button" className="button button--primary" onClick={guard.confirm}>
@@ -338,8 +337,8 @@ function RouteDetail({
         )}
         {learned > 1 ? (
           <p className="hint">
-            Os aprendidos casam paths exatos. Para cobrir vários de uma vez, troque-os por um override com curinga de
-            sufixo no documento ao lado.
+            Os aprendidos casam paths exatos. Para cobrir vários de uma vez, crie um override com curinga de
+            sufixo (por exemplo <span className="mono">/users/*</span>) e remova os aprendidos.
           </p>
         ) : null}
         {adding ? (

@@ -81,7 +81,7 @@
 - [x] 8.6 Implementar a criação de override a partir de uma troca exibida, com revisão antes de valer, e verificar pelos dois cenários da requirement correspondente
 - [x] 8.7 Implementar o consumo do fluxo SSE com sinalização de desconexão e reconexão automática, e verificar pelos dois cenários da requirement de atualização em tempo real
 - [x] 8.8 Implementar o aviso de perda de comentários antes da primeira escrita num documento de rota que os contenha, e verificar que o aviso aparece uma vez e não reaparece após a confirmação
-- [x] 8.9 Implementar a edição com paridade — controles de todos os campos de rota, override e processo com o documento YAML ou JSON ao lado, atualizado ao vivo e editável, e valores do ambiente travados — e verificar pelos quatro cenários da requirement de edição com paridade
+- [ ] 8.9 Implementar a edição com paridade só por controles — todos os campos de rota, override e processo editáveis na interface, sem exibir o YAML ou JSON dos documentos, com erros de validação junto do controle e valores do ambiente travados — e verificar pelos quatro cenários da requirement de edição com paridade
 - [x] 8.10 Implementar o liga/desliga do override e do modo aprendizado, a distinção dos overrides aprendidos e o acesso à troca de origem, e verificar pelos três cenários da requirement correspondente
 
 ## 9. Distribuição e documentação

@@ -86,8 +86,7 @@ export function ProcessBody({
       <p className="proc__file">
         {view.file.exists ? (
           <>
-            Valores efetivos. O que vem de <span className="mono">{view.file.path}</span> se altera aqui ou no documento ao
-            lado, e vale na hora.
+            Valores efetivos. O que vem de <span className="mono">{view.file.path}</span> se altera aqui e vale na hora.
           </>
         ) : (
           <>

@@ -139,9 +139,9 @@ components:
 
 **Creative North Star: "A Bancada de Instrumentos"**
 
-O painel é um console de painéis fixos sobre um chão grafite: mapa, tráfego, detalhe e documento, cada um com o seu lugar, separados por costuras de 1px e nunca empilhados em camadas. É uma bancada que o desenvolvedor consulta de relance numa segunda tela, então a densidade é alta, a tinta é quase toda neutra e a atenção vai para o único sinal que importa: o que o gateway está fazendo com o tráfego.
+O painel é um console de painéis fixos sobre um chão grafite: mapa, tráfego, detalhe e controles, cada um com o seu lugar, separados por costuras de 1px e nunca empilhados em camadas. É uma bancada que o desenvolvedor consulta de relance numa segunda tela, então a densidade é alta, a tinta é quase toda neutra e a atenção vai para o único sinal que importa: o que o gateway está fazendo com o tráfego.
 
-A cor não decora nada. Azul, âmbar, vermelho e verde são quatro estados com significado fixo, e todo o resto se resolve em tons de grafite e tinta. Números são sempre tabulares, o dado é mono e os cabeçalhos são versalete discreto. A profundidade vem do tom (chão, painel, painel elevado), nunca de sombra. O movimento se limita a dois momentos: a troca que acabou de chegar e a linha do documento que o controle ao lado acabou de mudar.
+A cor não decora nada. Azul, âmbar, vermelho e verde são quatro estados com significado fixo, e todo o resto se resolve em tons de grafite e tinta. Números são sempre tabulares, o dado é mono e os cabeçalhos são versalete discreto. A profundidade vem do tom (chão, painel, painel elevado), nunca de sombra. O movimento se limita a um momento: a troca que acabou de chegar.
 
 **Key Characteristics:**
 - Painéis fixos em grade, separados por costuras de 1px na cor `seam` (o `gap: 1px` sobre fundo `seam`).
@@ -155,7 +155,7 @@ A cor não decora nada. Azul, âmbar, vermelho e verde são quatro estados com s
 Grafite frio em três degraus de superfície, tinta em três degraus de contraste e quatro cores de estado que só aparecem quando há algo a dizer.
 
 ### Primary
-- **Azul de Seleção** (`override`): tudo o que está selecionado, aberto ou sob override: borda do nó selecionado, aresta do caminho escolhido no mapa, linha aberta no tráfego, interruptor ligado, filtro ativo, anel de foco, cursor e traço de mudança no documento. Sua versão translúcida (`override-dim`) é o fundo de seleção, de texto selecionado e do brilho de chegada.
+- **Azul de Seleção** (`override`): tudo o que está selecionado, aberto ou sob override: borda do nó selecionado, aresta do caminho escolhido no mapa, linha aberta no tráfego, interruptor ligado, filtro ativo, anel de foco e cursor. Sua versão translúcida (`override-dim`) é o fundo de seleção, de texto selecionado e do brilho de chegada.
 
 ### Secondary
 - **Âmbar de Injeção** (`injected`): tempo e atrasos injetados pelo gateway: o segmento do waterfall, a etiqueta de atraso, o medidor sob o nó e o trilho do controle de latência.
@@ -167,9 +167,9 @@ Grafite frio em três degraus de superfície, tinta em três degraus de contrast
 ### Neutral
 - **Chão Grafite** (`ground`): o fundo sob tudo, e o miolo recuado de campos, blocos de código e trilhos do waterfall.
 - **Painel** (`panel`): a superfície de cada painel fixo, da barra superior e dos cabeçalhos colantes.
-- **Painel Elevado** (`panel-raised`): nós do mapa, botões, hover de linha, avisos de estado, rascunhos e o documento com alterações pendentes.
+- **Painel Elevado** (`panel-raised`): nós do mapa, botões, hover de linha, avisos de estado e rascunhos.
 - **Costura** (`seam`): as linhas de 1px entre painéis, linhas de tabela, divisões de seção. **Costura Forte** (`seam-strong`): contornos de controles, arestas do mapa em repouso, barra de rolagem.
-- **Tinta** (`ink`), **Tinta 2** (`ink-2`), **Tinta 3** (`ink-3`): texto primário, secundário (títulos de painel, chaves do YAML) e terciário (rótulos, metadados, gutter). `ink-3` é o piso: mantém 4.5:1 sobre `panel`, e nada legível fica abaixo dele.
+- **Tinta** (`ink`), **Tinta 2** (`ink-2`), **Tinta 3** (`ink-3`): texto primário, secundário (títulos de painel) e terciário (rótulos, metadados, gutter). `ink-3` é o piso: mantém 4.5:1 sobre `panel`, e nada legível fica abaixo dele.
 - **Tinta Plena** (`ink-bright`): só o hover de elementos já em tinta (botão principal, polegar do controle contínuo, link da barra). Hoje está literal no CSS; ao mexer, promova a variável.
 - **Tempo do Upstream** (`time-upstream`) e **Tempo do Gateway** (`time-gateway`): os segmentos neutros do waterfall, para que só o âmbar injetado salte.
 
@@ -194,7 +194,7 @@ Grafite frio em três degraus de superfície, tinta em três degraus de contrast
 - **Título** (600, 15px): o nome do override e, em mono, a requisição e o status no detalhe da troca.
 - **Corpo** (400, 13px, 1.4): todo o texto de interface. Textos corridos de estado e aviso param em 62 a 64ch.
 - **Dado** (400, 12px mono, tabular e zero cortado): métodos, paths, status, durações, probabilidades, portas, etiquetas e campos numéricos.
-- **Documento** (400, 12px mono, 1.6, tab de 2): o YAML ao vivo e os corpos de mensagem (1.55).
+- **Corpo de mensagem** (400, 12px mono, 1.55): os corpos de requisição e resposta no detalhe da troca.
 - **Micro** (11px mono): apenas atalhos de teclado e marcas do eixo do waterfall.
 
 ### Named Rules
@@ -204,7 +204,7 @@ Grafite frio em três degraus de superfície, tinta em três degraus de contrast
 
 ## Layout
 
-O console ocupa a viewport inteira sem rolagem de página: uma barra de 30px e, abaixo, duas colunas em 3fr/2fr (60/40). A coluna esquerda empilha mapa (até metade da altura, ajustado ao que desenha) e tráfego (o resto); a direita divide controles da rota e documento meio a meio, ou 2fr/1fr quando o detalhe de uma troca está aberto. Os painéis se separam por `gap: 1px` sobre o fundo `seam`, e cada corpo de painel rola sozinho.
+O console ocupa a viewport inteira sem rolagem de página: uma barra de 30px e, abaixo, duas colunas em 3fr/2fr (60/40). A coluna esquerda empilha mapa (até metade da altura, ajustado ao que desenha) e tráfego (o resto); a direita é inteira dos controles da rota, do processo ou do detalhe da troca. O YAML nunca aparece na tela. Os painéis se separam por `gap: 1px` sobre o fundo `seam`, e cada corpo de painel rola sozinho.
 
 O ritmo usa a escala de 2, 4, 8, 12 e 16px. Recuo lateral de painel é 12px; controles e células usam 8px; seções dentro de um painel se separam por 16px e uma costura. Linhas de formulário são grade de rótulo de 108px e controle; configurações do processo são grade de rótulo, controle e origem.
 
@@ -217,7 +217,7 @@ O sistema é plano. A profundidade vem de três tons de superfície (`ground` < 
 ### Named Rules
 **A Regra da Costura, Não da Sombra.** Separação é costura de 1px ou mudança de tom. Sombra desfocada ou deslocada não pertence a este mundo; traço interno de 1px, sim.
 
-**A Regra do Colante Opaco.** Cabeçalhos colantes (tabela, barra do documento, barra do detalhe, aviso de comentários) têm fundo opaco de `panel` ou `panel-raised` e uma costura embaixo; o conteúdo passa por trás, nunca através.
+**A Regra do Colante Opaco.** Cabeçalhos colantes (tabela, barra do detalhe, aviso de comentários) têm fundo opaco de `panel` ou `panel-raised` e uma costura embaixo; o conteúdo passa por trás, nunca através.
 
 ## Shapes
 
@@ -262,9 +262,6 @@ Três colunas, cliente → rotas → upstreams, sobre um campo com grade de pont
 ### Tráfego com waterfall (assinatura)
 Tabela de linhas de 26px com cabeçalho colante em versalete e costura entre linhas. Hover em `panel-raised`, linha aberta em `override-dim` com traços azuis acima e abaixo. Cada linha termina num waterfall de 8px: upstream em `time-upstream`, injetado em âmbar, gateway em `time-gateway`. No detalhe, o waterfall vira faixas de 12px sobre trilho `ground` com eixo e marcas mono de 11px.
 
-### Documento ao vivo (assinatura)
-YAML em mono 12px com gutter numerado separado por costura. Chaves em `ink-2`, valores em `ink`, pontuação e comentários em `ink-3`; nenhuma cor de estado no realce. A linha que o controle ao lado acabou de gravar ganha um traço azul de 2px na margem e um brilho `override-dim` que se apaga em 1.6s. Com foco, a costura do gutter fica azul.
-
 ## Do's and Don'ts
 
 ### Do:
@@ -274,7 +271,7 @@ YAML em mono 12px com gutter numerado separado por costura. Chaves em `ink-2`, v
 - **Do** rotular painéis, colunas e grupos em versalete de 15px com espaçamento de 0.08 a 0.1em, em `ink-2` ou `ink-3`.
 - **Do** manter controles entre 20 e 26px de altura e cantos em 2px.
 - **Do** usar traço tracejado para travado, derivado ou incompleto, e dar forma além de cor a todo estado que o estreito precisar distinguir.
-- **Do** limitar a animação à chegada de troca e à linha alterada do documento (1.6s, `cubic-bezier(0.16, 1, 0.3, 1)`), com transições de 120 a 160ms, e desligar tudo sob `prefers-reduced-motion`.
+- **Do** limitar a animação à chegada de troca (1.6s, `cubic-bezier(0.16, 1, 0.3, 1)`), com transições de 120 a 160ms, e desligar tudo sob `prefers-reduced-motion`.
 - **Do** desenhar ícones como SVG de 10px com traço de 1.5px em `currentColor`.
 
 ### Don't:
