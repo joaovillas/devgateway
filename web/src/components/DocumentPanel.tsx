@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import { api, isApiError, type ApiError, type RouteResource, type SettingsPatchResult, type VersionedText } from "../api";
 import { toApiError, useResource } from "../hooks";
 import { shortPath } from "../format";
+import { highlightLine } from "../highlight";
 import { ErrorNote } from "./ErrorNote";
 import { Panel } from "./Panel";
 import { Empty, Failure, Loading } from "./States";
@@ -158,11 +159,15 @@ function Editor({
   // lado, outra aba, edição do arquivo): marcadas na margem até a próxima.
   const prevText = useRef<string | null>(null);
   const [changed, setChanged] = useState<Set<number>>(new Set());
+  // Geração da última mudança: remonta as linhas alteradas para o realce de
+  // chegada tocar de novo a cada gravação, mesmo na mesma linha.
+  const [generation, setGeneration] = useState(0);
   useEffect(() => {
     const prev = prevText.current;
     prevText.current = doc.text;
     if (prev === null || prev === doc.text) return;
     setChanged(changedLines(prev.split("\n"), doc.text.split("\n")));
+    setGeneration((g) => g + 1);
   }, [doc.text]);
 
   const text = draft ?? doc.text;
@@ -329,24 +334,44 @@ function Editor({
             </div>
           ))}
         </div>
-        <textarea
-          ref={area}
-          className="doc__text"
-          value={text}
-          rows={lines.length}
-          wrap="off"
-          spellCheck={false}
-          autoCapitalize="off"
-          autoComplete="off"
-          aria-label={`Documento ${label}, editável. Ctrl+S grava, Tab recua, Esc sai do campo.`}
-          aria-describedby={statusId}
-          aria-invalid={error && isApiError(error, "invalid") ? true : undefined}
-          onChange={(e) => {
-            if (draft === null) setBaseEtag(doc.etag);
-            setDraft(e.target.value);
-          }}
-          onKeyDown={onKey}
-        />
+        <div className="doc__code">
+          {/* O realce fica por baixo; o textarea por cima, de texto transparente,
+              é o que recebe o foco, a seleção e a digitação. */}
+          <pre className="doc__hl" aria-hidden="true">
+            {lines.map((line, i) => {
+              const fresh = !dirty && changed.has(i);
+              return (
+                <span key={fresh ? `c${generation}:${i}` : i} className={"doc__line" + (fresh ? " is-changed" : "")}>
+                  {line === ""
+                    ? " "
+                    : highlightLine(line, lang).map((t, j) => (
+                        <span key={j} className={`hl-${t.kind}`}>
+                          {t.text}
+                        </span>
+                      ))}
+                </span>
+              );
+            })}
+          </pre>
+          <textarea
+            ref={area}
+            className="doc__text"
+            value={text}
+            rows={lines.length}
+            wrap="off"
+            spellCheck={false}
+            autoCapitalize="off"
+            autoComplete="off"
+            aria-label={`Documento ${label}, editável. Ctrl+S grava, Tab recua, Esc sai do campo.`}
+            aria-describedby={statusId}
+            aria-invalid={error && isApiError(error, "invalid") ? true : undefined}
+            onChange={(e) => {
+              if (draft === null) setBaseEtag(doc.etag);
+              setDraft(e.target.value);
+            }}
+            onKeyDown={onKey}
+          />
+        </div>
       </div>
     </div>
   );

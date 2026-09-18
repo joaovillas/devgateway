@@ -230,7 +230,13 @@ export function TrafficPanel(props: TrafficPanelProps) {
             </button>
           </p>
         ) : null}
-        <TrafficTable rows={rows} fresh={liveIds} openId={openId} onOpen={onOpen} />
+        <TrafficTable
+          rows={rows}
+          fresh={liveIds}
+          openId={openId}
+          onOpen={onOpen}
+          showRoute={selection?.kind !== "route"}
+        />
         {more.next ? (
           <div className="traffic__more">
             <button type="button" className="text-button" onClick={loadMore} disabled={more.busy}>
@@ -381,11 +387,14 @@ function TrafficTable({
   fresh,
   openId,
   onOpen,
+  showRoute,
 }: {
   rows: Exchange[];
   fresh: Set<string>;
   openId: string | null;
   onOpen: (ex: Exchange) => void;
+  /** Com o filtro de uma rota, a coluna repetiria o mesmo nome em toda linha e sai; o path fica com a largura. */
+  showRoute: boolean;
 }) {
   const body = useRef<HTMLTableSectionElement>(null);
   const openRow = useRef<HTMLTableRowElement>(null);
@@ -441,7 +450,7 @@ function TrafficTable({
         <col className="traffic__c-time" />
         <col className="traffic__c-method" />
         <col />
-        <col className="traffic__c-route" />
+        {showRoute ? <col className="traffic__c-route" /> : null}
         <col className="traffic__c-status" />
         <col className="traffic__c-tag traffic__tag" />
         <col className="traffic__c-total" />
@@ -454,9 +463,11 @@ function TrafficTable({
           </th>
           <th scope="col">método</th>
           <th scope="col">path</th>
-          <th scope="col" className="traffic__route">
-            rota
-          </th>
+          {showRoute ? (
+            <th scope="col" className="traffic__route">
+              rota
+            </th>
+          ) : null}
           <th scope="col" className="num">
             status
           </th>
@@ -502,7 +513,11 @@ function TrafficTable({
                 {e.path}
                 {e.query ? <span className="dim">?{e.query}</span> : null}
               </td>
-              <td className={"traffic__route" + (e.route ? "" : " dim")}>{e.route ?? "sem rota"}</td>
+              {showRoute ? (
+                <td className={"traffic__route" + (e.route ? "" : " dim")} title={e.route ?? undefined}>
+                  {e.route ?? "sem rota"}
+                </td>
+              ) : null}
               <td
                 className={
                   "mono num" +
@@ -516,7 +531,11 @@ function TrafficTable({
                 }
                 title={gatewayError ? "erro do próprio gateway" : upstreamError ? "erro do upstream" : undefined}
               >
-                {status}
+                {/* Estreito, a coluna de intervenção sai: o status que o gateway
+                    sintetizou ou derrubou vira uma etiqueta em caixa, e o nome da
+                    intervenção segue para o leitor de tela. */}
+                <span className={tag && tag.tone !== "delay" ? "status-mark" : undefined}>{status}</span>
+                {tag ? <span className="traffic__narrow-tag"> {tag.label}</span> : null}
               </td>
               <td className="traffic__tag">
                 {tag ? (

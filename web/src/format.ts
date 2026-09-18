@@ -19,6 +19,8 @@ export function clock(iso: string): string {
 }
 
 export function ms(v: number): string {
+  // Zero é exato: "0 ms", sem a casa decimal que sugeriria uma medida arredondada.
+  if (v === 0) return "0 ms";
   if (v >= 10_000) return num(v / 1000, 1) + " s";
   if (v >= 1000) return num(v / 1000, 2) + " s";
   if (v >= 10) return num(Math.round(v)) + " ms";

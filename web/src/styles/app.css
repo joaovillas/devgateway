@@ -87,8 +87,10 @@ button {
   min-height: 0;
 }
 
+/* O mapa ocupa a altura do que desenha (até metade da coluna) e o resto vai
+   para o tráfego: cada linha a mais de trocas vale mais que grafite vazio. */
 .column--left {
-  grid-template-rows: minmax(160px, 2fr) minmax(0, 3fr);
+  grid-template-rows: fit-content(50%) minmax(0, 1fr);
 }
 
 .column--right {
@@ -332,7 +334,13 @@ button {
   display: grid;
   grid-template-columns: 104px minmax(20px, 1fr) minmax(128px, 3.2fr) minmax(20px, 1fr) minmax(112px, 2.6fr);
   grid-template-rows: 22px var(--map-h);
+  min-height: 100%;
   padding: var(--s-4);
+  /* O campo do mapa é uma superfície: a grade de pontos de 1px do console,
+     na cor da costura, sob os nós. Textura, não cor de estado. */
+  background-image: radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 1px);
+  background-size: var(--grid-step) var(--grid-step);
+  background-position: calc(var(--s-4) - 1px) calc(var(--s-4) - 1px);
 }
 
 .map__colhead {
@@ -823,12 +831,22 @@ kbd {
 .input--bad:hover {
   border-color: var(--fault);
 }
+/* Seletor nativo sem a caixa do navegador: a mesma caixa reta dos campos e
+   uma divisa de 1px na tinta terciária (a cor de --ink-3, que o data URI
+   não lê de variável). */
 .select {
-  padding-inline: var(--s-2);
+  appearance: none;
   width: auto;
+  padding-inline: var(--s-3) calc(var(--s-3) + 12px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0.5 0.5 4 4 7.5 0.5' fill='none' stroke='%23808c9b' stroke-width='1'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--s-3) center;
+  background-size: 8px 5px;
+  cursor: pointer;
 }
 .select option {
   background: var(--panel);
+  color: var(--ink);
 }
 .textarea {
   height: auto;
@@ -1594,22 +1612,62 @@ kbd {
   font-weight: 700;
 }
 
+/* Realce e textarea na mesma célula: os dois com a mesma fonte, o mesmo
+   recuo e a mesma altura de linha, e a célula rola na horizontal pelos dois. */
+.doc__code {
+  display: grid;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.doc__hl,
 .doc__text {
-  display: block;
-  width: 100%;
+  grid-area: 1 / 1;
   margin: 0;
   padding: 0 var(--s-4);
   border: 0;
-  background: transparent;
-  color: var(--ink);
   font: inherit;
   line-height: inherit;
+  letter-spacing: normal;
   white-space: pre;
+  tab-size: inherit;
+}
+.doc__hl {
+  color: var(--ink);
+  pointer-events: none;
+}
+.doc__line {
+  display: block;
+}
+/* Linha que acabou de mudar em disco (o controle ao lado gravou): um
+   fundo azul que se apaga, junto do traço da margem. */
+.doc__line.is-changed {
+  animation: arrive 1.6s var(--ease-out);
+}
+.hl-key {
+  color: var(--ink-2);
+}
+.hl-value {
+  color: var(--ink);
+}
+.hl-punct,
+.hl-comment {
+  color: var(--ink-3);
+}
+.doc__text {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  color: transparent;
   resize: none;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   field-sizing: content;
   caret-color: var(--override);
+}
+.doc__text::selection {
+  color: transparent;
+  background: var(--override-dim);
 }
 .doc__text:focus-visible {
   outline: none;
@@ -1700,7 +1758,8 @@ kbd {
   background: repeating-linear-gradient(135deg, var(--ink-2) 0 1px, transparent 1px 3px);
 }
 
-/* O único momento animado da tela: a troca que acabou de chegar pelo fluxo. */
+/* Os dois momentos animados da tela: a troca que acabou de chegar pelo fluxo
+   e, no documento, a linha que o controle ao lado acabou de mudar. */
 .traffic tr.is-new td {
   animation: arrive 1.6s var(--ease-out);
 }
@@ -1822,8 +1881,10 @@ kbd {
 .traffic__c-method {
   width: 60px;
 }
+/* O path é o dado da linha e fica com a largura livre; a rota é um rótulo
+   curto e sai de todo quando a lista já está filtrada por uma rota. */
 .traffic__c-route {
-  width: 13%;
+  width: 96px;
 }
 .traffic__c-status {
   width: 52px;
@@ -1835,7 +1896,12 @@ kbd {
   width: 68px;
 }
 .traffic__c-fall {
-  width: 22%;
+  width: 20%;
+}
+/* A etiqueta dentro do status só existe no estreito, onde a coluna de
+   intervenção sai. */
+.traffic__narrow-tag {
+  display: none;
 }
 .traffic__scale {
   margin-left: var(--s-2);
@@ -2248,11 +2314,30 @@ kbd {
   .traffic__c-method {
     width: 56px;
   }
-  /* O path é a informação principal da linha: a intervenção sai (a cor do
-     status e o segmento âmbar do waterfall já a sinalizam) e o detalhe
-     mostra tudo. */
+  /* O path é a informação principal da linha: a coluna de intervenção sai,
+     mas o sinal fica. O status que o gateway sintetizou ou derrubou vira uma
+     etiqueta em caixa (forma, não só cor, o separa de um 503 do upstream,
+     que segue sublinhado); o atraso é o segmento âmbar do waterfall. O nome
+     da intervenção segue para o leitor de tela. */
   .traffic__tag {
     display: none;
+  }
+  .status-mark {
+    display: inline-block;
+    padding-inline: 3px;
+    line-height: 16px;
+    border: 1px solid currentColor;
+    border-radius: var(--radius);
+    background: var(--fault-dim);
+  }
+  .traffic__narrow-tag {
+    display: inline;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .traffic__c-total {
     width: 60px;
