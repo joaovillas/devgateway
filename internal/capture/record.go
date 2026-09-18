@@ -15,10 +15,11 @@ import (
 // atende a requisição; só o corpo da requisição, lido também pelo transporte
 // do upstream, tem proteção própria.
 type Record struct {
-	rec     *Recorder
-	enabled bool
-	seq     uint64
-	start   time.Time
+	rec *Recorder
+	// enabled liga a observação da troca; store, a gravação no histórico.
+	enabled, store bool
+	seq            uint64
+	start          time.Time
 
 	w    http.ResponseWriter
 	req  *http.Request
@@ -43,8 +44,8 @@ type Record struct {
 // Seq é o número de sequência de chegada da requisição no processo.
 func (rec *Record) Seq() uint64 { return rec.seq }
 
-// Enabled informa se esta requisição está sendo registrada.
-func (rec *Record) Enabled() bool { return rec.enabled }
+// Enabled informa se esta requisição está sendo registrada no histórico.
+func (rec *Record) Enabled() bool { return rec.store }
 
 // Writer é o ResponseWriter a usar daqui em diante: com o registro ligado,
 // ele observa status, cabeçalhos e corpo sem alterar o que chega ao cliente.
@@ -95,6 +96,11 @@ func (rec *Record) Fail(msg string) {
 // Abort anota que a transferência foi interrompida depois de começar, sem
 // mudar quem produziu a resposta.
 func (rec *Record) Abort(msg string) {
+	// Uma queda provocada por override encerra o handler pelo mesmo pânico
+	// de uma transferência interrompida, mas não é falha.
+	if rec.ex.Outcome == exchange.OutcomeDropped {
+		return
+	}
 	if rec.ex.Error == "" {
 		rec.ex.Error = msg
 	}
@@ -224,7 +230,19 @@ func (rec *Record) Finish() {
 		e.Status = http.StatusOK
 	}
 	e.Response = cw.tap.message(header)
-	rec.rec.enqueue(e)
+	if rec.store {
+		rec.rec.enqueue(e)
+	}
+}
+
+// Exchange devolve a troca observada, depois de Finish. Falso quando a troca
+// não foi observada. A cópia compartilha cabeçalhos e corpos com a troca
+// entregue à gravação e deve ser tratada como somente leitura.
+func (rec *Record) Exchange() (exchange.Exchange, bool) {
+	if !rec.enabled || !rec.finished {
+		return exchange.Exchange{}, false
+	}
+	return rec.ex, true
 }
 
 // tap guarda o começo de um corpo, até limit bytes, e conta o tamanho real.

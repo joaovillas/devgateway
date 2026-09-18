@@ -2,8 +2,10 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -224,5 +226,72 @@ func TestGatewayFileLearning(t *testing.T) {
 	}
 	if g.Learning == nil || g.Learning.Enabled == nil || !*g.Learning.Enabled {
 		t.Fatalf("learning.enabled deveria ser lido: %+v", g.Learning)
+	}
+}
+
+// Um cabeçalho da resposta declarada tem um valor (texto) ou vários (lista),
+// em YAML e em JSON, e a forma sobrevive à ida e volta.
+func TestRespondHeaderValues(t *testing.T) {
+	src := []byte(`schemaVersion: 1
+name: h
+upstream: http://localhost:9000
+match:
+  path: /h/*
+overrides:
+  - name: cookies
+    match:
+      path: /h/x
+    respond:
+      headers:
+        Content-Type: text/plain
+        Set-Cookie:
+          - a=1; Path=/
+          - b=2
+`)
+	r, err := ParseRoute("h.yaml", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]HeaderValues{"Content-Type": {"text/plain"}, "Set-Cookie": {"a=1; Path=/", "b=2"}}
+	if got := r.Overrides[0].Respond.Headers; !reflect.DeepEqual(got, want) {
+		t.Fatalf("cabeçalhos lidos errado: %q", got)
+	}
+	out, err := MarshalRoute(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "Content-Type: text/plain\n") {
+		t.Fatalf("um valor único deveria ser gravado como texto:\n%s", out)
+	}
+	back, err := ParseRoute("h.yaml", out)
+	if err != nil || !reflect.DeepEqual(back.Overrides[0].Respond.Headers, want) {
+		t.Fatalf("a lista deveria sobreviver à ida e volta: %v %q", err, back.Overrides[0].Respond.Headers)
+	}
+	var viaJSON Respond
+	if err := json.Unmarshal([]byte(`{"headers":{"Content-Type":"text/plain","Set-Cookie":["a=1; Path=/","b=2"]}}`), &viaJSON); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(viaJSON.Headers, want) {
+		t.Fatalf("cabeçalhos lidos errado por JSON: %q", viaJSON.Headers)
+	}
+	b, _ := json.Marshal(viaJSON)
+	if string(b) != `{"headers":{"Content-Type":"text/plain","Set-Cookie":["a=1; Path=/","b=2"]}}` {
+		t.Fatalf("serialização JSON inesperada: %s", b)
+	}
+	if err := json.Unmarshal([]byte(`{"headers":{"X":1}}`), &viaJSON); err == nil {
+		t.Fatal("um valor numérico deveria ser recusado")
+	}
+}
+
+func TestRespondHeaderWithoutValuesRejected(t *testing.T) {
+	o := Override{Name: "v", Match: OverrideMatch{Path: "/x"}, Respond: &Respond{Headers: map[string]HeaderValues{"X-Vazio": {}}}}
+	err := ValidateOverride("v.yaml", o)
+	var es Errors
+	if !errors.As(err, &es) || len(es) != 1 || es[0].Field != "override.respond.headers.X-Vazio" {
+		t.Fatalf("a lista vazia deveria ser recusada: %v", err)
+	}
+	o.Respond.Headers["X-Vazio"] = HeaderValues{"v"}
+	if err := ValidateOverride("v.yaml", o); err != nil {
+		t.Fatalf("o override deveria ser válido: %v", err)
 	}
 }

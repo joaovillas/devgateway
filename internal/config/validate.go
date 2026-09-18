@@ -73,6 +73,18 @@ func validateRoute(r Route) []issue {
 	return is
 }
 
+// ValidateOverride aplica a um override isolado as regras de override do
+// documento de rota (as que não dependem dos demais overrides, como a
+// unicidade do nome). file nomeia o documento nos erros.
+func ValidateOverride(file string, o Override) error {
+	is := validateOverride("override", o)
+	if len(is) == 0 {
+		return nil
+	}
+	x := &nodeIndex{file: file}
+	return x.errors(is)
+}
+
 func validateOverride(base string, o Override) []issue {
 	var is []issue
 	add := func(field, format string, args ...any) {
@@ -118,6 +130,9 @@ func validateOverride(base string, o Override) []issue {
 			if !validHeaderName(k) {
 				add("respond.headers."+k, "nome de cabeçalho inválido")
 			}
+			if len(r.Headers[k]) == 0 {
+				add("respond.headers."+k, "declare ao menos um valor")
+			}
 		}
 	}
 	if p := o.Probability; p != nil && (*p < 0 || *p > 1) {
@@ -151,7 +166,9 @@ func validateOverride(base string, o Override) []issue {
 		default:
 			add("source.kind", "origem %q desconhecida; use %s ou %s", s.Kind, SourceLearned, SourceDerived)
 		}
-		if s.Exchange == "" {
+		// Um override derivado sempre parte de uma troca do histórico. Um
+		// aprendido com o registro desligado não tem troca gravada a apontar.
+		if s.Exchange == "" && s.Kind != SourceLearned {
 			add("source.exchange", "obrigatório: identificador da troca de origem")
 		}
 	}

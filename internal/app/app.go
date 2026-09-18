@@ -16,6 +16,9 @@ import (
 	"github.com/gamerjp64/gateway/internal/admin"
 	"github.com/gamerjp64/gateway/internal/capture"
 	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/gateway/internal/config/writer"
+	"github.com/gamerjp64/gateway/internal/learn"
+	"github.com/gamerjp64/gateway/internal/override"
 	"github.com/gamerjp64/gateway/internal/proxy"
 	"github.com/gamerjp64/gateway/internal/store"
 )
@@ -28,7 +31,15 @@ type App struct {
 	// Recorder registra as trocas da porta de tráfego no histórico em uso e
 	// as publica no broker de tempo real.
 	Recorder *capture.Recorder
-	Log      *slog.Logger
+	// Writer serializa as escritas de documento de rota e aplica o resultado
+	// a quente; é compartilhado pelo aprendizado e pela API.
+	Writer *writer.Writer
+	// Overrides guarda o estado vivo dos overrides: tempo de vida restante e
+	// contagem de aplicações.
+	Overrides *override.Tracker
+	// Learner grava os endpoints aprendidos com o modo aprendizado ligado.
+	Learner *learn.Learner
+	Log     *slog.Logger
 
 	traffic, admin     *http.Server
 	trafficLn, adminLn net.Listener
@@ -72,19 +83,27 @@ func Start(opts Options) (*App, error) {
 		serveErr: make(chan error, 2),
 	}
 	a.Recorder = capture.NewRecorder(a.History, capture.NewBroker(), log)
+	a.Writer = writer.New(a.Live)
+	a.Overrides = override.NewTracker(a.Live)
+	a.Learner = learn.New(a.Writer, log)
 	if a.trafficLn, err = listen("tráfego", s.TrafficPort); err != nil {
+		a.Learner.Close()
 		a.Recorder.Close()
 		a.History.Close()
 		return nil, err
 	}
 	if a.adminLn, err = listen("administração", s.AdminPort); err != nil {
 		a.trafficLn.Close()
+		a.Learner.Close()
 		a.Recorder.Close()
 		a.History.Close()
 		return nil, err
 	}
 	a.traffic = &http.Server{
-		Handler:           proxy.NewHandler(a.Live, a.Recorder),
+		Handler: proxy.NewHandlerWith(a.Live, a.Recorder, proxy.Options{
+			Tracker: a.Overrides,
+			Learner: a.Learner,
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	a.admin = &http.Server{
@@ -131,5 +150,8 @@ func (a *App) Shutdown(ctx context.Context) error {
 		err = fmt.Errorf("aguardando as trocas em curso: %w", werr)
 	}
 	a.Recorder.Close()
+	// Os endpoints já enfileirados pelo aprendizado são gravados antes de
+	// encerrar.
+	a.Learner.Close()
 	return errors.Join(err, a.History.Close())
 }

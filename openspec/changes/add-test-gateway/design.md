@@ -54,7 +54,7 @@ Toda requisição na porta de tráfego percorre exatamente esta sequência:
 5. Se a aplicação não foi sorteada: seguir para o upstream como se o override não existisse.
 6. Se houve queda: encerrar a conexão e fechar o registro.
 7. Se o override declara `respond`: sintetizar a resposta. Caso contrário, encaminhar ao upstream.
-8. Aplicar o atraso sorteado **depois** de a resposta estar pronta e antes de escrevê-la ao cliente.
+8. Aplicar o atraso sorteado **depois** de a resposta estar pronta e antes de escrevê-la ao cliente — seja ela a do upstream, a sintetizada ou uma resposta de erro do próprio gateway (`501`, `502`, `504`). Se o cliente desiste durante o atraso, nada lhe foi entregue: a troca fica sem status, com a desistência (`client_canceled`) anotada.
 9. Fechar o registro com os tempos decompostos e, com o modo aprendizado ligado, aprender o endpoint fora do caminho da requisição.
 
 *Por quê o atraso no passo 8 e não antes do upstream:* atrasar depois mantém o tempo real do upstream e o tempo injetado como grandezas independentes e diretamente mensuráveis. Atrasar antes obrigaria a subtrair um valor do outro para exibir o waterfall, e a subtração erra sempre que o upstream oscila. O custo é que a latência total passa a ser a soma, e não a máxima — que é justamente o comportamento esperado por quem pede "essa rota demora 2s a mais".
@@ -125,7 +125,7 @@ A interface recebe as trocas novas por *Server-Sent Events*, com envio agregado 
 
 A queda usa `http.Hijacker` para fechar o socket sem escrever resposta. Isso não existe em HTTP/2.
 
-*Decisão:* em HTTP/2 a queda é degradada para o cancelamento abrupto do stream, e a captura registra qual dos dois comportamentos ocorreu. A alternativa — recusar configurar queda quando a porta serve HTTP/2 — foi descartada por tornar o comportamento dependente de um detalhe de transporte que o usuário não escolheu.
+*Decisão:* em HTTP/2 a queda é degradada para o cancelamento abrupto do stream, e a captura registra qual dos comportamentos ocorreu em `dropMode`: `hijack` (HTTP/1.1, socket fechado) ou `stream_reset` (HTTP/2). Um terceiro valor, `abort`, cobre o caso raro de uma conexão HTTP/1.x cujo `ResponseWriter` não permite sequestro (um writer intermediário sem `Unwrap`, por exemplo): o handler é abortado com `http.ErrAbortHandler` e o servidor fecha a conexão sem resposta. Registrá-lo como `hijack` ou `stream_reset` esconderia do desenvolvedor o que de fato aconteceu. A alternativa — recusar configurar queda quando a porta serve HTTP/2 — foi descartada por tornar o comportamento dependente de um detalhe de transporte que o usuário não escolheu.
 
 ### Frontend embutido via `go:embed`
 
@@ -147,7 +147,7 @@ O gateway repassa método, path, query, corpo, todos os cabeçalhos e o `Host` c
 
 *Por quê:* o gateway existe para testar o cliente contra o serviço real; qualquer alteração silenciosa invalida o teste. O `Host` original por padrão segue a mesma lógica; a rota declara `rewriteHost` quando o upstream exige o próprio host, como servidores com virtual host.
 
-*Um cabeçalho só:* `X-Gateway` carrega a rota e, quando há intervenção, o override e o tipo (`route=payments; override=payments/flaky; intervention=synthesized`). Vários cabeçalhos `X-Gateway-*` seriam mais fáceis de ler um a um, mas multiplicariam o que o gateway injeta no tráfego.
+*Um cabeçalho só:* `X-Gateway` carrega a rota e, quando há intervenção, o override e o tipo (`route=payments; override=payments/flaky; intervention=synthesized`). Quando o override sintetiza e também atrasa, as duas intervenções aparecem, separadas por vírgula e na ordem em que acontecem (`intervention=synthesized,delayed`), como na lista `interventions` da troca capturada. Vários cabeçalhos `X-Gateway-*` seriam mais fáceis de ler um a um, mas multiplicariam o que o gateway injeta no tráfego.
 
 ### Aprendizado grava overrides desligados
 
@@ -156,6 +156,10 @@ Com o modo aprendizado ligado, cada método e path novo respondido pelo upstream
 *Por quê:* o endpoint aprendido já é o ponto de partida do gesto que o usuário quer fazer em seguida — ligar caos ou customizar a resposta. Guardá-lo como uma lista paralela de "endpoints conhecidos" criaria um segundo conceito ao lado do override, exatamente a separação que este projeto recusa. Desligado por padrão, ele não altera o tráfego até o usuário decidir.
 
 *Como:* o aprendizado roda depois de a resposta ser entregue, fora do caminho da requisição, e grava pelo mesmo mecanismo da API — escrita atômica do documento sob o mutex de escrita, seguida de reconstrução do snapshot. Uma combinação é conhecida quando já há override com o mesmo path exato e método; curingas não contam, para que endpoints sob um curinga também sejam aprendidos.
+
+*Fidelidade da resposta aprendida:* um cabeçalho repetido (vários `Set-Cookie`, por exemplo) é gravado como lista de valores em `respond.headers` — cada cabeçalho aceita um texto ou uma lista — e a resposta sintetizada o repete, um por valor. O corpo JSON só vira estrutura quando todos os números cabem sem perda (inteiros até `uint64`, decimais que o `float64` reproduz); senão fica como texto, idêntico ao observado. Um path que contém `*` literal (ou que não começa com `/`) não pode ser escrito como path exato, porque o `*` seria curinga: o critério gravado é `pathRegex` ancorado (`^` + path escapado + `$`), que também conta como path exato na verificação de endpoint conhecido. Um override montado que ainda assim não passe na validação não é gravado, e o endpoint deixa de ser candidato até o processo reiniciar, com um único aviso no log.
+
+*Troca de origem sem histórico:* com `history.record` desligado a troca é observada pelo aprendizado mas não vai para o histórico; o override aprendido sai então sem `source.exchange`, para não apontar para uma troca inexistente, e mantém `source.kind`, `source.at` e `source.bodyIncomplete`. Um override derivado (que sempre parte de uma troca do histórico) continua exigindo `source.exchange`.
 
 ## Risks / Trade-offs
 

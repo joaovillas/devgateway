@@ -20,6 +20,18 @@ const (
 	OutcomeGateway     Outcome = "gateway"     // resposta de erro do próprio gateway
 )
 
+// Como uma queda de conexão aconteceu.
+const (
+	// DropHijack: HTTP/1.x, o socket foi sequestrado e fechado sem resposta.
+	DropHijack = "hijack"
+	// DropStreamReset: HTTP/2, onde não há socket a fechar, o stream foi
+	// cancelado abruptamente, sem resposta.
+	DropStreamReset = "stream_reset"
+	// DropAbort: HTTP/1.x cujo ResponseWriter não permite sequestro; o
+	// handler foi abortado e o servidor fechou a conexão sem resposta.
+	DropAbort = "abort"
+)
+
 // Exchange é uma troca HTTP que atravessou a porta de tráfego.
 type Exchange struct {
 	ID    string    `json:"id"`
@@ -39,8 +51,8 @@ type Exchange struct {
 	// Interventions lista o que o override fez: synthesized, delayed, dropped.
 	Interventions []string `json:"interventions,omitempty"`
 	Outcome       Outcome  `json:"outcome"`
-	// DropMode registra como a queda aconteceu: hijack (HTTP/1.1) ou
-	// stream_reset (HTTP/2, onde não há socket para fechar).
+	// DropMode registra como a queda aconteceu: hijack (HTTP/1.1),
+	// stream_reset (HTTP/2, onde não há socket para fechar) ou abort.
 	DropMode string `json:"dropMode,omitempty"`
 	// Error descreve falhas do gateway ou do upstream (502, 504...).
 	Error string `json:"error,omitempty"`

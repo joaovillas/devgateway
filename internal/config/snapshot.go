@@ -2,6 +2,8 @@ package config
 
 import (
 	"os"
+	"slices"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -74,6 +76,9 @@ func (l Loader) Load() (*Snapshot, error) {
 // que uma troca concorrente nunca é observada pela metade.
 type Live struct {
 	p atomic.Pointer[Snapshot]
+
+	mu   sync.Mutex
+	subs []func(*Snapshot)
 }
 
 func NewLive(s *Snapshot) *Live {
@@ -84,5 +89,25 @@ func NewLive(s *Snapshot) *Live {
 
 func (l *Live) Load() *Snapshot { return l.p.Load() }
 
-// Swap publica um snapshot novo e devolve o anterior.
-func (l *Live) Swap(s *Snapshot) *Snapshot { return l.p.Swap(s) }
+// Swap publica um snapshot novo e devolve o anterior. Os assinantes são
+// avisados depois da troca, na goroutine de quem trocou.
+func (l *Live) Swap(s *Snapshot) *Snapshot {
+	old := l.p.Swap(s)
+	l.mu.Lock()
+	subs := slices.Clone(l.subs)
+	l.mu.Unlock()
+	for _, fn := range subs {
+		fn(s)
+	}
+	return old
+}
+
+// Subscribe registra fn para ser chamada a cada troca de snapshot, com o
+// snapshot publicado. Serve a quem guarda estado derivado da configuração
+// fora do snapshot, como o estado vivo dos overrides. fn não deve trocar o
+// snapshot nem bloquear.
+func (l *Live) Subscribe(fn func(*Snapshot)) {
+	l.mu.Lock()
+	l.subs = append(l.subs, fn)
+	l.mu.Unlock()
+}

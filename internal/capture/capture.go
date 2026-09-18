@@ -83,6 +83,9 @@ func (r *Recorder) Broker() *Broker { return r.broker }
 type Options struct {
 	// Record liga o registro (history.record).
 	Record bool
+	// Observe liga a observação da troca mesmo com o registro desligado, sem
+	// gravá-la no histórico: o modo aprendizado precisa da resposta observada.
+	Observe bool
 	// MaxBodyBytes é o limite de captura de cada corpo (capture.maxBodyBytes).
 	MaxBodyBytes int
 }
@@ -95,13 +98,14 @@ func (r *Recorder) Begin(w http.ResponseWriter, req *http.Request, o Options) *R
 	r.open.Add(1)
 	rec := &Record{
 		rec:     r,
-		enabled: o.Record,
+		enabled: o.Record || o.Observe,
+		store:   o.Record,
 		start:   start,
 		seq:     r.seq.Add(1),
 		w:       w,
 		req:     req,
 	}
-	if !o.Record {
+	if !rec.enabled {
 		return rec
 	}
 	limit := max(o.MaxBodyBytes, 0)

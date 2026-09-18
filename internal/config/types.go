@@ -106,8 +106,10 @@ const (
 type OverrideSource struct {
 	// Kind é learned ou derived.
 	Kind string `json:"kind" yaml:"kind"`
-	// Exchange é o identificador da troca de origem.
-	Exchange string `json:"exchange" yaml:"exchange"`
+	// Exchange é o identificador da troca de origem. Fica ausente quando a
+	// troca não foi gravada no histórico (aprendizado com o registro
+	// desligado), para não apontar para uma troca que não existe.
+	Exchange string `json:"exchange,omitempty" yaml:"exchange,omitempty"`
 	// At é o instante em que o override foi criado a partir da troca.
 	At time.Time `json:"at,omitzero" yaml:"at,omitempty"`
 	// BodyIncomplete indica que o corpo observado foi truncado na captura.
@@ -125,9 +127,11 @@ type OverrideMatch struct {
 	Body      *Matcher           `json:"body,omitempty" yaml:"body,omitempty"`
 }
 
-// Respond é a resposta declarada. Body é texto ou uma estrutura serializada como JSON.
+// Respond é a resposta declarada. Body é texto ou uma estrutura serializada
+// como JSON. Cada cabeçalho tem um valor ou, quando repetido na resposta (como
+// vários Set-Cookie), uma lista de valores.
 type Respond struct {
-	Status  int               `json:"status,omitempty" yaml:"status,omitempty"`
-	Headers map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
-	Body    any               `json:"body,omitempty" yaml:"body,omitempty"`
+	Status  int                     `json:"status,omitempty" yaml:"status,omitempty"`
+	Headers map[string]HeaderValues `json:"headers,omitempty" yaml:"headers,omitempty"`
+	Body    any                     `json:"body,omitempty" yaml:"body,omitempty"`
 }

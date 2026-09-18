@@ -180,3 +180,55 @@ func (m *Matcher) UnmarshalYAML(n *yaml.Node) error {
 func nodeErr(n *yaml.Node, format string, args ...any) error {
 	return fmt.Errorf("line %d: %s", n.Line, fmt.Sprintf(format, args...))
 }
+
+// HeaderValues são os valores de um cabeçalho da resposta declarada. Na forma
+// curta, um texto simples é um único valor; uma lista declara o cabeçalho
+// repetido, uma vez por valor, como vários Set-Cookie.
+type HeaderValues []string
+
+func (v HeaderValues) MarshalJSON() ([]byte, error) {
+	if len(v) == 1 {
+		return json.Marshal(v[0])
+	}
+	return json.Marshal([]string(v))
+}
+
+func (v *HeaderValues) UnmarshalJSON(b []byte) error {
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		*v = HeaderValues{s}
+		return nil
+	}
+	var l []string
+	if err := json.Unmarshal(b, &l); err != nil {
+		return fmt.Errorf("valor de cabeçalho deve ser texto ou lista de textos")
+	}
+	*v = l
+	return nil
+}
+
+func (v HeaderValues) MarshalYAML() (any, error) {
+	if len(v) == 1 {
+		return v[0], nil
+	}
+	return []string(v), nil
+}
+
+func (v *HeaderValues) UnmarshalYAML(n *yaml.Node) error {
+	switch n.Kind {
+	case yaml.ScalarNode:
+		*v = HeaderValues{n.Value}
+		return nil
+	case yaml.SequenceNode:
+		l := make([]string, 0, len(n.Content))
+		for _, item := range n.Content {
+			if item.Kind != yaml.ScalarNode {
+				return nodeErr(item, "valor de cabeçalho deve ser texto")
+			}
+			l = append(l, item.Value)
+		}
+		*v = l
+		return nil
+	}
+	return nodeErr(n, "valor de cabeçalho deve ser texto ou lista de textos")
+}
