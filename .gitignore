@@ -1,0 +1,23 @@
+# Binários
+/gateway
+/gateway.exe
+*.exe
+*.test
+*.out
+
+# Node
+node_modules/
+
+# Build do frontend — o placeholder é versionado de propósito (ver design.md)
+web/dist/*
+!web/dist/index.html
+
+# Dados locais de execução
+*.db
+*.sqlite
+*.sqlite3
+*.ndjson
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
