@@ -1,0 +1,13 @@
+# Rota do catálogo de brinquedo (examples/toys/catalog), só passthrough.
+# Nenhum override declarado: com learning.enabled em gateway.json, cada método
+# e path novo respondido pelo upstream é gravado aqui como override desligado,
+# com a resposta observada. A gravação reescreve o arquivo e descarta estes
+# comentários; por isso run.sh trabalha sobre uma cópia em examples/.run/.
+schemaVersion: 1
+name: catalog
+upstream: http://127.0.0.1:9002
+match:
+  path: /catalog/*
+stripPrefix: true
+rewriteHost: true
+timeout: 3s

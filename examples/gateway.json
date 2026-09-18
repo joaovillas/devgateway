@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "ports": {
+    "traffic": 8080,
+    "admin": 8081
+  },
+  "seed": 42,
+  "history": {
+    "backend": "memory",
+    "capacity": 2000,
+    "record": true,
+    "expose": true
+  },
+  "capture": {
+    "maxBodyBytes": 65536
+  },
+  "learning": {
+    "enabled": true
+  },
+  "routesDir": "routes"
+}

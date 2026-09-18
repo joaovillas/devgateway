@@ -34,3 +34,6 @@ Thumbs.db
 
 # Impeccable: relatórios de revisão locais
 .impeccable/review/
+
+# Cópia de trabalho do ambiente de exemplo (examples/run.sh)
+/examples/.run/
