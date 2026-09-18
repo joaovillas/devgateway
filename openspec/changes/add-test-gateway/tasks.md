@@ -86,6 +86,6 @@
 
 ## 9. Distribuição e documentação
 
-- [ ] 9.1 Produzir binários por plataforma e a imagem Docker no mesmo build que embute o frontend, e verificar que a imagem sobe e atende nas duas portas
-- [ ] 9.2 Escrever o README com instalação, `gateway.json` e documento de rota de exemplo, as variáveis de ambiente, o critério dos dois formatos, e os limites assumidos (perda de comentários na escrita e no aprendizado, determinismo por ordem de chegada, queda de conexão em HTTP/2, aprendizado de paths com identificadores, troca de backend sem migração), e verificar que um leitor consegue subir o gateway seguindo apenas o documento
-- [ ] 9.3 Montar um ambiente de exemplo com dois serviços de brinquedo e documentos de rota prontos, e verificar de ponta a ponta que passthrough, override forçado, override probabilístico, latência em intervalo, waterfall, modo aprendizado e troca de porta a quente funcionam sobre ele
+- [x] 9.1 Produzir binários por plataforma e a imagem Docker no mesmo build que embute o frontend, e verificar que a imagem sobe e atende nas duas portas
+- [x] 9.2 Escrever o README com instalação, `gateway.json` e documento de rota de exemplo, as variáveis de ambiente, o critério dos dois formatos, e os limites assumidos (perda de comentários na escrita e no aprendizado, determinismo por ordem de chegada, queda de conexão em HTTP/2, aprendizado de paths com identificadores, troca de backend sem migração), e verificar que um leitor consegue subir o gateway seguindo apenas o documento
+- [x] 9.3 Montar um ambiente de exemplo com dois serviços de brinquedo e documentos de rota prontos, e verificar de ponta a ponta que passthrough, override forçado, override probabilístico, latência em intervalo, waterfall, modo aprendizado e troca de porta a quente funcionam sobre ele

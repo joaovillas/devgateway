@@ -37,3 +37,6 @@ Thumbs.db
 
 # Cópia de trabalho do ambiente de exemplo (examples/run.sh)
 /examples/.run/
+
+# Binários de release (make release)
+/dist/

@@ -1,0 +1,13 @@
+# Contexto do docker build: só o que o Dockerfile precisa.
+.git
+.github
+.claude
+.impeccable
+bin
+dist
+examples/.run
+**/node_modules
+web/dist
+*.exe
+*.db
+*.ndjson
