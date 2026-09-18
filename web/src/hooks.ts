@@ -41,7 +41,11 @@ export function useResource<T>(
       },
       (e: unknown) => {
         if (ctl.signal.aborted) return;
-        setState({ kind: "error", error: toApiError(e) });
+        const error = toApiError(e);
+        // Recarga sem resposta da porta de administração (processo fora do
+        // ar): o dado anterior continua à vista, e a barra e os painéis já
+        // dizem que o painel parou de atualizar. A reconexão relê tudo.
+        setState((prev) => (prev.kind === "ready" && error.code === "network" ? prev : { kind: "error", error }));
       },
     );
     return () => ctl.abort();

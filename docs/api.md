@@ -2,7 +2,7 @@
 
 Contrato da API REST servida na porta de administração (padrão `8081`), sob o prefixo `/api/`. O backend a implementa em `internal/admin` (fase 7 de `openspec/changes/add-test-gateway/tasks.md`). O painel em `web/` é um cliente dela e nada mais: toda operação que o painel faz tem aqui um equivalente executável por `curl`.
 
-Tudo o que este documento descreve está implementado, com uma exceção marcada no lugar: a disponibilidade dos upstreams (`GET /api/upstreams` e o evento `upstreams` do fluxo SSE), que acompanha o mapa de topologia do painel (tarefa 8.2) e hoje responde `404 not_found`.
+Tudo o que este documento descreve está implementado.
 
 Os campos JSON são os dos tipos Go em `internal/config` (`Route`, `Override`, `EffectiveValue`) e em `internal/exchange` (`Exchange`, `Filter`). Quando este documento e o código divergirem, o código dos tipos manda e este documento é corrigido.
 
@@ -42,7 +42,7 @@ Nos exemplos, `$A` é `http://localhost:8081`.
 | | `GET /api/exchanges/{id}/older` | troca anterior (mais antiga) |
 | | `GET /api/exchanges/{id}/newer` | troca seguinte (mais nova) |
 | | `DELETE /api/exchanges` | limpar o histórico |
-| Upstreams | `GET /api/upstreams` | disponibilidade recente por upstream (ainda não implementado) |
+| Upstreams | `GET /api/upstreams` | disponibilidade recente por upstream |
 | Tempo real | `GET /api/events` | fluxo SSE |
 
 ## Convenções
@@ -849,8 +849,6 @@ curl -s -X DELETE $A/api/exchanges
 
 ### `GET /api/upstreams`
 
-> **Ainda não implementado.** Previsto com o mapa de topologia (tarefa 8.2). Hoje responde `404 not_found`, e o evento `upstreams` não é emitido. O contrato abaixo é o que o painel espera.
-
 Disponibilidade recente de cada upstream, para o mapa. O gateway não sonda os upstreams: o estado vem das últimas tentativas de encaminhamento, contadas no caminho da requisição e independentes do registro do histórico.
 
 ```json
@@ -878,9 +876,10 @@ Disponibilidade recente de cada upstream, para o mapa. O gateway não sonda os u
 }
 ```
 
-- `status`: `up` (a última tentativa recebeu resposta), `down` (as três últimas tentativas falharam por conexão recusada, tempo limite de conexão ou `504`), `unknown` (nenhuma tentativa desde o início ou desde a última recarga que mudou o upstream).
+- `status`: `down` quando as três tentativas mais recentes ficaram sem resposta do upstream (conexão recusada, tempo limite de conexão, ou o `timeout` da rota esgotado antes da resposta, que o gateway devolve como `504`); `unknown` quando não houve nenhuma tentativa desde o início ou desde que o upstream passou a ser declarado (uma recarga ou escrita que tira o upstream de todas as rotas descarta o que foi contado para ele); `up` nos demais casos. Com menos de três tentativas o status é `up`, e as falhas aparecem em `recent`.
 - `recent` cobre as últimas 20 tentativas.
-- Uma resposta `5xx` do próprio upstream **não** o torna `down`: ele respondeu.
+- Uma resposta `5xx` do próprio upstream, inclusive um `504` escrito por ele, **não** o torna `down`: ele respondeu. A desistência do cliente também não conta como tentativa.
+- A ordem dos itens é a das rotas na precedência, e `routes` lista as rotas que apontam para o upstream.
 - Rotas sem `upstream` não aparecem aqui.
 
 ```sh
@@ -901,7 +900,7 @@ Fluxo `text/event-stream`. O painel mantém uma conexão aberta e reage aos even
 | `exchanges` | no máximo uma vez por segundo, se houve trocas novas | `{ "items": [resumo...], "dropped": 0 }` |
 | `config` | após qualquer escrita, recarga ou aprendizado | `{ "cause": "api" \| "reload" \| "learning", "routes": ["payments"], "settings": ["seed"] }` |
 | `overrides` | quando o estado vivo muda de forma não contínua (surgiu, sumiu, ligou, desligou, expirou, reativou, aplicou), no máximo uma vez por segundo | o mesmo corpo de `GET /api/overrides/state` |
-| `upstreams` | quando o `status` de algum upstream muda (**ainda não emitido**, ver [upstreams](#get-apiupstreams)) | o mesmo corpo de `GET /api/upstreams` |
+| `upstreams` | quando o `status` de algum upstream muda, conferido no máximo uma vez por segundo; as contagens de `recent` mudarem não basta | o mesmo corpo de `GET /api/upstreams` |
 | `history` | limpeza ou troca de backend | `{ "cause": "cleared" \| "backend", "backend": "sqlite" }` |
 | `heartbeat` | a cada 15 s | `{ "now": "2026-09-18T15:05:15Z" }` |
 

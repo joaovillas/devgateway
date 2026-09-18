@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { api, type ApiError, type EffectiveValue } from "../api";
 import { useResource } from "../hooks";
+import { shortPath } from "../format";
 
 /**
  * De onde vem um valor de configuração, lido de GET /api/settings. Serve para
@@ -27,7 +28,7 @@ function Origin({ value, fallbackEnv, fallbackFile }: { value: EffectiveValue | 
   if (file) {
     return (
       <>
-        em <span className="mono">{file}</span>
+        em <span className="mono" title={file}>{shortPath(file)}</span>
       </>
     );
   }

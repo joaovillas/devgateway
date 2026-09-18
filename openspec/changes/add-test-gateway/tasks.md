@@ -74,15 +74,15 @@
 ## 8. Interface web
 
 - [x] 8.1 Montar o projeto Vite com React e TypeScript, o cliente da API e o build para `web/dist`, e verificar que o binário construído serve a interface na porta de administração sem acesso à rede externa, conforme os dois cenários da requirement de interface servida pelo próprio binário
-- [ ] 8.2 Implementar o mapa de topologia com ligações entre cliente, rota e upstream, destaque de override ativo, sinalização de upstream indisponível e filtragem por seleção, e verificar pelos quatro cenários da requirement de mapa de topologia
-- [ ] 8.3 Implementar os controles contínuos do override aplicados imediatamente, com restante de tempo e de aplicações e desligamento em um gesto, e verificar pelos três cenários da requirement de controle direto
-- [ ] 8.4 Implementar a lista e o detalhe de tráfego com waterfall separando tempo de upstream e tempo injetado, sinalização de intervenção, navegação item a item e exibição de corpos truncados, e verificar pelos quatro cenários da requirement de inspeção com waterfall
-- [ ] 8.5 Implementar a indicação de histórico desabilitado distinta de histórico vazio, e verificar pelos dois cenários da requirement correspondente
-- [ ] 8.6 Implementar a criação de override a partir de uma troca exibida, com revisão antes de valer, e verificar pelos dois cenários da requirement correspondente
-- [ ] 8.7 Implementar o consumo do fluxo SSE com sinalização de desconexão e reconexão automática, e verificar pelos dois cenários da requirement de atualização em tempo real
-- [ ] 8.8 Implementar o aviso de perda de comentários antes da primeira escrita num documento de rota que os contenha, e verificar que o aviso aparece uma vez e não reaparece após a confirmação
-- [ ] 8.9 Implementar a edição com paridade — controles de todos os campos de rota, override e processo com o documento YAML ou JSON ao lado, atualizado ao vivo e editável, e valores do ambiente travados — e verificar pelos quatro cenários da requirement de edição com paridade
-- [ ] 8.10 Implementar o liga/desliga do override e do modo aprendizado, a distinção dos overrides aprendidos e o acesso à troca de origem, e verificar pelos três cenários da requirement correspondente
+- [x] 8.2 Implementar o mapa de topologia com ligações entre cliente, rota e upstream, destaque de override ativo, sinalização de upstream indisponível e filtragem por seleção, e verificar pelos quatro cenários da requirement de mapa de topologia
+- [x] 8.3 Implementar os controles contínuos do override aplicados imediatamente, com restante de tempo e de aplicações e desligamento em um gesto, e verificar pelos três cenários da requirement de controle direto
+- [x] 8.4 Implementar a lista e o detalhe de tráfego com waterfall separando tempo de upstream e tempo injetado, sinalização de intervenção, navegação item a item e exibição de corpos truncados, e verificar pelos quatro cenários da requirement de inspeção com waterfall
+- [x] 8.5 Implementar a indicação de histórico desabilitado distinta de histórico vazio, e verificar pelos dois cenários da requirement correspondente
+- [x] 8.6 Implementar a criação de override a partir de uma troca exibida, com revisão antes de valer, e verificar pelos dois cenários da requirement correspondente
+- [x] 8.7 Implementar o consumo do fluxo SSE com sinalização de desconexão e reconexão automática, e verificar pelos dois cenários da requirement de atualização em tempo real
+- [x] 8.8 Implementar o aviso de perda de comentários antes da primeira escrita num documento de rota que os contenha, e verificar que o aviso aparece uma vez e não reaparece após a confirmação
+- [x] 8.9 Implementar a edição com paridade — controles de todos os campos de rota, override e processo com o documento YAML ou JSON ao lado, atualizado ao vivo e editável, e valores do ambiente travados — e verificar pelos quatro cenários da requirement de edição com paridade
+- [x] 8.10 Implementar o liga/desliga do override e do modo aprendizado, a distinção dos overrides aprendidos e o acesso à troca de origem, e verificar pelos três cenários da requirement correspondente
 
 ## 9. Distribuição e documentação
 

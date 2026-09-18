@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { api, isApiError, type ApiError, type RouteResource, type SettingsPatchResult, type VersionedText } from "../api";
 import { toApiError, useResource } from "../hooks";
+import { shortPath } from "../format";
 import { ErrorNote } from "./ErrorNote";
 import { Panel } from "./Panel";
 import { Empty, Failure, Loading } from "./States";
@@ -22,7 +23,7 @@ interface DocumentPanelProps {
 export function DocumentPanel({ target, version, onSettings }: DocumentPanelProps) {
   const file = target?.kind === "process" ? "gateway.json" : target?.route?.file;
   return (
-    <Panel id="doc" title="documento" sub={file ? <span className="mono">{file}</span> : undefined}>
+    <Panel id="doc" title="documento" sub={file ? <span className="mono" title={file}>{shortPath(file)}</span> : undefined}>
       {target ? (
         <DocumentEditor
           key={target.kind === "route" ? `r:${target.name}` : "p"}

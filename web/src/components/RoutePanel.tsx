@@ -8,7 +8,7 @@ import {
   type SettingsPatchResult,
   type UpstreamHealth,
 } from "../api";
-import { clock } from "../format";
+import { clock, shortPath } from "../format";
 import type { OnOverrideState } from "../live";
 import { useCommentsGuard, WriteCancelled, type CommentsGuard, type GuardedDoc } from "../commentsGuard";
 import type { Load } from "../hooks";
@@ -176,7 +176,7 @@ function CommentsPrompt({ guard }: { guard: CommentsGuard }) {
       }}
     >
       <p className="guard__title" id={titleId}>
-        <span className="mono">{guard.asking}</span> tem comentários
+        <span className="mono" title={guard.asking ?? undefined}>{shortPath(guard.asking ?? "")}</span> tem comentários
       </p>
       <p id={`${titleId}-d`}>
         Gravar pelo painel reescreve o arquivo inteiro: os comentários e a ordem das chaves se perdem. Esta pergunta
@@ -448,7 +448,7 @@ function RouteFields({
       <h3 className="section-title">
         rota
         <span className="section-title__note">
-          {res.order + 1}ª em precedência · <span className="mono">{res.file}</span>
+          {res.order + 1}ª em precedência · <span className="mono" title={res.file}>{shortPath(res.file)}</span>
           {w.busy ? " · gravando" : ""}
         </span>
       </h3>
@@ -544,7 +544,7 @@ function RouteFields({
               autoFocus
               onClick={() => act(() => api.deleteRoute(name), onDeleted)}
             >
-              apagar {res.file} e a rota {name}
+              apagar {shortPath(res.file)} e a rota {name}
             </button>
             <button type="button" className="text-button" onClick={() => setConfirmDelete(false)}>
               manter
@@ -664,7 +664,7 @@ function NewRouteForm({ onCreated }: { onCreated: (name: string) => void }) {
   return (
     <form className="create" onSubmit={submit} aria-labelledby={`${ids}-t`}>
       <p className="create__title" id={`${ids}-t`}>
-        Nova rota, gravada em <span className="mono">routes/{name.trim() || "nome"}.yaml</span>
+        Nova rota, gravada em <span className="mono">routes/{name.trim() || "nome"}.yaml</span> (ou <span className="mono">-2</span>, <span className="mono">-3</span>… se o arquivo for de outra rota)
       </p>
       <div className="form">
         <Row label="nome" htmlFor={`${ids}-n`}>

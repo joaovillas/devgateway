@@ -18,6 +18,7 @@ import (
 	"github.com/gamerjp64/gateway/internal/config"
 	"github.com/gamerjp64/gateway/internal/exchange"
 	"github.com/gamerjp64/gateway/internal/override"
+	"github.com/gamerjp64/gateway/internal/upstream"
 )
 
 // DefaultTimeout vale para rotas que não declaram timeout.
@@ -33,8 +34,9 @@ type Handler struct {
 	// atrase, o atraso é zero.
 	delayFor func(*http.Request) (override string, d time.Duration)
 
-	tracker *override.Tracker
-	learner Learner
+	tracker   *override.Tracker
+	learner   Learner
+	upstreams *upstream.Health
 }
 
 // Learner aprende endpoints a partir das trocas respondidas pelo upstream.
@@ -52,6 +54,9 @@ type Options struct {
 	// Learner recebe as trocas do modo aprendizado. Sem ele, nada é
 	// aprendido.
 	Learner Learner
+	// Upstreams recebe o resultado de cada tentativa de encaminhamento,
+	// para a disponibilidade recente dos upstreams. Sem ele, nada é contado.
+	Upstreams *upstream.Health
 }
 
 // NewHandler atende o tráfego com a configuração em vigor em live e registra
@@ -65,7 +70,7 @@ func NewHandlerWith(live *config.Live, rec *capture.Recorder, o Options) *Handle
 	if o.Tracker == nil {
 		o.Tracker = override.NewTracker(live)
 	}
-	return &Handler{live: live, rec: rec, transport: newTransport(), tracker: o.Tracker, learner: o.Learner}
+	return &Handler{live: live, rec: rec, transport: newTransport(), tracker: o.Tracker, learner: o.Learner, upstreams: o.Upstreams}
 }
 
 // Tracker devolve o estado vivo dos overrides usado pelo handler.
@@ -316,6 +321,8 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.
 		},
 		ModifyResponse: func(res *http.Response) error {
 			timer.Stop()
+			// O upstream respondeu, qualquer que seja o status.
+			h.upstreams.Success(route.Doc.Upstream)
 			res.Header.Set(HeaderGateway, h.ident(route, dec, "").String())
 			// A resposta está pronta; o atraso vem antes de escrevê-la.
 			if err := h.delay(r, dec, rec); err != nil {
@@ -341,6 +348,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.
 					Upstream: route.Doc.Upstream,
 				}
 				status = http.StatusGatewayTimeout
+				h.upstreams.Failure(route.Doc.Upstream, d.Message)
 			case errors.Is(err, context.Canceled):
 				// O cliente desistiu (inclusive durante o atraso injetado em
 				// ModifyResponse); não há a quem responder.
@@ -353,6 +361,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.
 					Upstream: route.Doc.Upstream,
 				}
 				status = http.StatusBadGateway
+				h.upstreams.Failure(route.Doc.Upstream, err.Error())
 			}
 			rec.Fail(d.Error + ": " + d.Message)
 			if status == 0 {

@@ -144,3 +144,13 @@ export function bytes(n: number, scale = n): string {
   if (scale >= 1024) return unit(1024, "KiB");
   return `${num(n)} B`;
 }
+
+/**
+ * Caminho de arquivo curto para a tela: o arquivo e a pasta dele
+ * ("routes/payments.yaml"). A API devolve o caminho como o processo o
+ * resolveu, que pode ser absoluto; o caminho inteiro vai na dica.
+ */
+export function shortPath(path: string): string {
+  const parts = path.split(/[\\/]+/).filter(Boolean);
+  return parts.length <= 2 ? path : parts.slice(-2).join("/");
+}

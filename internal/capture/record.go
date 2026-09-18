@@ -117,7 +117,7 @@ func (rec *Record) Upgrade(status int, h http.Header) {
 		return
 	}
 	rec.upgradeStatus = status
-	rec.upgradeHeader = h.Clone()
+	rec.upgradeHeader = sentHeader(h)
 }
 
 // UpstreamStarted marca o envio da requisição ao upstream.
@@ -324,7 +324,7 @@ func (w *writer) WriteHeader(code int) {
 	}
 	if w.status == 0 {
 		w.status = code
-		w.header = w.ResponseWriter.Header().Clone()
+		w.header = sentHeader(w.ResponseWriter.Header())
 	}
 	w.ResponseWriter.WriteHeader(code)
 }
@@ -332,7 +332,7 @@ func (w *writer) WriteHeader(code int) {
 func (w *writer) Write(p []byte) (int, error) {
 	if w.status == 0 {
 		w.status = http.StatusOK
-		w.header = w.ResponseWriter.Header().Clone()
+		w.header = sentHeader(w.ResponseWriter.Header())
 	}
 	n, err := w.ResponseWriter.Write(p)
 	w.tap.add(p[:n])
@@ -348,3 +348,17 @@ func (w *writer) FlushError() error {
 func (w *writer) Flush() { w.FlushError() }
 
 func (w *writer) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// sentHeader copia os cabeçalhos como vão ao cliente. Uma chave com lista
+// vazia não é enviada — o net/http a usa para suprimir um cabeçalho
+// automático, como o Content-Type deduzido do corpo — e por isso fica de
+// fora da captura, em vez de aparecer como null na API.
+func sentHeader(h http.Header) http.Header {
+	out := make(http.Header, len(h))
+	for k, v := range h {
+		if len(v) > 0 {
+			out[k] = slices.Clone(v)
+		}
+	}
+	return out
+}

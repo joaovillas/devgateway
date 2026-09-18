@@ -18,6 +18,7 @@ import (
 	"github.com/gamerjp64/gateway/internal/override"
 	"github.com/gamerjp64/gateway/internal/proxy"
 	"github.com/gamerjp64/gateway/internal/store"
+	"github.com/gamerjp64/gateway/internal/upstream"
 )
 
 // App é o processo em execução.
@@ -34,6 +35,9 @@ type App struct {
 	// Overrides guarda o estado vivo dos overrides: tempo de vida restante e
 	// contagem de aplicações.
 	Overrides *override.Tracker
+	// Upstreams é a disponibilidade recente dos upstreams, contada pela porta
+	// de tráfego e lida pela API.
+	Upstreams *upstream.Health
 	// Learner grava os endpoints aprendidos com o modo aprendizado ligado.
 	Learner *learn.Learner
 	Log     *slog.Logger
@@ -85,12 +89,14 @@ func Start(opts Options) (*App, error) {
 	a.Recorder = capture.NewRecorder(a.History, capture.NewBroker(), log)
 	a.Writer = writer.New(a.Live)
 	a.Overrides = override.NewTracker(a.Live)
+	a.Upstreams = upstream.New()
 	a.Learner = learn.New(a.Writer, log)
 	a.traffic = &port{
 		name: "tráfego", key: "ports.traffic", fatal: a.fatal,
 		handler: proxy.NewHandlerWith(a.Live, a.Recorder, proxy.Options{
-			Tracker: a.Overrides,
-			Learner: a.Learner,
+			Tracker:   a.Overrides,
+			Learner:   a.Learner,
+			Upstreams: a.Upstreams,
 		}),
 	}
 	a.admin = &port{
@@ -102,6 +108,7 @@ func Start(opts Options) (*App, error) {
 			Recorder:  a.Recorder,
 			Writer:    a.Writer,
 			Overrides: a.Overrides,
+			Upstreams: a.Upstreams,
 			Loader:    opts.Loader,
 			Apply:     a.applySettings,
 			Ports:     a.ports,

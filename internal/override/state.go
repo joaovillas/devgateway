@@ -207,7 +207,7 @@ func (e *entry) status(route, name string, now time.Time) LiveState {
 		Route:        route,
 		Override:     name,
 		Enabled:      e.enabled,
-		RegisteredAt: e.registeredAt,
+		RegisteredAt: e.registeredAt.UTC(),
 		Applications: e.applications,
 	}
 	if why := e.expired(now); why != "" {
@@ -223,7 +223,7 @@ func (e *entry) status(route, name string, now time.Time) LiveState {
 		s.MaxApplications = &n
 	}
 	if !e.lastAppliedAt.IsZero() {
-		at := e.lastAppliedAt
+		at := e.lastAppliedAt.UTC()
 		s.LastAppliedAt = &at
 	}
 	return s
@@ -256,5 +256,5 @@ func (t *Tracker) States() ([]LiveState, time.Time) {
 			}
 		}
 	}
-	return slices.Clip(out), now
+	return slices.Clip(out), now.UTC()
 }

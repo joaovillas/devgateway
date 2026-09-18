@@ -24,6 +24,8 @@ const VIEW_KEY = "gateway.painel.controles";
 
 /** A aba lembrada entre sessões: rota ou processo. A troca aberta não sobrevive a um F5. */
 function readView(): ControlView {
+  // Um link para uma rota (#rota=...) abre os controles dela, não a aba lembrada.
+  if (window.location.hash.startsWith("#rota=")) return "route";
   try {
     return window.localStorage.getItem(VIEW_KEY) === "process" ? "process" : "route";
   } catch {
@@ -97,7 +99,19 @@ export function App() {
       reloadLearning();
       setDocVersion((v) => v + 1);
     };
+    // O evento upstreams só sai quando o status muda; as contagens recentes
+    // (falhas em tentativas) andam a cada troca, então são relidas junto com
+    // as trocas novas, no máximo a cada dois segundos.
+    let countsTimer: number | undefined;
+    const refreshCounts = () => {
+      if (countsTimer !== undefined) return;
+      countsTimer = window.setTimeout(() => {
+        countsTimer = undefined;
+        reloadUpstreams();
+      }, 2000);
+    };
     const offs = [
+      stream.on("exchanges", refreshCounts),
       // Ao (re)conectar, tudo é relido: o servidor não reenvia eventos perdidos.
       stream.on("hello", all),
       // Escrita, recarga ou aprendizado: rotas, upstreams, estado do processo
@@ -109,6 +123,7 @@ export function App() {
     ];
     return () => {
       for (const off of offs) off();
+      window.clearTimeout(countsTimer);
       stream.stop();
     };
   }, [stream, reloadStatus, reloadRoutes, reloadUpstreams, reloadLearning, onLiveEvent]);

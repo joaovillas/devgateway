@@ -112,7 +112,7 @@ func (r *Recorder) Begin(w http.ResponseWriter, req *http.Request, o Options) *R
 	rec.ex = exchange.Exchange{
 		ID:         exchange.NewID(start),
 		Seq:        rec.seq,
-		Start:      start,
+		Start:      start.UTC(),
 		Method:     req.Method,
 		Host:       req.Host,
 		Path:       req.URL.Path,

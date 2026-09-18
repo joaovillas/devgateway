@@ -157,7 +157,9 @@ type heartbeatEvent struct {
 // stream atende o fluxo text/event-stream do painel: hello ao conectar; as
 // trocas novas agregadas a no máximo uma atualização por segundo; as
 // alterações de configuração e do histórico; o estado vivo dos overrides
-// quando muda de forma não contínua, também agregado por segundo; e um
+// quando muda de forma não contínua, também agregado por segundo; a
+// disponibilidade dos upstreams quando o status de algum muda, conferida no
+// mesmo intervalo; e um
 // heartbeat periódico, que mantém a conexão viva sem tráfego.
 //
 // Nada aqui bloqueia o proxy: as trocas chegam pelo broker, que nunca espera
@@ -198,6 +200,7 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lastStates := statesKey(h.overrides.States())
+	lastUpstreams := upstreamsKey(h.upstreamsReport())
 
 	tick := time.NewTicker(aggregateEvery)
 	defer tick.Stop()
@@ -243,6 +246,12 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 			if key := statesKey(states, now); key != lastStates {
 				lastStates = key
 				if !sendJSON("overrides", overridesEvent{Now: now, Items: states}) {
+					return
+				}
+			}
+			if ups := h.upstreamsReport(); upstreamsKey(ups) != lastUpstreams {
+				lastUpstreams = upstreamsKey(ups)
+				if !sendJSON("upstreams", ups) {
 					return
 				}
 			}

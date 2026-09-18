@@ -252,6 +252,9 @@ button {
 }
 
 .panel__body {
+  /* Contém os absolutos (legendas sr-only, segmentos): sem isto, eles se
+     posicionam pela página e a fazem rolar além do console. */
+  position: relative;
   min-height: 0;
   overflow: auto;
 }
@@ -1773,6 +1776,7 @@ kbd {
   min-height: 0;
 }
 .traffic-scroll {
+  position: relative;
   min-height: 0;
   overflow: auto;
 }
@@ -2343,4 +2347,7 @@ kbd {
 .lanes__tick--end::before {
   left: auto;
   right: 0;
+}
+.setting__unit {
+  white-space: nowrap;
 }

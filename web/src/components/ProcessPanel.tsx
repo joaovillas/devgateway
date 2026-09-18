@@ -7,7 +7,7 @@ import {
   type SettingsPatchResult,
   type SettingsView,
 } from "../api";
-import { bytes } from "../format";
+import { bytes, shortPath } from "../format";
 import { toApiError, useResource } from "../hooks";
 import { patchForKey } from "../patch";
 import { IntField, Segmented, Switch, TextField } from "./Controls";
@@ -128,7 +128,14 @@ function Origin({ v }: { v: EffectiveValue }) {
       </span>
     );
   }
-  if (v.source.origin === "file") return <span className="origin">{v.source.name ?? "gateway.json"}</span>;
+  if (v.source.origin === "file") {
+    const file = v.source.name ?? "gateway.json";
+    return (
+      <span className="origin mono" title={file}>
+        {shortPath(file)}
+      </span>
+    );
+  }
   return <span className="origin origin--default">padrão</span>;
 }
 
@@ -244,7 +251,7 @@ function Control({
           onCommit={(n) => onCommit(n)}
         />
         {v.key === "capture.maxBodyBytes" && typeof v.value === "number" ? (
-          <span className="dim mono">{bytes(v.value)}</span>
+          <span className="dim mono setting__unit">{bytes(v.value)}</span>
         ) : null}
       </span>
     );

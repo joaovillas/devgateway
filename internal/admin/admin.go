@@ -18,6 +18,7 @@ import (
 	"github.com/gamerjp64/gateway/internal/config/writer"
 	"github.com/gamerjp64/gateway/internal/override"
 	"github.com/gamerjp64/gateway/internal/store"
+	"github.com/gamerjp64/gateway/internal/upstream"
 )
 
 // Deps reúne o que a API opera.
@@ -34,6 +35,9 @@ type Deps struct {
 	Writer *writer.Writer
 	// Overrides é o estado vivo dos overrides.
 	Overrides *override.Tracker
+	// Upstreams é a disponibilidade recente dos upstreams, alimentada pela
+	// porta de tráfego. nil: um acompanhamento próprio, sempre desconhecido.
+	Upstreams *upstream.Health
 	// Loader relê gateway.json e o diretório de rotas na recarga.
 	Loader config.Loader
 	// Apply aplica a quente o que a configuração do processo controla fora
@@ -65,6 +69,7 @@ type Handler struct {
 	rec       *capture.Recorder
 	writer    *writer.Writer
 	overrides *override.Tracker
+	upstreams *upstream.Health
 	loader    config.Loader
 	apply     func(old, next config.Settings, persist func() error) error
 	ports     func() (int, int)
@@ -83,6 +88,7 @@ func New(d Deps) *Handler {
 		rec:       d.Recorder,
 		writer:    d.Writer,
 		overrides: d.Overrides,
+		upstreams: d.Upstreams,
 		loader:    d.Loader,
 		apply:     d.Apply,
 		ports:     d.Ports,
@@ -91,6 +97,9 @@ func New(d Deps) *Handler {
 		events:    newHub(),
 		now:       time.Now,
 		mux:       http.NewServeMux(),
+	}
+	if h.upstreams == nil {
+		h.upstreams = upstream.New()
 	}
 	if h.heartbeat <= 0 {
 		h.heartbeat = DefaultHeartbeat
@@ -114,6 +123,7 @@ func New(d Deps) *Handler {
 	h.settingsRoutes()
 	h.deriveRoutes()
 	h.eventRoutes()
+	h.upstreamRoutes()
 	h.mux.Handle("/", spa(d.Web))
 	return h
 }

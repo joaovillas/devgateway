@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { api, type Exchange, type Matcher, type Override, type RouteResource } from "../api";
 import { WriteCancelled, type CommentsGuard } from "../commentsGuard";
+import { shortPath } from "../format";
 import { toApiError, type Load } from "../hooks";
 import { ProbabilityControl, Row, Switch } from "./Controls";
 import { ErrorNote } from "./ErrorNote";
@@ -145,7 +146,7 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
       </p>
       <p className="hint">
         Preenchido com esta requisição e esta resposta. Revise e edite; ele só passa a valer quando for criado, e entra no
-        fim da lista da rota, gravado em <span className="mono">{res?.file ?? `routes/${route}.yaml`}</span>.
+        fim da lista da rota, gravado em <span className="mono" title={res?.file}>{res ? shortPath(res.file) : `routes/${route}.yaml`}</span>.
       </p>
 
       {incomplete || stage.warnings.length ? (

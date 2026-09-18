@@ -1,0 +1,124 @@
+package upstream
+
+import (
+	"testing"
+	"time"
+
+	"github.com/gamerjp64/gateway/internal/config"
+)
+
+func routes(pairs ...string) []*config.CompiledRoute {
+	var out []*config.CompiledRoute
+	for i := 0; i+1 < len(pairs); i += 2 {
+		out = append(out, &config.CompiledRoute{Doc: config.Route{Name: pairs[i], Upstream: pairs[i+1]}})
+	}
+	return out
+}
+
+const (
+	a = "http://localhost:9001"
+	b = "http://localhost:9002"
+)
+
+func find(t *testing.T, items []Item, u string) Item {
+	t.Helper()
+	for _, it := range items {
+		if it.Upstream == u {
+			return it
+		}
+	}
+	t.Fatalf("upstream %s ausente de %+v", u, items)
+	return Item{}
+}
+
+func TestReportGroupsRoutesByUpstream(t *testing.T) {
+	h := New()
+	items := h.Report(routes("payments", a, "catalog", b, "catalog-admin", b, "mock", ""))
+	if len(items) != 2 {
+		t.Fatalf("esperados dois upstreams (rota sem upstream fica de fora): %+v", items)
+	}
+	if items[0].Upstream != a || items[1].Upstream != b {
+		t.Fatalf("ordem da precedência não respeitada: %+v", items)
+	}
+	if got := items[1].Routes; len(got) != 2 || got[0] != "catalog" || got[1] != "catalog-admin" {
+		t.Fatalf("rotas de %s: %v", b, got)
+	}
+	for _, it := range items {
+		if it.Status != StatusUnknown || it.LastSuccessAt != nil || it.LastFailureAt != nil {
+			t.Fatalf("sem tentativas o upstream é desconhecido: %+v", it)
+		}
+	}
+}
+
+func TestDownAfterThreeFailuresAndUpOnResponse(t *testing.T) {
+	h := New()
+	rs := routes("catalog", b)
+	h.Success(b)
+	h.Failure(b, "connection refused")
+	h.Failure(b, "connection refused")
+	if it := find(t, h.Report(rs), b); it.Status != StatusUp || it.Recent != (Recent{3, 2}) {
+		t.Fatalf("duas falhas seguidas ainda não bastam: %+v", it)
+	}
+	h.Failure(b, "dial tcp 127.0.0.1:9002: connect: connection refused")
+	it := find(t, h.Report(rs), b)
+	if it.Status != StatusDown {
+		t.Fatalf("três falhas seguidas deveriam dar indisponível: %+v", it)
+	}
+	if it.LastError != "dial tcp 127.0.0.1:9002: connect: connection refused" || it.LastFailureAt == nil || it.LastSuccessAt == nil {
+		t.Fatalf("detalhes da última falha: %+v", it)
+	}
+	h.Success(b)
+	if it := find(t, h.Report(rs), b); it.Status != StatusUp {
+		t.Fatalf("uma resposta volta a dar respondendo: %+v", it)
+	}
+}
+
+func TestFewerThanThreeAttemptsNeverDown(t *testing.T) {
+	h := New()
+	h.Failure(a, "x")
+	h.Failure(a, "x")
+	if it := find(t, h.Report(routes("p", a)), a); it.Status != StatusUp || it.Recent.Failures != 2 {
+		t.Fatalf("%+v", it)
+	}
+}
+
+func TestRecentWindowKeepsLastTwenty(t *testing.T) {
+	h := New()
+	for range 25 {
+		h.Failure(a, "x")
+	}
+	for range 5 {
+		h.Success(a)
+	}
+	it := find(t, h.Report(routes("p", a)), a)
+	if it.Recent != (Recent{Window, Window - 5}) || it.Status != StatusUp {
+		t.Fatalf("janela das últimas %d tentativas: %+v", Window, it)
+	}
+}
+
+func TestUndeclaredUpstreamIsForgotten(t *testing.T) {
+	h := New()
+	for range 3 {
+		h.Failure(b, "x")
+	}
+	h.Report(routes("p", a))
+	if it := find(t, h.Report(routes("p", a, "c", b)), b); it.Status != StatusUnknown || it.Recent.Attempts != 0 {
+		t.Fatalf("um upstream que deixou de ser declarado volta desconhecido: %+v", it)
+	}
+}
+
+func TestNilHealthIgnoresAttempts(t *testing.T) {
+	var h *Health
+	h.Success(a)
+	h.Failure(a, "x")
+}
+
+func TestTimesAreUTC(t *testing.T) {
+	h := New()
+	h.now = func() time.Time { return time.Date(2026, 9, 18, 12, 0, 0, 0, time.FixedZone("BRT", -3*3600)) }
+	h.Success(a)
+	it := find(t, h.Report(routes("p", a)), a)
+	if it.LastSuccessAt.Location() != time.UTC {
+		t.Fatalf("instantes devem sair em UTC: %v", it.LastSuccessAt)
+	}
+}

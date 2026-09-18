@@ -509,7 +509,9 @@ function TimeLanes({ x }: { x: Exchange }) {
 function MessageSection({ title, m, x, kind }: { title: string; m: Message; x: Exchange; kind: "request" | "response" }) {
   const headId = useId();
   const decoded = decodeMessage(m);
-  const headers = Object.entries(m.headers ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  const headers = Object.entries(m.headers ?? {})
+    .filter((e): e is [string, string[]] => Array.isArray(e[1]) && e[1].length > 0)
+    .sort(([a], [b]) => a.localeCompare(b));
   const noResponse = kind === "response" && (x.outcome === "dropped" || (!x.status && headers.length === 0));
   return (
     <section className="xd__section" aria-labelledby={headId}>
