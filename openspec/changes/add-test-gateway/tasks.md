@@ -14,7 +14,7 @@
 - [x] 2.5 Implementar a validação com mensagem nomeando arquivo, campo e localização, incluindo a recusa por versão de schema superior, e verificar pelos quatro cenários da requirement de validação
 - [x] 2.6 Implementar a precedência ambiente sobre arquivo sobre padrão e a consulta de origem efetiva de cada valor, e verificar pelos três cenários da requirement correspondente
 - [x] 2.7 Implementar o snapshot imutável atrás de `atomic.Pointer` com índices pré-computados, e verificar por teste de concorrência com `-race` que leituras simultâneas à troca nunca observam estado parcial
-- [ ] 2.8 Implementar a inicialização com portas separadas e recusa de portas iguais, e verificar pelos dois cenários da requirement de separação de portas e pelo cenário "Portas iguais" da validação
+- [x] 2.8 Implementar a inicialização com portas separadas e recusa de portas iguais, e verificar pelos dois cenários da requirement de separação de portas e pelo cenário "Portas iguais" da validação
 
 ## 3. Roteamento reverso
 

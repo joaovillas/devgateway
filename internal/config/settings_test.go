@@ -150,3 +150,22 @@ func TestRelativePathsResolveFromConfigDir(t *testing.T) {
 		t.Fatalf("caminhos deveriam partir de %s: %q, %q", dir, s.RoutesDir, s.HistoryPath)
 	}
 }
+
+func TestDefaultPathsSitNextToGatewayFile(t *testing.T) {
+	path := writeGateway(t, `{"history":{"backend":"sqlite"}}`)
+	s, _, err := LoadSettings(path, envMap(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Dir(path)
+	if s.RoutesDir != filepath.Join(dir, "routes") || s.HistoryPath != filepath.Join(dir, "gateway-history.db") {
+		t.Fatalf("padrões deveriam ficar ao lado de gateway.json: %q, %q", s.RoutesDir, s.HistoryPath)
+	}
+	s, _, err = LoadSettings(path, envMap(map[string]string{"GATEWAY_ROUTES_DIR": "rel"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.RoutesDir != "rel" {
+		t.Fatalf("caminho do ambiente parte do diretório de trabalho: %q", s.RoutesDir)
+	}
+}

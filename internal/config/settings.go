@@ -287,12 +287,18 @@ func LoadSettings(configPath string, getenv func(string) (string, bool)) (Settin
 		return s, nil, errs
 	}
 
+	// Caminhos padrão ficam ao lado do gateway.json, como os do arquivo;
+	// só os do ambiente partem do diretório de trabalho.
+	dir := filepath.Dir(configPath)
+	if s.Sources["routesDir"].Origin == OriginDefault {
+		s.RoutesDir = relativeTo(dir, s.RoutesDir)
+	}
 	if s.HistoryPath == "" {
 		switch s.HistoryBackend {
 		case BackendNDJSON:
-			s.HistoryPath = "gateway-history.ndjson"
+			s.HistoryPath = relativeTo(dir, "gateway-history.ndjson")
 		case BackendSQLite:
-			s.HistoryPath = "gateway-history.db"
+			s.HistoryPath = relativeTo(dir, "gateway-history.db")
 		}
 	}
 	if err := s.validate(x); err != nil {
