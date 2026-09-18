@@ -1,0 +1,61 @@
+/*
+ * Console Escuro de Dev (direction contract em .impeccable/surfaces/web.md).
+ * Grafite ao fundo, painéis separados por costuras de 1px, sem sombra.
+ * Cor só para estado: âmbar injetado, vermelho queda/sintetizado,
+ * azul override/seleção, verde saudável. Nada decorativo usa essas cores.
+ */
+@import "@fontsource-variable/source-sans-3/wght.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+
+:root {
+  color-scheme: dark;
+
+  /* Superfícies */
+  --ground: #0d1117;
+  --panel: #151a22;
+  --panel-raised: #1b212b;
+  --seam: #262e3a;
+  --seam-strong: #354050;
+
+  /* Tinta: contraste sobre --panel ≥ 4.5:1 até --ink-3 */
+  --ink: #d8dee7;
+  --ink-2: #a3aebb;
+  --ink-3: #808c9b;
+
+  /* Estado */
+  --injected: #e5a53d;
+  --injected-dim: rgb(229 165 61 / 0.16);
+  --fault: #f26b64;
+  --fault-dim: rgb(242 107 100 / 0.14);
+  --override: #5aa2ff;
+  --override-dim: rgb(90 162 255 / 0.14);
+  --healthy: #4cc26a;
+  --healthy-dim: rgb(76 194 106 / 0.14);
+
+  /* Segmentos neutros do waterfall */
+  --time-upstream: #6d7f96;
+  --time-gateway: #3e4a5a;
+
+  /* Tipo */
+  --font-ui: "Source Sans 3 Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --text-caps: 0.9375rem; /* 15px: versalete (all-small-caps encolhe para a altura-x) */
+  --text-sm: 0.75rem; /* 12px: mono de dados */
+  --text-md: 0.8125rem; /* 13px: texto de interface */
+  --text-lg: 0.9375rem; /* 15px: nome da rota em foco */
+
+  /* Espaço */
+  --s-1: 2px;
+  --s-2: 4px;
+  --s-3: 8px;
+  --s-4: 12px;
+  --s-5: 16px;
+  --s-6: 24px;
+
+  --bar-h: 30px;
+  --panel-head-h: 30px;
+  --row-h: 26px;
+  --radius: 2px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
