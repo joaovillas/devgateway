@@ -73,7 +73,7 @@
 
 ## 8. Interface web
 
-- [ ] 8.1 Montar o projeto Vite com React e TypeScript, o cliente da API e o build para `web/dist`, e verificar que o binário construído serve a interface na porta de administração sem acesso à rede externa, conforme os dois cenários da requirement de interface servida pelo próprio binário
+- [x] 8.1 Montar o projeto Vite com React e TypeScript, o cliente da API e o build para `web/dist`, e verificar que o binário construído serve a interface na porta de administração sem acesso à rede externa, conforme os dois cenários da requirement de interface servida pelo próprio binário
 - [ ] 8.2 Implementar o mapa de topologia com ligações entre cliente, rota e upstream, destaque de override ativo, sinalização de upstream indisponível e filtragem por seleção, e verificar pelos quatro cenários da requirement de mapa de topologia
 - [ ] 8.3 Implementar os controles contínuos do override aplicados imediatamente, com restante de tempo e de aplicações e desligamento em um gesto, e verificar pelos três cenários da requirement de controle direto
 - [ ] 8.4 Implementar a lista e o detalhe de tráfego com waterfall separando tempo de upstream e tempo injetado, sinalização de intervenção, navegação item a item e exibição de corpos truncados, e verificar pelos quatro cenários da requirement de inspeção com waterfall
