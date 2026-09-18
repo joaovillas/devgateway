@@ -1,0 +1,22 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: build
+        run: make build
+      - name: lint
+        run: make lint
+      - name: test (-race)
+        run: make race
+      - name: build sem CGO
+        run: CGO_ENABLED=0 go build ./...

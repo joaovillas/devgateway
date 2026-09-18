@@ -21,3 +21,6 @@ web/dist/*
 # Sistema operacional
 .DS_Store
 Thumbs.db
+
+# Build local
+/bin/
