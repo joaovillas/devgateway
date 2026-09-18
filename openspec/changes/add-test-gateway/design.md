@@ -111,6 +111,8 @@ O histórico é acessado por uma interface única, com implementações em memó
 
 *Restrição que decide o driver:* o driver comum de SQLite em Go usa CGO, o que quebraria a compilação cruzada e o binário estático. A implementação MUST usar um driver puro em Go (`modernc.org/sqlite`). É mais lento, e nesse uso isso não importa.
 
+*Ordem do histórico pela chegada, não pela conclusão:* a troca só é gravada quando termina, mas o histórico a posiciona pela chegada — instante de início, depois número de sequência, e a ordem de gravação apenas como desempate. Assim uma requisição lenta que chegou antes não aparece como mais nova que as rápidas que chegaram depois dela, e a listagem, a paginação e a navegação item a item concordam com os instantes exibidos. O cursor de paginação carrega essa chave e a época do histórico, que avança a cada limpeza.
+
 *Por que a falha de inicialização não cai para memória:* subir silenciosamente com outro backend produziria a pior forma de erro — tudo funcionando, nada sendo persistido, descoberto horas depois. Melhor recusar iniciar.
 
 ### Tempo real por SSE, não WebSocket
@@ -158,6 +160,7 @@ Com o modo aprendizado ligado, cada método e path novo respondido pelo upstream
 ## Risks / Trade-offs
 
 - **Latência injetada soma em vez de sobrepor** → Assumido conscientemente para manter o waterfall exato. Documentar no campo de latência da interface que o valor é acrescido ao tempo real do upstream.
+- **Tempo de upstream inclui a espera por um cliente lento em streaming** → O corpo da resposta é copiado ao cliente sem ser acumulado; quando o cliente lê mais devagar do que o upstream envia, a cópia espera por ele e essa espera entra no tempo de upstream. Separá-las exigiria acumular a resposta inteira, o que quebraria o streaming. Assumido e documentado no modelo da troca (`exchange.Timing`).
 - **Determinismo depende da ordem de chegada** → Documentar junto à configuração do seed. Requisições concorrentes podem receber números de sequência em ordem distinta entre execuções; a reprodutibilidade estrita exige envio serial.
 - **Queda de conexão se comporta de forma diferente em HTTP/2** → Registrar na captura qual comportamento ocorreu, para que o desenvolvedor nunca precise adivinhar.
 - **Comentários do documento de rota se perdem ao escrever pela API** → Escrita atômica por documento, aviso no README e alerta na interface antes da primeira escrita destrutiva. O dano fica contido a uma rota.

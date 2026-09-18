@@ -2,10 +2,13 @@ package store_test
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -68,11 +71,15 @@ func TestSQLiteFilterMatchesReferenceSemantics(t *testing.T) {
 		"desde antes do zero":   {Since: time.Date(1, 1, 1, 0, 0, 0, 1, time.UTC)},
 		"até depois de 2262":    {Until: time.Date(2300, 1, 1, 0, 0, 0, 0, time.UTC)},
 	}
+	// A ordem de referência é a cronológica pelo início, da mais nova para a
+	// mais antiga, e não a de registro.
+	chrono := slices.Clone(all)
+	slices.SortStableFunc(chrono, func(a, b *exchange.Exchange) int { return b.Start.Compare(a.Start) })
 	for name, f := range filters {
 		var want []string
-		for i := len(all) - 1; i >= 0; i-- {
-			if f.Match(all[i]) {
-				want = append(want, all[i].ID)
+		for _, e := range chrono {
+			if f.Match(e) {
+				want = append(want, e.ID)
 			}
 		}
 		res, err := s.List(ctx, f, store.Page{Limit: store.MaxLimit})
@@ -140,5 +147,62 @@ func TestSQLiteRefusesReadOnlyExistingDatabase(t *testing.T) {
 	if err == nil {
 		s.Close()
 		t.Fatalf("um banco existente sem permissão de escrita deveria ser recusado na abertura")
+	}
+}
+
+// Um banco criado antes da coluna seq é migrado na abertura, com a sequência
+// tirada do JSON de cada troca, e passa a seguir a ordem de chegada.
+func TestSQLiteMigratesDatabaseWithoutSeq(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "history.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`CREATE TABLE exchanges (
+		ord        INTEGER PRIMARY KEY AUTOINCREMENT,
+		id         TEXT    NOT NULL UNIQUE,
+		route      TEXT    NOT NULL,
+		upstream   TEXT    NOT NULL,
+		override   TEXT    NOT NULL,
+		method     TEXT    NOT NULL,
+		path       BLOB    NOT NULL,
+		status     INTEGER NOT NULL,
+		intervened INTEGER NOT NULL,
+		start_sec  INTEGER NOT NULL,
+		start_nsec INTEGER NOT NULL,
+		data       BLOB    NOT NULL
+	)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+	// Mesmo instante; a de sequência maior foi gravada primeiro.
+	for _, e := range []exchange.Exchange{{ID: "b", Seq: 2, Start: at}, {ID: "a", Seq: 1, Start: at}} {
+		data, _ := json.Marshal(e)
+		if _, err := db.Exec(`INSERT INTO exchanges (id, route, upstream, override, method, path, status, intervened, start_sec, start_nsec, data)
+			VALUES (?, '', '', '', '', ?, 0, 0, ?, ?, ?)`, e.ID, []byte{}, at.Unix(), at.Nanosecond(), data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+
+	s := openSQLite(t, path)
+	res, err := s.List(ctx, exchange.Filter{}, store.Page{Limit: store.MaxLimit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range res.Items {
+		got = append(got, e.ID)
+	}
+	if !equalStrings(got, []string{"b", "a"}) {
+		t.Fatalf("após a migração, a ordem deveria seguir a sequência: %v", got)
+	}
+	if err := s.Record(ctx, &exchange.Exchange{ID: "c", Seq: 3, Start: at}); err != nil {
+		t.Fatalf("Record após a migração: %v", err)
+	}
+	if e, err := s.Neighbor(ctx, "b", store.Newer, exchange.Filter{}); err != nil || e.ID != "c" {
+		t.Fatalf("seguinte de b deveria ser c: %q %v", e.ID, err)
 	}
 }

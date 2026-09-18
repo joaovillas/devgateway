@@ -65,6 +65,13 @@ type Message struct {
 }
 
 // Timing decompõe a latência da troca, em milissegundos.
+//
+// O tempo de upstream vai do envio da requisição ao upstream até o fim do
+// corpo da resposta, descontado o atraso injetado nessa janela. O corpo é
+// repassado ao cliente em streaming, sem ser acumulado: quando o cliente lê
+// mais devagar do que o upstream envia, a cópia espera pelo cliente, e essa
+// espera entra no tempo de upstream. Separá-las exigiria acumular a resposta
+// inteira antes de escrevê-la, o que quebraria o streaming.
 type Timing struct {
 	TotalMs    float64 `json:"totalMs"`
 	UpstreamMs float64 `json:"upstreamMs"`

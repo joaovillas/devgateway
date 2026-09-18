@@ -37,24 +37,24 @@
 
 ## 5. Captura de tráfego
 
-- [ ] 5.1 Implementar o registro da troca com identificador único, dados de requisição e resposta, rota, override e tamanhos, com truncamento de corpo no limite configurado, e verificar pelos três cenários da requirement de registro
-- [ ] 5.2 Implementar a cronometragem decomposta em tempo total, tempo de upstream, tempo injetado e overhead do gateway, e verificar pelos três cenários da requirement de decomposição da latência
-- [ ] 5.3 Implementar a consulta com ordem cronológica inversa, paginação e filtros combinados, e verificar pelos quatro cenários da requirement de consulta e filtragem
-- [ ] 5.4 Implementar a leitura por identificador e a navegação item a item respeitando os filtros ativos, e verificar pelos quatro cenários da requirement de leitura individual e navegação por cursor
-- [ ] 5.5 Implementar o desligamento independente de registro e de exposição, e a limpeza sob demanda, e verificar pelos três cenários da requirement de exposição configurável
+- [x] 5.1 Implementar o registro da troca com identificador único, dados de requisição e resposta, rota, override e tamanhos, com truncamento de corpo no limite configurado, e verificar pelos três cenários da requirement de registro
+- [x] 5.2 Implementar a cronometragem decomposta em tempo total, tempo de upstream, tempo injetado e overhead do gateway, e verificar pelos três cenários da requirement de decomposição da latência
+- [x] 5.3 Implementar a consulta com ordem cronológica inversa, paginação e filtros combinados, e verificar pelos quatro cenários da requirement de consulta e filtragem
+- [x] 5.4 Implementar a leitura por identificador e a navegação item a item respeitando os filtros ativos, e verificar pelos quatro cenários da requirement de leitura individual e navegação por cursor
+- [x] 5.5 Implementar o desligamento independente de registro e de exposição, e a limpeza sob demanda, e verificar pelos três cenários da requirement de exposição configurável
 
 ## 6. Overrides
 
 - [ ] 6.1 Implementar os critérios de seleção (path exato, curinga e regex; método, cabeçalhos, query e corpo com os operadores de igualdade, regex, igualdade JSON e substring), e verificar pelos cinco cenários da requirement de critérios de seleção
 - [ ] 6.2 Implementar a precedência por especificidade entre overrides, com desempate pela ordem de declaração, e verificar pelos três cenários da requirement de precedência
 - [ ] 6.3 Implementar o passthrough por padrão e o `501` de rota sem upstream e sem override casado, e verificar pelos três cenários da requirement de interceptação seletiva
-- [ ] 6.4 Implementar a resposta declarada com status padrão `200` e inferência do tipo de conteúdo para corpo JSON, e verificar pelos três cenários da requirement de resposta declarada
+- [ ] 6.4 Implementar a resposta declarada com status padrão `200` e inferência do tipo de conteúdo para corpo JSON, e verificar pelos três cenários da requirement de resposta declarada, e verificar de novo, com resposta sintetizada por override real, o cenário "Resposta sintetizada não contabiliza tempo de upstream" da spec `traffic-capture` (em 5.2 ele foi verificado só pelo registro de captura, com a intervenção anotada à mão)
 - [ ] 6.5 Implementar a fonte de aleatoriedade derivada de `(seed, número de sequência)` com `math/rand/v2`, e verificar pelos dois cenários da requirement de determinismo, com `-race` e requisições concorrentes
 - [ ] 6.6 Implementar a probabilidade de aplicação com passthrough quando não sorteada, e verificar pelos quatro cenários da requirement correspondente, incluindo o teste estatístico de 1000 requisições a 30%
-- [ ] 6.7 Implementar a latência fixa ou sorteada em intervalo, aplicada após a resposta estar pronta, inclusive no caso de override sem `respond`, e verificar pelos cinco cenários da requirement de latência e queda
+- [ ] 6.7 Implementar a latência fixa ou sorteada em intervalo, aplicada após a resposta estar pronta, inclusive no caso de override sem `respond`, e verificar pelos cinco cenários da requirement de latência e queda, e repetir com override real (latência de `2s`, upstream de `150ms`) o cenário "Tempo injetado separado do tempo real" da spec `traffic-capture`, que em 5.2 foi verificado pelo mesmo ponto de injeção acionado por gancho de teste
 - [ ] 6.8 Implementar a queda de conexão via `http.Hijacker` com degradação documentada em HTTP/2, e verificar pelo cenário "Queda encerra sem resposta" e pelo cenário de queda da spec `traffic-capture`
 - [ ] 6.9 Implementar a expiração por tempo de vida e por contagem de aplicações, com ambos consultáveis, e verificar pelos quatro cenários da requirement de expiração
-- [ ] 6.10 Implementar o cabeçalho de identificação da intervenção e a marcação na troca capturada, e verificar pelos dois cenários da requirement de identificação, pelo cenário "Identificação com intervenção" da requirement de identificação do gateway da spec `gateway-routing` (o cliente recebe `X-Gateway: route=payments; override=payments/flaky; intervention=synthesized` quando o override sintetiza a resposta) e pelos três cenários da requirement de distinção da spec `traffic-capture`
+- [ ] 6.10 Implementar o cabeçalho de identificação da intervenção e a marcação na troca capturada, e verificar pelos dois cenários da requirement de identificação, pelo cenário "Identificação com intervenção" da requirement de identificação do gateway da spec `gateway-routing` (o cliente recebe `X-Gateway: route=payments; override=payments/flaky; intervention=synthesized` quando o override sintetiza a resposta) e pelos três cenários da requirement de distinção da spec `traffic-capture`, e pelo cenário "Filtro por intervenção" da mesma spec com uma troca sintetizada por override real (em 5.3 a troca sintetizada foi registrada pelo caminho da captura, sem o motor de overrides)
 - [ ] 6.11 Implementar o liga/desliga do override, com desligados fora da seleção e da precedência, e verificar pelos três cenários da requirement de override ligado e desligado
 - [ ] 6.12 Implementar o modo aprendizado — detecção de método e path desconhecidos após resposta do upstream, geração do override desligado com resposta completa e origem, gravação atômica do documento e reconstrução do snapshot fora do caminho da requisição — e verificar pelos seis cenários da requirement de aprendizado de endpoints
 

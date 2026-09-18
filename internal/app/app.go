@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gamerjp64/gateway/internal/admin"
+	"github.com/gamerjp64/gateway/internal/capture"
 	"github.com/gamerjp64/gateway/internal/config"
 	"github.com/gamerjp64/gateway/internal/proxy"
 	"github.com/gamerjp64/gateway/internal/store"
@@ -24,7 +25,10 @@ type App struct {
 	Live *config.Live
 	// History é o histórico de trocas, com backend trocável a quente.
 	History *store.Switchable
-	Log     *slog.Logger
+	// Recorder registra as trocas da porta de tráfego no histórico em uso e
+	// as publica no broker de tempo real.
+	Recorder *capture.Recorder
+	Log      *slog.Logger
 
 	traffic, admin     *http.Server
 	trafficLn, adminLn net.Listener
@@ -67,21 +71,24 @@ func Start(opts Options) (*App, error) {
 		Log:      log,
 		serveErr: make(chan error, 2),
 	}
+	a.Recorder = capture.NewRecorder(a.History, capture.NewBroker(), log)
 	if a.trafficLn, err = listen("tráfego", s.TrafficPort); err != nil {
+		a.Recorder.Close()
 		a.History.Close()
 		return nil, err
 	}
 	if a.adminLn, err = listen("administração", s.AdminPort); err != nil {
 		a.trafficLn.Close()
+		a.Recorder.Close()
 		a.History.Close()
 		return nil, err
 	}
 	a.traffic = &http.Server{
-		Handler:           proxy.NewHandler(a.Live),
+		Handler:           proxy.NewHandler(a.Live, a.Recorder),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	a.admin = &http.Server{
-		Handler:           admin.NewHandler(a.Live, opts.Web),
+		Handler:           admin.NewHandler(a.Live, opts.Web, a.History, a.Recorder),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go a.serve(a.traffic, a.trafficLn)
@@ -115,5 +122,14 @@ func (a *App) AdminAddr() string   { return a.adminLn.Addr().String() }
 // depois fecha o histórico.
 func (a *App) Shutdown(ctx context.Context) error {
 	err := errors.Join(a.traffic.Shutdown(ctx), a.admin.Shutdown(ctx))
+	// Com as portas fechadas nenhuma troca nova chega. O Shutdown do
+	// servidor não espera as conexões sequestradas (upgrades de protocolo):
+	// os registros delas são esperados aqui, até o prazo de ctx. Um que
+	// feche depois disso é descartado com aviso no log. O que está na fila é
+	// gravado antes de o histórico fechar.
+	if werr := a.Recorder.Wait(ctx); werr != nil && err == nil {
+		err = fmt.Errorf("aguardando as trocas em curso: %w", werr)
+	}
+	a.Recorder.Close()
 	return errors.Join(err, a.History.Close())
 }

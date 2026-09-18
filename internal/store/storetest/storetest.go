@@ -62,6 +62,8 @@ var Cases = []Case{
 	{Name: "CursorBeforeClearIsStale", Run: cursorBeforeClear},
 	{Name: "DuplicateIDRejected", Run: duplicateIDRejected},
 	{Name: "ConcurrentRecord", Run: concurrentRecord},
+	{Name: "ChronologicalOrderNotCompletionOrder", Run: chronologicalOrder},
+	{Name: "ChronologicalOrderSurvivesRestart", Run: chronologicalOrderSurvivesRestart, Persistent: true},
 	{Name: "SurvivesRestart", Run: survivesRestart, Persistent: true},
 	{Name: "CursorBeforeClearSurvivesRestart", Run: cursorBeforeClearSurvivesRestart, Persistent: true},
 }
@@ -576,5 +578,100 @@ func cursorBeforeClearSurvivesRestart(t TB, f Factory) {
 	res, err := s.List(ctx, exchange.Filter{}, store.Page{Limit: store.MaxLimit})
 	if err != nil || len(res.Items) != 8 || res.Items[0].ID != "ID000007" {
 		t.Fatalf("o histórico após limpeza e reinício deveria ter só as 8 novas: %v %v", ids(res.Items), err)
+	}
+}
+
+// outOfOrder registra trocas na ordem em que terminariam, que não é a de
+// chegada: a lenta chegou primeiro e terminou por último; duas chegaram no
+// mesmo instante e só a sequência as separa; duas empatam em instante e
+// sequência (processos diferentes) e ficam na ordem de registro. Devolve os
+// identificadores na ordem cronológica esperada, do mais novo ao mais antigo.
+func outOfOrder(t TB, s store.Store) []string {
+	t.Helper()
+	at := func(ms int, seq uint64, id string) *exchange.Exchange {
+		e := sample(int(seq))
+		e.ID, e.Seq, e.Start = id, seq, base.Add(time.Duration(ms)*time.Millisecond)
+		return e
+	}
+	finished := []*exchange.Exchange{
+		at(50, 2, "rapida"),
+		at(80, 4, "empate-seq-b"),
+		at(80, 3, "empate-seq-a"),
+		at(0, 1, "lenta"),
+		at(90, 5, "empate-total-1"),
+		at(90, 5, "empate-total-2"),
+		at(120, 6, "ultima"),
+	}
+	for _, e := range finished {
+		if err := s.Record(ctx, e); err != nil {
+			t.Fatalf("Record(%s): %v", e.ID, err)
+		}
+	}
+	return []string{"ultima", "empate-total-2", "empate-total-1", "empate-seq-b", "empate-seq-a", "rapida", "lenta"}
+}
+
+// checkOrder confere listagem, paginação e navegação contra want, do mais
+// novo ao mais antigo.
+func checkOrder(t TB, s store.Store, want []string) {
+	t.Helper()
+	res, err := s.List(ctx, exchange.Filter{}, store.Page{Limit: store.MaxLimit})
+	if err != nil || !reflect.DeepEqual(ids(res.Items), want) {
+		t.Fatalf("a listagem deveria seguir a ordem de chegada: recebido %v, esperado %v (%v)", ids(res.Items), want, err)
+	}
+	var paged []string
+	cursor := ""
+	for range len(want) + 1 {
+		res, err := s.List(ctx, exchange.Filter{}, store.Page{Limit: 2, Cursor: cursor})
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		paged = append(paged, ids(res.Items)...)
+		if cursor = res.Next; cursor == "" {
+			break
+		}
+	}
+	if !reflect.DeepEqual(paged, want) {
+		t.Fatalf("a paginação deveria seguir a ordem de chegada: recebido %v, esperado %v", paged, want)
+	}
+	for i, id := range want {
+		older, err := s.Neighbor(ctx, id, store.Older, exchange.Filter{})
+		if i == len(want)-1 {
+			if !errors.Is(err, store.ErrNoMore) {
+				t.Fatalf("antes de %s não deveria haver troca: %s %v", id, older.ID, err)
+			}
+		} else if err != nil || older.ID != want[i+1] {
+			t.Fatalf("anterior de %s deveria ser %s: %s %v", id, want[i+1], older.ID, err)
+		}
+		newer, err := s.Neighbor(ctx, id, store.Newer, exchange.Filter{})
+		if i == 0 {
+			if !errors.Is(err, store.ErrNoMore) {
+				t.Fatalf("depois de %s não deveria haver troca: %s %v", id, newer.ID, err)
+			}
+		} else if err != nil || newer.ID != want[i-1] {
+			t.Fatalf("seguinte de %s deveria ser %s: %s %v", id, want[i-1], newer.ID, err)
+		}
+	}
+}
+
+// chronologicalOrder: a ordem do histórico é a de chegada (início, depois
+// sequência), e não a de registro, que segue o fim das trocas.
+func chronologicalOrder(t TB, f Factory) {
+	s := f.New(t)
+	checkOrder(t, s, outOfOrder(t, s))
+}
+
+func chronologicalOrderSurvivesRestart(t TB, f Factory) {
+	s := f.New(t)
+	want := outOfOrder(t, s)
+	// Um cursor emitido antes do reinício continua valendo depois dele.
+	first, err := s.List(ctx, exchange.Filter{}, store.Page{Limit: 3})
+	if err != nil || first.Next == "" {
+		t.Fatalf("primeira página deveria indicar continuação: %q %v", first.Next, err)
+	}
+	s = f.Reopen(t, s)
+	checkOrder(t, s, want)
+	rest, err := s.List(ctx, exchange.Filter{}, store.Page{Limit: store.MaxLimit, Cursor: first.Next})
+	if err != nil || !reflect.DeepEqual(ids(rest.Items), want[3:]) {
+		t.Fatalf("cursor de antes do reinício: recebido %v, esperado %v (%v)", ids(rest.Items), want[3:], err)
 	}
 }

@@ -44,9 +44,13 @@ type ListResult struct {
 	Next  string
 }
 
-// Store guarda o histórico. A ordem do histórico é a ordem de registro, e
-// todas as implementações precisam passar pela mesma bateria de contrato
-// (pacote storetest).
+// Store guarda o histórico. A ordem do histórico é cronológica pela chegada
+// da requisição: instante de início, depois número de sequência e, só para
+// desempatar, a ordem de registro. Como a captura registra a troca quando
+// ela termina, uma troca lenta entra no histórico depois de outras que
+// chegaram depois dela, mas ocupa a posição da sua chegada. Todas as
+// implementações precisam passar pela mesma bateria de contrato (pacote
+// storetest).
 type Store interface {
 	// Record acrescenta a troca ao histórico, ou devolve ErrDuplicateID se
 	// o identificador já constar dele.

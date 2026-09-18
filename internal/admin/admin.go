@@ -6,20 +6,27 @@ import (
 	"io/fs"
 	"net/http"
 
+	"github.com/gamerjp64/gateway/internal/capture"
 	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/gateway/internal/store"
 )
 
 // Handler é o handler da porta de administração.
 type Handler struct {
-	live *config.Live
-	mux  *http.ServeMux
+	live    *config.Live
+	history *store.Switchable
+	rec     *capture.Recorder
+	mux     *http.ServeMux
 }
 
-func NewHandler(live *config.Live, web fs.FS) *Handler {
-	h := &Handler{live: live, mux: http.NewServeMux()}
+// NewHandler monta a API sobre a configuração em vigor, o histórico em uso e
+// o registrador de trocas, e serve o frontend embutido em web.
+func NewHandler(live *config.Live, web fs.FS, history *store.Switchable, rec *capture.Recorder) *Handler {
+	h := &Handler{live: live, history: history, rec: rec, mux: http.NewServeMux()}
 	h.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "recurso da API inexistente: "+r.URL.Path)
 	})
+	h.historyRoutes()
 	h.mux.Handle("/", spa(web))
 	return h
 }
@@ -44,9 +51,16 @@ func spa(web fs.FS) http.Handler {
 	})
 }
 
+// apiError é o corpo de toda resposta de erro da API.
 type apiError struct {
 	Error   string `json:"error"`
 	Message string `json:"message"`
+	// Field é o campo responsável, quando há.
+	Field string `json:"field,omitempty"`
+	// File é o documento responsável, quando há.
+	File string `json:"file,omitempty"`
+	// Env é a variável de ambiente que define o valor, quando é o caso.
+	Env string `json:"env,omitempty"`
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -59,4 +73,13 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, code, msg string) {
 	writeJSON(w, status, apiError{Error: code, Message: msg})
+}
+
+// methodNotAllowed responde 405 aos métodos não suportados num path da API.
+func methodNotAllowed(allow string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Allow", allow)
+		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed",
+			"método "+r.Method+" não suportado em "+r.URL.Path+"; use "+allow)
+	}
 }

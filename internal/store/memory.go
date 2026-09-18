@@ -2,33 +2,40 @@ package store
 
 import (
 	"context"
-	"strconv"
+	"slices"
 	"sync"
 
 	"github.com/gamerjp64/gateway/internal/exchange"
 )
 
-// Memory guarda as trocas num anel de capacidade fixa: ao atingi-la, a troca
-// mais antiga é descartada para dar lugar à nova.
+// Memory guarda as trocas em memória, com capacidade fixa: ao atingi-la, a
+// troca mais antiga é descartada para dar lugar à nova. As trocas ficam em
+// ordem crescente de chave (orderKey), da mais antiga para a mais nova.
 type Memory struct {
-	mu    sync.RWMutex
-	ring  []memEntry
-	head  int // posição da troca mais antiga
-	count int
-	next  uint64 // chave de ordem da próxima troca
-	byID  map[string]uint64
+	mu       sync.RWMutex
+	capacity int
+	items    []memEntry
+	byID     map[string]orderKey
+	next     uint64 // posição de registro da próxima troca
+	epoch    uint64 // avança a cada limpeza
 }
 
 type memEntry struct {
-	order uint64
-	ex    exchange.Exchange
+	key orderKey
+	ex  exchange.Exchange
 }
 
 func NewMemory(capacity int) *Memory {
 	if capacity < 1 {
 		capacity = 1
 	}
-	return &Memory{ring: make([]memEntry, capacity), byID: map[string]uint64{}}
+	return &Memory{capacity: capacity, byID: map[string]orderKey{}}
+}
+
+// search devolve a posição da primeira troca com chave não anterior a k.
+func (m *Memory) search(k orderKey) int {
+	i, _ := slices.BinarySearchFunc(m.items, k, func(e memEntry, k orderKey) int { return e.key.compare(k) })
+	return i
 }
 
 func (m *Memory) Record(_ context.Context, e *exchange.Exchange) error {
@@ -37,71 +44,50 @@ func (m *Memory) Record(_ context.Context, e *exchange.Exchange) error {
 	if _, ok := m.byID[e.ID]; ok {
 		return ErrDuplicateID
 	}
-	if m.count == len(m.ring) {
-		delete(m.byID, m.ring[m.head].ex.ID)
-		m.head = (m.head + 1) % len(m.ring)
-		m.count--
+	if len(m.items) == m.capacity {
+		// Sai a mais antiga já registrada, para que a nova sempre entre.
+		delete(m.byID, m.items[0].ex.ID)
+		m.items[0] = memEntry{}
+		m.items = m.items[1:]
 	}
-	pos := (m.head + m.count) % len(m.ring)
-	m.ring[pos] = memEntry{order: m.next, ex: *e}
-	m.byID[e.ID] = m.next
+	k := keyOf(e, m.next)
 	m.next++
-	m.count++
+	m.items = slices.Insert(m.items, m.search(k), memEntry{key: k, ex: *e})
+	m.byID[e.ID] = k
 	return nil
-}
-
-// at devolve a i-ésima troca, da mais antiga (0) para a mais nova.
-func (m *Memory) at(i int) *memEntry { return &m.ring[(m.head+i)%len(m.ring)] }
-
-// indexOf localiza a posição de uma chave de ordem. As chaves no anel são
-// contíguas, então a posição é aritmética.
-func (m *Memory) indexOf(order uint64) (int, bool) {
-	if m.count == 0 {
-		return 0, false
-	}
-	first := m.at(0).order
-	if order < first || order >= first+uint64(m.count) {
-		return 0, false
-	}
-	return int(order - first), true
 }
 
 func (m *Memory) List(_ context.Context, f exchange.Filter, p Page) (ListResult, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	limit := NormalizeLimit(p.Limit)
-	start := m.count - 1
+	start := len(m.items) - 1
 	if p.Cursor != "" {
-		c, err := strconv.ParseUint(p.Cursor, 10, 64)
+		c, err := decodeCursor(p.Cursor)
 		if err != nil {
-			return ListResult{}, ErrBadCursor
+			return ListResult{}, err
 		}
-		// O cursor é a chave da última troca entregue; segue-se da anterior.
-		// Se ela já saiu do anel, as restantes também saíram.
-		i, ok := m.indexOf(c)
-		if !ok {
-			if m.count > 0 && c > m.at(m.count-1).order {
-				i = m.count
-			} else {
-				return ListResult{}, nil
-			}
+		if c.Epoch != m.epoch {
+			return ListResult{}, nil // cursor anterior à última limpeza
 		}
-		start = i - 1
+		// O cursor é a chave da última troca entregue; segue-se da anterior
+		// a ela, ainda que ela já tenha saído do histórico.
+		start = m.search(c.Key) - 1
 	}
 	var res ListResult
-	var last uint64
+	var last orderKey
 	for i := start; i >= 0; i-- {
-		en := m.at(i)
+		en := &m.items[i]
 		if !f.Match(&en.ex) {
 			continue
 		}
 		if len(res.Items) == limit {
 			// Há mais uma troca que casa: a página continua depois da última entregue.
-			res.Next = strconv.FormatUint(last, 10)
+			res.Next = encodeCursor(m.epoch, last)
 			break
 		}
 		res.Items = append(res.Items, en.ex)
-		last = en.order
+		last = en.key
 	}
 	return res, nil
 }
@@ -109,28 +95,27 @@ func (m *Memory) List(_ context.Context, f exchange.Filter, p Page) (ListResult,
 func (m *Memory) Get(_ context.Context, id string) (exchange.Exchange, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	order, ok := m.byID[id]
+	k, ok := m.byID[id]
 	if !ok {
 		return exchange.Exchange{}, ErrNotFound
 	}
-	i, _ := m.indexOf(order)
-	return m.at(i).ex, nil
+	return m.items[m.search(k)].ex, nil
 }
 
 func (m *Memory) Neighbor(_ context.Context, id string, d Direction, f exchange.Filter) (exchange.Exchange, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	order, ok := m.byID[id]
+	k, ok := m.byID[id]
 	if !ok {
 		return exchange.Exchange{}, ErrNotFound
 	}
-	i, _ := m.indexOf(order)
+	i := m.search(k)
 	step := -1
 	if d == Newer {
 		step = 1
 	}
-	for j := i + step; j >= 0 && j < m.count; j += step {
-		if en := m.at(j); f.Match(&en.ex) {
+	for j := i + step; j >= 0 && j < len(m.items); j += step {
+		if en := &m.items[j]; f.Match(&en.ex) {
 			return en.ex, nil
 		}
 	}
@@ -140,9 +125,9 @@ func (m *Memory) Neighbor(_ context.Context, id string, d Direction, f exchange.
 func (m *Memory) Clear(context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	clear(m.ring)
-	m.head, m.count = 0, 0
-	m.byID = map[string]uint64{}
+	m.items = nil
+	m.byID = map[string]orderKey{}
+	m.epoch++
 	return nil
 }
 

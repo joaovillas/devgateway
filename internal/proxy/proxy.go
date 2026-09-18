@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gamerjp64/gateway/internal/capture"
 	"github.com/gamerjp64/gateway/internal/config"
 )
 
@@ -23,11 +24,18 @@ const DefaultTimeout = 30 * time.Second
 // Handler é o handler da porta de tráfego.
 type Handler struct {
 	live      *config.Live
+	rec       *capture.Recorder
 	transport http.RoundTripper
+	// delayFor decide o atraso a injetar entre a resposta pronta e a escrita
+	// ao cliente, com o override responsável. Sem ele, ou sem override que
+	// atrase, o atraso é zero.
+	delayFor func(*http.Request) (override string, d time.Duration)
 }
 
-func NewHandler(live *config.Live) *Handler {
-	return &Handler{live: live, transport: newTransport()}
+// NewHandler atende o tráfego com a configuração em vigor em live e registra
+// as trocas em rec.
+func NewHandler(live *config.Live, rec *capture.Recorder) *Handler {
+	return &Handler{live: live, rec: rec, transport: newTransport()}
 }
 
 func newTransport() *http.Transport {
@@ -49,29 +57,66 @@ func newTransport() *http.Transport {
 	}
 }
 
+// ServeHTTP percorre o caminho da requisição na ordem fixa: resolve a rota,
+// abre o registro de captura, encaminha (ou responde pelo próprio gateway),
+// aplica o atraso entre a resposta pronta e a escrita ao cliente e fecha o
+// registro com os tempos decompostos.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// O snapshot é capturado uma única vez: uma recarga no meio da requisição
 	// não a afeta.
 	snap := h.live.Load()
 	route := Resolve(snap, r)
+
+	rec := h.rec.Begin(w, r, capture.Options{
+		Record:       snap.Settings.HistoryRecord,
+		MaxBodyBytes: snap.Settings.CaptureMaxBodyBytes,
+	})
+	defer func() {
+		// Uma cópia de corpo interrompida faz o ReverseProxy abortar o
+		// handler com pânico; a troca é registrada antes de o pânico seguir.
+		if p := recover(); p != nil {
+			rec.Abort("a transferência da resposta foi interrompida")
+			rec.Finish()
+			panic(p)
+		}
+		rec.Finish()
+	}()
+	w, r = rec.Writer(), rec.Request()
+
 	if route == nil {
-		writeNoRoute(w, snap)
+		rec.DrainRequest()
+		d := writeNoRoute(w, snap)
+		rec.Fail(d.Error + ": " + d.Message)
 		return
 	}
+	rec.SetRoute(route.Name(), route.Doc.Upstream)
 	if route.Upstream == nil {
-		writeDiag(w, http.StatusNotImplemented, Ident{Route: route.Name()}, diag{
+		rec.DrainRequest()
+		d := diag{
 			Error:   "no_upstream",
 			Message: "a rota não declara upstream e nenhum override interceptou a requisição",
 			Route:   route.Name(),
-		})
+		}
+		rec.Fail(d.Error + ": " + d.Message)
+		writeDiag(w, http.StatusNotImplemented, Ident{Route: route.Name()}, d)
 		return
 	}
-	h.forward(w, r, route)
+	h.forward(w, r, route, rec)
+}
+
+// delay aplica o atraso decidido para a requisição, no ponto entre a resposta
+// pronta e a escrita ao cliente.
+func (h *Handler) delay(r *http.Request, rec *capture.Record) error {
+	if h.delayFor == nil {
+		return nil
+	}
+	override, d := h.delayFor(r)
+	return rec.Delay(r.Context(), override, d)
 }
 
 // forward encaminha ao upstream. O tempo limite da rota vale até a chegada
 // dos cabeçalhos da resposta: depois disso o corpo pode ser um stream longo.
-func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.CompiledRoute) {
+func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.CompiledRoute, rec *capture.Record) {
 	timeout := DefaultTimeout
 	if route.Doc.Timeout != nil {
 		timeout = time.Duration(*route.Doc.Timeout)
@@ -86,36 +131,56 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.
 	defer timer.Stop()
 
 	id := Ident{Route: route.Name()}
+	rewrite := rewriteFor(route, id)
 	rp := &httputil.ReverseProxy{
 		Transport: h.transport,
-		Rewrite:   rewriteFor(route, id),
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			rewrite(pr)
+			rec.UpstreamStarted()
+		},
 		ModifyResponse: func(res *http.Response) error {
 			timer.Stop()
 			res.Header.Set(HeaderGateway, id.String())
+			// A resposta está pronta; o atraso vem antes de escrevê-la.
+			if err := h.delay(r, rec); err != nil {
+				return err
+			}
+			if res.StatusCode == http.StatusSwitchingProtocols {
+				// Num upgrade o ReverseProxy escreve a resposta direto na
+				// conexão sequestrada, sem passar pelo writer da captura.
+				rec.Upgrade(res.StatusCode, res.Header)
+			}
 			return nil
 		},
 		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
+			rec.UpstreamDone()
+			var d diag
 			switch {
 			case timedOut.Load():
-				writeDiag(w, http.StatusGatewayTimeout, id, diag{
+				d = diag{
 					Error:    "upstream_timeout",
 					Message:  "o upstream excedeu o tempo limite de " + timeout.String(),
 					Route:    route.Name(),
 					Upstream: route.Doc.Upstream,
-				})
+				}
+				writeDiag(w, http.StatusGatewayTimeout, id, d)
 			case errors.Is(err, context.Canceled):
 				// O cliente desistiu; não há a quem responder.
+				d = diag{Error: "client_canceled", Message: "o cliente desistiu antes da resposta"}
 			default:
-				writeDiag(w, http.StatusBadGateway, id, diag{
+				d = diag{
 					Error:    "upstream_unavailable",
 					Message:  "não foi possível obter resposta do upstream: " + err.Error(),
 					Route:    route.Name(),
 					Upstream: route.Doc.Upstream,
-				})
+				}
+				writeDiag(w, http.StatusBadGateway, id, d)
 			}
+			rec.Fail(d.Error + ": " + d.Message)
 		},
 	}
 	rp.ServeHTTP(w, r.WithContext(ctx))
+	rec.UpstreamDone()
 }
 
 // forwardingHeaders são os cabeçalhos que o Rewrite do ReverseProxy remove
@@ -206,14 +271,16 @@ func writeDiag(w http.ResponseWriter, status int, id Ident, d diag) {
 	enc.Encode(d)
 }
 
-func writeNoRoute(w http.ResponseWriter, snap *config.Snapshot) {
+func writeNoRoute(w http.ResponseWriter, snap *config.Snapshot) diag {
 	patterns := make([]string, 0, len(snap.Routes))
 	for _, r := range snap.Routes {
 		patterns = append(patterns, r.Pattern())
 	}
-	writeDiag(w, http.StatusNotFound, Ident{}, diag{
+	d := diag{
 		Error:    "no_route",
 		Message:  "nenhuma rota casou com a requisição",
 		Patterns: patterns,
-	})
+	}
+	writeDiag(w, http.StatusNotFound, Ident{}, d)
+	return d
 }

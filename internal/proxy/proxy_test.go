@@ -14,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gamerjp64/gateway/internal/capture"
 	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/gateway/internal/store"
 )
 
 // echo é o que o upstream de teste devolve sobre a requisição recebida.
@@ -49,7 +51,19 @@ func route(name, upstream, path string, mods ...func(*config.Route)) config.Rout
 
 func withHost(h string) func(*config.Route) { return func(r *config.Route) { r.Match.Host = h } }
 
+// recording é a configuração dos testes: registro ligado com o limite de
+// captura padrão, para que todo teste de encaminhamento também exercite a
+// captura.
+func recording() config.Settings {
+	return config.Settings{HistoryRecord: true, HistoryExpose: true, CaptureMaxBodyBytes: 64 << 10}
+}
+
 func liveOf(t *testing.T, routes ...config.Route) *config.Live {
+	t.Helper()
+	return liveWith(t, recording(), routes...)
+}
+
+func liveWith(t *testing.T, s config.Settings, routes ...config.Route) *config.Live {
 	t.Helper()
 	var docs []config.RouteDoc
 	for _, r := range routes {
@@ -59,12 +73,14 @@ func liveOf(t *testing.T, routes ...config.Route) *config.Live {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return config.NewLive(config.NewSnapshot(config.Settings{}, compiled, nil))
+	return config.NewLive(config.NewSnapshot(s, compiled, nil))
 }
 
 func gateway(t *testing.T, routes ...config.Route) *httptest.Server {
 	t.Helper()
-	s := httptest.NewServer(NewHandler(liveOf(t, routes...)))
+	rec := capture.NewRecorder(store.NewMemory(10), nil, nil)
+	t.Cleanup(rec.Close)
+	s := httptest.NewServer(NewHandler(liveOf(t, routes...), rec))
 	t.Cleanup(s.Close)
 	return s
 }

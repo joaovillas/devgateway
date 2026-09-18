@@ -10,26 +10,30 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
+	"slices"
 	"sync"
 
 	"github.com/gamerjp64/gateway/internal/exchange"
 )
 
-// NDJSON grava uma troca por linha num arquivo, só por acréscimo. Um índice
-// em memória guarda a posição de cada linha e os campos usados nos filtros,
-// de modo que consultar não exige reler o arquivo e ler uma troca exige uma
-// única leitura posicionada.
+// NDJSON grava uma troca por linha num arquivo, só por acréscimo, na ordem
+// em que as trocas terminam. Um índice em memória, em ordem crescente de
+// chave (orderKey), guarda a posição de cada linha e os campos usados nos
+// filtros, de modo que consultar não exige reler o arquivo e ler uma troca
+// exige uma única leitura posicionada.
 type NDJSON struct {
 	mu    sync.RWMutex
 	path  string
 	f     *os.File
 	size  int64
 	index []ndEntry
-	byID  map[string]int
-	// base desloca as chaves de ordem a cada limpeza, para que um cursor
-	// emitido antes dela não aponte para trocas novas. Ela é gravada na
-	// primeira linha do arquivo limpo (baseLine) e sobrevive ao reinício.
+	byID  map[string]orderKey
+	// lines conta as trocas lidas ou gravadas desde a abertura: é a posição
+	// de registro da próxima, a mesma que ela terá ao reabrir o arquivo.
+	lines uint64
+	// base é a época do histórico: avança a cada limpeza, para que um cursor
+	// emitido antes dela não alcance trocas novas. Ela é gravada na primeira
+	// linha do arquivo limpo (baseLine) e sobrevive ao reinício.
 	base uint64
 }
 
@@ -43,6 +47,7 @@ type baseLine struct {
 }
 
 type ndEntry struct {
+	key    orderKey
 	offset int64
 	length int
 	meta   exchange.Exchange // sem cabeçalhos nem corpos
@@ -61,7 +66,7 @@ func OpenNDJSON(path string) (*NDJSON, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &NDJSON{path: path, f: f, byID: map[string]int{}}
+	s := &NDJSON{path: path, f: f, byID: map[string]orderKey{}}
 	if err := s.load(); err != nil {
 		f.Close()
 		return nil, err
@@ -107,11 +112,19 @@ func (s *NDJSON) load() error {
 	return nil
 }
 
+// search devolve a posição da primeira troca com chave não anterior a k.
+func (s *NDJSON) search(k orderKey) int {
+	i, _ := slices.BinarySearchFunc(s.index, k, func(e ndEntry, k orderKey) int { return e.key.compare(k) })
+	return i
+}
+
 func (s *NDJSON) add(offset int64, length int, e *exchange.Exchange) {
 	meta := e.Summary()
 	meta.Request.Headers, meta.Response.Headers = nil, nil
-	s.byID[e.ID] = len(s.index)
-	s.index = append(s.index, ndEntry{offset: offset, length: length, meta: meta})
+	k := keyOf(e, s.lines)
+	s.lines++
+	s.byID[e.ID] = k
+	s.index = slices.Insert(s.index, s.search(k), ndEntry{key: k, offset: offset, length: length, meta: meta})
 }
 
 func (s *NDJSON) Record(_ context.Context, e *exchange.Exchange) error {
@@ -152,23 +165,25 @@ func (s *NDJSON) List(_ context.Context, f exchange.Filter, p Page) (ListResult,
 	limit := NormalizeLimit(p.Limit)
 	start := len(s.index) - 1
 	if p.Cursor != "" {
-		c, err := strconv.ParseUint(p.Cursor, 10, 64)
+		c, err := decodeCursor(p.Cursor)
 		if err != nil {
-			return ListResult{}, ErrBadCursor
+			return ListResult{}, err
 		}
-		if c < s.base {
+		if c.Epoch != s.base {
 			return ListResult{}, nil // cursor anterior à última limpeza
 		}
-		start = min(int(c-s.base), len(s.index)) - 1
+		// O cursor é a chave da última troca entregue; segue-se da anterior.
+		start = s.search(c.Key) - 1
 	}
 	var res ListResult
-	last := -1
+	var last orderKey
 	for i := start; i >= 0; i-- {
 		if !f.Match(&s.index[i].meta) {
 			continue
 		}
 		if len(res.Items) == limit {
-			res.Next = strconv.FormatUint(s.base+uint64(last), 10)
+			// Há mais uma troca que casa: a página continua depois da última entregue.
+			res.Next = encodeCursor(s.base, last)
 			break
 		}
 		e, err := s.read(i)
@@ -176,7 +191,7 @@ func (s *NDJSON) List(_ context.Context, f exchange.Filter, p Page) (ListResult,
 			return ListResult{}, err
 		}
 		res.Items = append(res.Items, e)
-		last = i
+		last = s.index[i].key
 	}
 	return res, nil
 }
@@ -184,20 +199,21 @@ func (s *NDJSON) List(_ context.Context, f exchange.Filter, p Page) (ListResult,
 func (s *NDJSON) Get(_ context.Context, id string) (exchange.Exchange, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	i, ok := s.byID[id]
+	k, ok := s.byID[id]
 	if !ok {
 		return exchange.Exchange{}, ErrNotFound
 	}
-	return s.read(i)
+	return s.read(s.search(k))
 }
 
 func (s *NDJSON) Neighbor(_ context.Context, id string, d Direction, f exchange.Filter) (exchange.Exchange, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	i, ok := s.byID[id]
+	k, ok := s.byID[id]
 	if !ok {
 		return exchange.Exchange{}, ErrNotFound
 	}
+	i := s.search(k)
 	step := -1
 	if d == Newer {
 		step = 1
@@ -216,10 +232,11 @@ func (s *NDJSON) Clear(context.Context) error {
 	if err := s.f.Truncate(0); err != nil {
 		return fmt.Errorf("limpando histórico em %s: %w", s.path, err)
 	}
-	s.base += uint64(len(s.index))
+	s.base++
+	s.lines = 0
 	s.size = 0
 	s.index = nil
-	s.byID = map[string]int{}
+	s.byID = map[string]orderKey{}
 	// A nova base abre o arquivo limpo, para que o reinício a recupere.
 	line, err := json.Marshal(baseLine{Base: s.base})
 	if err != nil {
