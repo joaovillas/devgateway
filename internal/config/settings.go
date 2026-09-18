@@ -46,7 +46,9 @@ type Settings struct {
 	HistoryRecord       bool
 	HistoryExpose       bool
 	CaptureMaxBodyBytes int
-	RoutesDir           string
+	// LearningEnabled liga o modo aprendizado; alterável em execução.
+	LearningEnabled bool
+	RoutesDir       string
 	// Sources guarda a origem de cada valor, pela chave de settingFields.
 	Sources map[string]Source
 }
@@ -165,6 +167,15 @@ var settingFields = []settingField{
 		},
 		fromEnv: func(s *Settings, v string) error { return parseInt(v, &s.CaptureMaxBodyBytes) },
 		value:   func(s Settings) any { return s.CaptureMaxBodyBytes },
+	},
+	{
+		key: "learning.enabled", env: "GATEWAY_LEARNING",
+		setDef: func(s *Settings) { s.LearningEnabled = false },
+		fromFile: func(s *Settings, g GatewayFile, _ string) bool {
+			return setIf(&s.LearningEnabled, g.Learning, func(l *LearningFile) *bool { return l.Enabled })
+		},
+		fromEnv: func(s *Settings, v string) error { return parseBool(v, &s.LearningEnabled) },
+		value:   func(s Settings) any { return s.LearningEnabled },
 	},
 	{
 		key: "routesDir", env: "GATEWAY_ROUTES_DIR",

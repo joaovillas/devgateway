@@ -15,5 +15,8 @@
   "capture": {
     "maxBodyBytes": 32768
   },
+  "learning": {
+    "enabled": true
+  },
   "routesDir": "env/routes"
 }

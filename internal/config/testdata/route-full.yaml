@@ -5,7 +5,7 @@ match:
   host: payments.local
   path: /api/payments/*
 stripPrefix: true
-preserveHost: true
+rewriteHost: true
 timeout: 5s
 overrides:
   - name: bilulu
@@ -46,3 +46,26 @@ overrides:
       path: /api/payments/text
     respond:
       body: plain text
+  - name: learned-get
+    enabled: false
+    match:
+      path: /api/payments/status
+      method: GET
+    respond:
+      status: 200
+      body: '{"status":"ok"}'
+    source:
+      kind: learned
+      exchange: 01J8ZK3Q4N6V7W8X9Y0Z1A2B3C
+      at: 2026-09-18T10:15:30.123456789Z
+      bodyIncomplete: true
+  - name: derived-charge
+    enabled: true
+    match:
+      path: /api/payments/derived
+    respond:
+      status: 202
+    source:
+      kind: derived
+      exchange: 01J8ZK3Q4N6V7W8X9Y0Z1A2B3D
+      at: 2026-09-18T07:15:30-03:00

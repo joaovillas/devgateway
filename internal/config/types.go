@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 // SchemaVersion é a maior versão de schema que este binário sabe interpretar,
 // tanto em gateway.json quanto nos documentos de rota.
 const SchemaVersion = 1
@@ -7,12 +9,19 @@ const SchemaVersion = 1
 // GatewayFile é o conteúdo de gateway.json. Todos os campos são opcionais:
 // o que não está no arquivo vem do ambiente ou do padrão embutido.
 type GatewayFile struct {
-	SchemaVersion *int         `json:"schemaVersion,omitempty" yaml:"schemaVersion,omitempty"`
-	Ports         *PortsFile   `json:"ports,omitempty" yaml:"ports,omitempty"`
-	Seed          *uint64      `json:"seed,omitempty" yaml:"seed,omitempty"`
-	History       *HistoryFile `json:"history,omitempty" yaml:"history,omitempty"`
-	Capture       *CaptureFile `json:"capture,omitempty" yaml:"capture,omitempty"`
-	RoutesDir     *string      `json:"routesDir,omitempty" yaml:"routesDir,omitempty"`
+	SchemaVersion *int          `json:"schemaVersion,omitempty" yaml:"schemaVersion,omitempty"`
+	Ports         *PortsFile    `json:"ports,omitempty" yaml:"ports,omitempty"`
+	Seed          *uint64       `json:"seed,omitempty" yaml:"seed,omitempty"`
+	History       *HistoryFile  `json:"history,omitempty" yaml:"history,omitempty"`
+	Capture       *CaptureFile  `json:"capture,omitempty" yaml:"capture,omitempty"`
+	RoutesDir     *string       `json:"routesDir,omitempty" yaml:"routesDir,omitempty"`
+	Learning      *LearningFile `json:"learning,omitempty" yaml:"learning,omitempty"`
+}
+
+type LearningFile struct {
+	// Enabled liga o modo aprendizado, que grava cada endpoint novo como um
+	// override desligado no documento da rota.
+	Enabled *bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 }
 
 type PortsFile struct {
@@ -46,8 +55,9 @@ type Route struct {
 	Match         RouteMatch `json:"match" yaml:"match"`
 	// StripPrefix remove a parte fixa do padrão de path antes de encaminhar.
 	StripPrefix bool `json:"stripPrefix,omitempty" yaml:"stripPrefix,omitempty"`
-	// PreserveHost mantém o Host original em vez do host do upstream.
-	PreserveHost bool `json:"preserveHost,omitempty" yaml:"preserveHost,omitempty"`
+	// RewriteHost substitui o Host original pelo host do upstream. Sem ele,
+	// o upstream recebe o Host como o cliente enviou.
+	RewriteHost bool `json:"rewriteHost,omitempty" yaml:"rewriteHost,omitempty"`
 	// Timeout é o tempo limite de resposta do upstream (504 ao excedê-lo).
 	Timeout   *Duration  `json:"timeout,omitempty" yaml:"timeout,omitempty"`
 	Overrides []Override `json:"overrides,omitempty" yaml:"overrides,omitempty"`
@@ -62,7 +72,10 @@ type RouteMatch struct {
 
 // Override intercepta parte do tráfego de uma rota.
 type Override struct {
-	Name  string        `json:"name" yaml:"name"`
+	Name string `json:"name" yaml:"name"`
+	// On é o campo enabled do documento: falso desliga o override e ausente
+	// equivale a ligado. Consulte pelo método Enabled.
+	On    *bool         `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	Match OverrideMatch `json:"match" yaml:"match"`
 	// Respond é a resposta sintetizada. Sem ele, o override só atrasa ou derruba.
 	Respond *Respond `json:"respond,omitempty" yaml:"respond,omitempty"`
@@ -75,6 +88,30 @@ type Override struct {
 	TTL *Duration `json:"ttl,omitempty" yaml:"ttl,omitempty"`
 	// MaxApplications é o número máximo de aplicações antes de expirar.
 	MaxApplications *int `json:"maxApplications,omitempty" yaml:"maxApplications,omitempty"`
+	// Source registra a troca de origem de um override aprendido ou derivado.
+	Source *OverrideSource `json:"source,omitempty" yaml:"source,omitempty"`
+}
+
+// Enabled diz se o override participa da seleção. A ausência do campo liga.
+func (o Override) Enabled() bool { return o.On == nil || *o.On }
+
+const (
+	// SourceLearned marca um override gravado pelo modo aprendizado.
+	SourceLearned = "learned"
+	// SourceDerived marca um override derivado de uma troca do histórico.
+	SourceDerived = "derived"
+)
+
+// OverrideSource é a origem de um override criado a partir de uma troca.
+type OverrideSource struct {
+	// Kind é learned ou derived.
+	Kind string `json:"kind" yaml:"kind"`
+	// Exchange é o identificador da troca de origem.
+	Exchange string `json:"exchange" yaml:"exchange"`
+	// At é o instante em que o override foi criado a partir da troca.
+	At time.Time `json:"at,omitzero" yaml:"at,omitempty"`
+	// BodyIncomplete indica que o corpo observado foi truncado na captura.
+	BodyIncomplete bool `json:"bodyIncomplete,omitempty" yaml:"bodyIncomplete,omitempty"`
 }
 
 // OverrideMatch seleciona requisições. Todos os critérios declarados precisam casar.

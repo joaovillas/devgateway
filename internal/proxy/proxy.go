@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -40,6 +42,10 @@ func newTransport() *http.Transport {
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
+		// Sem isto o Transport pediria gzip ao upstream por conta própria e
+		// descompactaria a resposta, acrescentando um Accept-Encoding que o
+		// cliente não enviou e alterando o corpo que ele recebe.
+		DisableCompression: true,
 	}
 }
 
@@ -53,7 +59,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if route.Upstream == nil {
-		writeDiag(w, http.StatusNotImplemented, diag{
+		writeDiag(w, http.StatusNotImplemented, Ident{Route: route.Name()}, diag{
 			Error:   "no_upstream",
 			Message: "a rota não declara upstream e nenhum override interceptou a requisição",
 			Route:   route.Name(),
@@ -79,17 +85,19 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.
 	})
 	defer timer.Stop()
 
+	id := Ident{Route: route.Name()}
 	rp := &httputil.ReverseProxy{
 		Transport: h.transport,
-		Rewrite:   rewriteFor(route),
-		ModifyResponse: func(*http.Response) error {
+		Rewrite:   rewriteFor(route, id),
+		ModifyResponse: func(res *http.Response) error {
 			timer.Stop()
+			res.Header.Set(HeaderGateway, id.String())
 			return nil
 		},
 		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
 			switch {
 			case timedOut.Load():
-				writeDiag(w, http.StatusGatewayTimeout, diag{
+				writeDiag(w, http.StatusGatewayTimeout, id, diag{
 					Error:    "upstream_timeout",
 					Message:  "o upstream excedeu o tempo limite de " + timeout.String(),
 					Route:    route.Name(),
@@ -98,7 +106,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.
 			case errors.Is(err, context.Canceled):
 				// O cliente desistiu; não há a quem responder.
 			default:
-				writeDiag(w, http.StatusBadGateway, diag{
+				writeDiag(w, http.StatusBadGateway, id, diag{
 					Error:    "upstream_unavailable",
 					Message:  "não foi possível obter resposta do upstream: " + err.Error(),
 					Route:    route.Name(),
@@ -110,7 +118,37 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.
 	rp.ServeHTTP(w, r.WithContext(ctx))
 }
 
-func rewriteFor(route *config.CompiledRoute) func(*httputil.ProxyRequest) {
+// forwardingHeaders são os cabeçalhos que o Rewrite do ReverseProxy remove
+// da requisição de saída antes de chamar a função de reescrita.
+var forwardingHeaders = []string{"Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"}
+
+// incomingForwarding copia da requisição de entrada os cabeçalhos de
+// encaminhamento que chegaram preenchidos. Os que o cliente declarou em
+// Connection são hop-by-hop nessa conexão e ficam de fora.
+func incomingForwarding(in http.Header) http.Header {
+	hop := map[string]bool{}
+	for _, v := range in.Values("Connection") {
+		for tok := range strings.SplitSeq(v, ",") {
+			if tok = strings.TrimSpace(tok); tok != "" {
+				hop[http.CanonicalHeaderKey(tok)] = true
+			}
+		}
+	}
+	out := http.Header{}
+	for _, k := range forwardingHeaders {
+		if v, ok := in[k]; ok && !hop[k] {
+			out[k] = slices.Clone(v)
+		}
+	}
+	return out
+}
+
+// filled informa se algum dos valores do cabeçalho tem conteúdo.
+func filled(v []string) bool {
+	return slices.ContainsFunc(v, func(s string) bool { return strings.TrimSpace(s) != "" })
+}
+
+func rewriteFor(route *config.CompiledRoute, id Ident) func(*httputil.ProxyRequest) {
 	return func(pr *httputil.ProxyRequest) {
 		if route.Doc.StripPrefix {
 			u := pr.Out.URL
@@ -120,13 +158,32 @@ func rewriteFor(route *config.CompiledRoute) func(*httputil.ProxyRequest) {
 			}
 		}
 		pr.SetURL(route.Upstream)
-		// Rewrite descarta o X-Forwarded-For de entrada; recolocá-lo antes de
-		// SetXForwarded faz o endereço do cliente ser acrescentado à cadeia.
-		pr.Out.Header["X-Forwarded-For"] = pr.In.Header["X-Forwarded-For"]
+		// Rewrite descarta os cabeçalhos de encaminhamento de entrada.
+		// Recolocar o X-Forwarded-For antes de SetXForwarded faz o endereço do
+		// cliente ser acrescentado à cadeia; os demais que já chegaram
+		// preenchidos voltam depois, prevalecendo sobre os que SetXForwarded
+		// preencheu, que assim só valem para os ausentes. Um X-Forwarded-*
+		// que chegou vazio não está preenchido e fica com o valor calculado;
+		// o Forwarded, que SetXForwarded não preenche, volta como chegou.
+		in := incomingForwarding(pr.In.Header)
+		if v := in["X-Forwarded-For"]; filled(v) {
+			pr.Out.Header["X-Forwarded-For"] = v
+		}
 		pr.SetXForwarded()
-		if route.Doc.PreserveHost {
+		if v, ok := in["Forwarded"]; ok {
+			pr.Out.Header["Forwarded"] = v
+		}
+		for _, k := range []string{"X-Forwarded-Host", "X-Forwarded-Proto"} {
+			if v := in[k]; filled(v) {
+				pr.Out.Header[k] = v
+			}
+		}
+		// SetURL troca o Host pelo do upstream; sem rewriteHost, o Host
+		// original é devolvido para que o upstream o receba como chegou.
+		if !route.Doc.RewriteHost {
 			pr.Out.Host = pr.In.Host
 		}
+		pr.Out.Header.Set(HeaderGateway, id.String())
 	}
 }
 
@@ -139,7 +196,8 @@ type diag struct {
 	Patterns []string `json:"patterns,omitempty"`
 }
 
-func writeDiag(w http.ResponseWriter, status int, d diag) {
+func writeDiag(w http.ResponseWriter, status int, id Ident, d diag) {
+	w.Header().Set(HeaderGateway, id.String())
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
@@ -153,7 +211,7 @@ func writeNoRoute(w http.ResponseWriter, snap *config.Snapshot) {
 	for _, r := range snap.Routes {
 		patterns = append(patterns, r.Pattern())
 	}
-	writeDiag(w, http.StatusNotFound, diag{
+	writeDiag(w, http.StatusNotFound, Ident{}, diag{
 		Error:    "no_route",
 		Message:  "nenhuma rota casou com a requisição",
 		Patterns: patterns,

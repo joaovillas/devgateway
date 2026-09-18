@@ -143,6 +143,18 @@ func validateOverride(base string, o Override) []issue {
 	if n := o.MaxApplications; n != nil && *n < 1 {
 		add("maxApplications", "deve ser ao menos 1 (recebido %d)", *n)
 	}
+	if s := o.Source; s != nil {
+		switch s.Kind {
+		case SourceLearned, SourceDerived:
+		case "":
+			add("source.kind", "obrigatório; use %s ou %s", SourceLearned, SourceDerived)
+		default:
+			add("source.kind", "origem %q desconhecida; use %s ou %s", s.Kind, SourceLearned, SourceDerived)
+		}
+		if s.Exchange == "" {
+			add("source.exchange", "obrigatório: identificador da troca de origem")
+		}
+	}
 	return is
 }
 

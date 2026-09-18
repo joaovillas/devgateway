@@ -28,3 +28,6 @@ Thumbs.db
 # Impeccable: preferências locais e referências baixadas
 .impeccable/config.local.json
 .impeccable/ref/
+
+# Worktrees dos workflows
+.claude/worktrees/

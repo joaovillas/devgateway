@@ -5,6 +5,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -106,5 +107,122 @@ func TestUnknownFieldIsLocated(t *testing.T) {
 	e := es[0]
 	if e.File != "routes/x.yaml" || e.Field != "match.paht" || e.Line != 6 {
 		t.Fatalf("localização errada: %+v", e)
+	}
+}
+
+func TestNewRouteFieldsParsed(t *testing.T) {
+	r, err := ParseRoute("payments.yaml", readTestdata(t, "route-full.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.RewriteHost {
+		t.Fatal("rewriteHost deveria ser lido")
+	}
+	byName := map[string]Override{}
+	for _, o := range r.Overrides {
+		byName[o.Name] = o
+	}
+	if o := byName["bilulu"]; !o.Enabled() || o.On != nil || o.Source != nil {
+		t.Fatalf("sem enabled o override é ligado e sem origem: %+v", o)
+	}
+	learned := byName["learned-get"]
+	if learned.Enabled() {
+		t.Fatal("enabled: false deveria desligar o override")
+	}
+	want := &OverrideSource{
+		Kind:           SourceLearned,
+		Exchange:       "01J8ZK3Q4N6V7W8X9Y0Z1A2B3C",
+		At:             time.Date(2026, 9, 18, 10, 15, 30, 123456789, time.UTC),
+		BodyIncomplete: true,
+	}
+	if s := learned.Source; s == nil || s.Kind != want.Kind || s.Exchange != want.Exchange ||
+		!s.At.Equal(want.At) || s.BodyIncomplete != want.BodyIncomplete {
+		t.Fatalf("origem lida errada: %+v, esperada %+v", learned.Source, want)
+	}
+	derived := byName["derived-charge"]
+	if !derived.Enabled() || derived.On == nil || derived.Source == nil || derived.Source.Kind != SourceDerived {
+		t.Fatalf("enabled: true explícito e origem derivada deveriam ser lidos: %+v", derived)
+	}
+	if want := time.Date(2026, 9, 18, 10, 15, 30, 0, time.UTC); !derived.Source.At.Equal(want) {
+		t.Fatalf("instante com fuso deveria ser lido: %v", derived.Source.At)
+	}
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"payments.yaml": string(readTestdata(t, "route-full.yaml"))})
+	if _, _, err := loadDir(t, dir); err != nil {
+		t.Fatalf("documento completo deveria ser válido: %v", err)
+	}
+}
+
+func TestOverrideToggleKeepsFields(t *testing.T) {
+	// Desligar e religar um override preserva todos os seus demais campos,
+	// inclusive ao passar pelo documento serializado.
+	r, err := ParseRoute("payments.yaml", readTestdata(t, "route-full.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := r.Overrides[0]
+	off := false
+	r.Overrides[0].On = &off
+	out, err := MarshalRoute(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2, err := ParseRoute("payments.yaml", out)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if r2.Overrides[0].Enabled() {
+		t.Fatalf("override deveria continuar desligado após reserialização:\n%s", out)
+	}
+	on := true
+	r2.Overrides[0].On = &on
+	got := r2.Overrides[0]
+	got.On = nil
+	if !reflect.DeepEqual(got, orig) || !r2.Overrides[0].Enabled() {
+		t.Fatalf("religar deveria restaurar o override:\n%+v\n%+v", got, orig)
+	}
+}
+
+func TestNewFieldsThroughJSON(t *testing.T) {
+	// Os campos novos chegam pela API em JSON com as mesmas chaves do YAML.
+	src := []byte(`{"schemaVersion":1,"name":"j","upstream":"http://localhost:9000",
+"match":{"path":"/j/*"},"rewriteHost":true,
+"overrides":[{"name":"l","enabled":false,"match":{"path":"/j/x","method":"GET"},
+"respond":{"status":200},
+"source":{"kind":"learned","exchange":"01J8ZK3Q4N6V7W8X9Y0Z1A2B3C","at":"2026-09-18T10:15:30Z","bodyIncomplete":true}}]}`)
+	var viaJSON Route
+	if err := json.Unmarshal(src, &viaJSON); err != nil {
+		t.Fatal(err)
+	}
+	viaYAML, err := ParseRoute("j.json", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, r := range map[string]Route{"json": viaJSON, "documento": viaYAML} {
+		o := r.Overrides[0]
+		if !r.RewriteHost || o.Enabled() || o.Source == nil || o.Source.Kind != SourceLearned ||
+			!o.Source.BodyIncomplete || !o.Source.At.Equal(time.Date(2026, 9, 18, 10, 15, 30, 0, time.UTC)) {
+			t.Fatalf("%s: campos novos lidos errado: %+v %+v", name, r, o.Source)
+		}
+	}
+	b, err := json.Marshal(viaJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var a, c any
+	json.Unmarshal(src, &a)
+	json.Unmarshal(b, &c)
+	if !reflect.DeepEqual(a, c) {
+		t.Fatalf("campos perdidos na ida e volta por JSON:\noriginal: %v\nsaída:    %v", a, c)
+	}
+}
+
+func TestGatewayFileLearning(t *testing.T) {
+	g, err := ParseGatewayFile("gateway.json", readTestdata(t, "gateway.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Learning == nil || g.Learning.Enabled == nil || !*g.Learning.Enabled {
+		t.Fatalf("learning.enabled deveria ser lido: %+v", g.Learning)
 	}
 }

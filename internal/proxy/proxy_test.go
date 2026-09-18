@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -223,16 +224,22 @@ func TestForwardedHeadersAdded(t *testing.T) {
 	if got := e.Header.Get("X-Forwarded-Host"); got != "front.local" {
 		t.Errorf("X-Forwarded-Host = %q", got)
 	}
-	if e.Host != strings.TrimPrefix(up.URL, "http://") {
-		t.Errorf("Host deveria ser o do upstream por padrão, recebido %q", e.Host)
+}
+
+func TestOriginalHostByDefault(t *testing.T) {
+	up := echoUpstream(t, "a")
+	gw := gateway(t, route("a", up.URL, "/*"))
+	if e := echoOf(t)(get(t, gw, "/x", "Host", "payments.local")); e.Host != "payments.local" {
+		t.Fatalf("Host original deveria ser repassado por padrão, recebido %q", e.Host)
 	}
 }
 
-func TestHostPreservedOnDemand(t *testing.T) {
+func TestHostRewrittenOnDemand(t *testing.T) {
 	up := echoUpstream(t, "a")
-	gw := gateway(t, route("a", up.URL, "/*", func(r *config.Route) { r.PreserveHost = true }))
-	if e := echoOf(t)(get(t, gw, "/x", "Host", "payments.local")); e.Host != "payments.local" {
-		t.Fatalf("Host deveria ser preservado, recebido %q", e.Host)
+	gw := gateway(t, route("a", up.URL, "/*", func(r *config.Route) { r.RewriteHost = true }))
+	e := echoOf(t)(get(t, gw, "/x", "Host", "payments.local"))
+	if e.Host != strings.TrimPrefix(up.URL, "http://") {
+		t.Fatalf("Host deveria ser o do upstream com rewriteHost, recebido %q", e.Host)
 	}
 }
 
@@ -242,6 +249,196 @@ func TestXForwardedForAccumulates(t *testing.T) {
 	e := echoOf(t)(get(t, gw, "/x", "X-Forwarded-For", "203.0.113.9, 10.0.0.1"))
 	if got := strings.Join(e.Header.Values("X-Forwarded-For"), ", "); got != "203.0.113.9, 10.0.0.1, 127.0.0.1" {
 		t.Fatalf("cadeia deveria acumular, recebido %q", got)
+	}
+}
+
+func TestForwardedHostAndProtoPreserved(t *testing.T) {
+	up := echoUpstream(t, "a")
+	gw := gateway(t, route("a", up.URL, "/*"))
+	e := echoOf(t)(get(t, gw, "/x", "Host", "interno.local",
+		"X-Forwarded-Host", "publico.example.com", "X-Forwarded-Proto", "https",
+		"Forwarded", "for=203.0.113.9;proto=https"))
+	if got := e.Header.Values("X-Forwarded-Host"); len(got) != 1 || got[0] != "publico.example.com" {
+		t.Errorf("X-Forwarded-Host deveria chegar como veio, recebido %q", got)
+	}
+	if got := e.Header.Values("X-Forwarded-Proto"); len(got) != 1 || got[0] != "https" {
+		t.Errorf("X-Forwarded-Proto deveria chegar como veio, recebido %q", got)
+	}
+	if got := e.Header.Values("Forwarded"); len(got) != 1 || got[0] != "for=203.0.113.9;proto=https" {
+		t.Errorf("Forwarded deveria chegar como veio, recebido %q", got)
+	}
+	if got := e.Header.Get("X-Forwarded-For"); got != "127.0.0.1" {
+		t.Errorf("X-Forwarded-For ausente deveria ser preenchido, recebido %q", got)
+	}
+}
+
+func TestForwardedHeaderDeclaredHopByHopNotRestored(t *testing.T) {
+	up := echoUpstream(t, "a")
+	gw := gateway(t, route("a", up.URL, "/*"))
+	e := echoOf(t)(get(t, gw, "/x", "Host", "front.local",
+		"Connection", "X-Forwarded-Host", "X-Forwarded-Host", "so-nesta-conexao.local"))
+	if got := e.Header.Get("X-Forwarded-Host"); got != "front.local" {
+		t.Fatalf("cabeçalho listado em Connection não deveria ser repassado, recebido %q", got)
+	}
+}
+
+func TestArbitraryHeadersRelayed(t *testing.T) {
+	up := echoUpstream(t, "a")
+	gw := gateway(t, route("a", up.URL, "/*"))
+	e := echoOf(t)(get(t, gw, "/x",
+		"Authorization", "Bearer abc.def.ghi",
+		"X-Custom", "valor com  espaços",
+		"X-Repetido", "um",
+		"X-Repetido", "dois",
+		"X-Repetido", "um",
+		"Accept", "application/json",
+		"Accept", "text/plain;q=0.5",
+		"Cookie", "a=1; b=2",
+	))
+	want := http.Header{
+		"Authorization": {"Bearer abc.def.ghi"},
+		"X-Custom":      {"valor com  espaços"},
+		"X-Repetido":    {"um", "dois", "um"},
+		"Accept":        {"application/json", "text/plain;q=0.5"},
+		"Cookie":        {"a=1; b=2"},
+	}
+	for k, v := range want {
+		if got := e.Header.Values(k); strings.Join(got, "\x00") != strings.Join(v, "\x00") {
+			t.Errorf("%s = %q, esperado %q", k, got, v)
+		}
+	}
+}
+
+// rawGet envia uma requisição HTTP/1.1 escrita à mão, sem os cabeçalhos que
+// o cliente do Go acrescentaria por conta própria.
+func rawGet(t *testing.T, gw *httptest.Server, path string, hdr ...string) (*http.Response, []byte) {
+	t.Helper()
+	conn, err := net.Dial("tcp", strings.TrimPrefix(gw.URL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	var b strings.Builder
+	fmt.Fprintf(&b, "GET %s HTTP/1.1\r\nHost: front.local\r\nConnection: close\r\n", path)
+	for i := 0; i+1 < len(hdr); i += 2 {
+		fmt.Fprintf(&b, "%s: %s\r\n", hdr[i], hdr[i+1])
+	}
+	b.WriteString("\r\n")
+	if _, err := io.WriteString(conn, b.String()); err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res, body
+}
+
+func TestNoOtherHeadersAdded(t *testing.T) {
+	up := echoUpstream(t, "a")
+	gw := gateway(t, route("a", up.URL, "/*"))
+	e := echoOf(t)(rawGet(t, gw, "/x", "X-Custom", "1"))
+	var got []string
+	for k := range e.Header {
+		got = append(got, k)
+	}
+	slices.Sort(got)
+	want := []string{"X-Custom", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "X-Gateway"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("o upstream deveria receber só os cabeçalhos enviados mais os do gateway:\nrecebido %q\nesperado %q", got, want)
+	}
+}
+
+// Um cabeçalho de encaminhamento que chega vazio não está preenchido: o
+// gateway o completa como se estivesse ausente. O Forwarded, que o gateway
+// não acrescenta, segue repassado como chegou.
+func TestEmptyForwardedHeadersAreFilled(t *testing.T) {
+	up := echoUpstream(t, "a")
+	gw := gateway(t, route("a", up.URL, "/*"))
+	e := echoOf(t)(rawGet(t, gw, "/x",
+		"X-Forwarded-Host", "", "X-Forwarded-Proto", " ", "X-Forwarded-For", "", "Forwarded", ""))
+	if got := e.Header.Values("X-Forwarded-Host"); len(got) != 1 || got[0] != "front.local" {
+		t.Errorf("X-Forwarded-Host vazio deveria receber o host original, recebido %q", got)
+	}
+	if got := e.Header.Values("X-Forwarded-Proto"); len(got) != 1 || got[0] != "http" {
+		t.Errorf("X-Forwarded-Proto vazio deveria receber o esquema original, recebido %q", got)
+	}
+	if got := e.Header.Values("X-Forwarded-For"); len(got) != 1 || got[0] != "127.0.0.1" {
+		t.Errorf("X-Forwarded-For vazio deveria receber só o cliente, recebido %q", got)
+	}
+	if got, ok := e.Header["Forwarded"]; !ok || len(got) != 1 || got[0] != "" {
+		t.Errorf("Forwarded deveria ser repassado como chegou, recebido %q", got)
+	}
+}
+
+// Requirement: Cabeçalho de identificação do gateway
+
+func TestIdentWithoutIntervention(t *testing.T) {
+	up := echoUpstream(t, "payments")
+	gw := gateway(t, route("payments", up.URL, "/*"))
+	res, body := get(t, gw, "/x", "X-Gateway", "forjado-pelo-cliente")
+	e := echoOf(t)(res, body)
+	if got := e.Header.Values(HeaderGateway); len(got) != 1 || got[0] != "route=payments" {
+		t.Errorf("upstream deveria receber um único X-Gateway com a rota, recebido %q", got)
+	}
+	if got := res.Header.Values(HeaderGateway); len(got) != 1 || got[0] != "route=payments" {
+		t.Errorf("cliente deveria receber um único X-Gateway com a rota, recebido %q", got)
+	}
+}
+
+func TestIdentReplacesUpstreamHeader(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(HeaderGateway, "route=outro-gateway")
+	}))
+	t.Cleanup(up.Close)
+	gw := gateway(t, route("payments", up.URL, "/*"))
+	if res, _ := get(t, gw, "/x"); strings.Join(res.Header.Values(HeaderGateway), ",") != "route=payments" {
+		t.Fatalf("X-Gateway da resposta deveria ser o deste gateway, recebido %q", res.Header.Values(HeaderGateway))
+	}
+}
+
+func TestIdentFormat(t *testing.T) {
+	for _, c := range []struct {
+		id   Ident
+		want string
+	}{
+		{Ident{}, ""},
+		{Ident{Route: "payments"}, "route=payments"},
+		{Ident{Route: "payments", Override: "payments/flaky", Intervention: "synthesized"},
+			"route=payments; override=payments/flaky; intervention=synthesized"},
+	} {
+		if got := c.id.String(); got != c.want {
+			t.Errorf("%+v = %q, esperado %q", c.id, got, c.want)
+		}
+	}
+}
+
+func TestIdentOnGatewayErrors(t *testing.T) {
+	gw := gateway(t,
+		route("vazia", "", "/vazia/*"),
+		route("morta", closedAddr(t), "/morta/*"),
+	)
+	for _, c := range []struct {
+		path   string
+		status int
+		want   string
+	}{
+		{"/nada", http.StatusNotFound, ""},
+		{"/vazia/x", http.StatusNotImplemented, "route=vazia"},
+		{"/morta/x", http.StatusBadGateway, "route=morta"},
+	} {
+		res, body := get(t, gw, c.path)
+		if res.StatusCode != c.status {
+			t.Fatalf("%s: esperado %d, recebido %d: %s", c.path, c.status, res.StatusCode, body)
+		}
+		if got, ok := res.Header[HeaderGateway]; !ok || len(got) != 1 || got[0] != c.want {
+			t.Errorf("%s: X-Gateway = %q (presente: %v), esperado %q", c.path, got, ok, c.want)
+		}
 	}
 }
 
@@ -296,6 +493,9 @@ func TestUpstreamTimeout(t *testing.T) {
 	json.Unmarshal(body, &d)
 	if d.Route != "slow" || d.Upstream != slow.URL {
 		t.Fatalf("corpo deveria nomear a rota e o upstream: %s", body)
+	}
+	if got := res.Header.Get(HeaderGateway); got != "route=slow" {
+		t.Errorf("X-Gateway do 504 = %q, esperado route=slow", got)
 	}
 	select {
 	case <-released:

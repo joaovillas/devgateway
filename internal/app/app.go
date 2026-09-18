@@ -16,12 +16,15 @@ import (
 	"github.com/gamerjp64/gateway/internal/admin"
 	"github.com/gamerjp64/gateway/internal/config"
 	"github.com/gamerjp64/gateway/internal/proxy"
+	"github.com/gamerjp64/gateway/internal/store"
 )
 
 // App é o processo em execução.
 type App struct {
 	Live *config.Live
-	Log  *slog.Logger
+	// History é o histórico de trocas, com backend trocável a quente.
+	History *store.Switchable
+	Log     *slog.Logger
 
 	traffic, admin     *http.Server
 	trafficLn, adminLn net.Listener
@@ -52,12 +55,25 @@ func Start(opts Options) (*App, error) {
 	}
 	s := snap.Settings
 
-	a := &App{Live: config.NewLive(snap), Log: log, serveErr: make(chan error, 2)}
+	// O backend do histórico abre antes das portas: se falhar, o processo recusa
+	// iniciar em vez de cair silenciosamente para outro backend.
+	hist, err := store.Open(s)
+	if err != nil {
+		return nil, err
+	}
+	a := &App{
+		Live:     config.NewLive(snap),
+		History:  store.NewSwitchable(store.BackendName(s), hist),
+		Log:      log,
+		serveErr: make(chan error, 2),
+	}
 	if a.trafficLn, err = listen("tráfego", s.TrafficPort); err != nil {
+		a.History.Close()
 		return nil, err
 	}
 	if a.adminLn, err = listen("administração", s.AdminPort); err != nil {
 		a.trafficLn.Close()
+		a.History.Close()
 		return nil, err
 	}
 	a.traffic = &http.Server{
@@ -71,7 +87,7 @@ func Start(opts Options) (*App, error) {
 	go a.serve(a.traffic, a.trafficLn)
 	go a.serve(a.admin, a.adminLn)
 	log.Info("gateway no ar",
-		"trafego", a.TrafficAddr(), "administracao", a.AdminAddr(), "rotas", len(snap.Routes))
+		"trafego", a.TrafficAddr(), "administracao", a.AdminAddr(), "rotas", len(snap.Routes), "historico", a.History.Backend())
 	return a, nil
 }
 
@@ -95,7 +111,9 @@ func (a *App) Err() <-chan error { return a.serveErr }
 func (a *App) TrafficAddr() string { return a.trafficLn.Addr().String() }
 func (a *App) AdminAddr() string   { return a.adminLn.Addr().String() }
 
-// Shutdown encerra as duas portas, aguardando as requisições em curso.
+// Shutdown encerra as duas portas, aguardando as requisições em curso, e
+// depois fecha o histórico.
 func (a *App) Shutdown(ctx context.Context) error {
-	return errors.Join(a.traffic.Shutdown(ctx), a.admin.Shutdown(ctx))
+	err := errors.Join(a.traffic.Shutdown(ctx), a.admin.Shutdown(ctx))
+	return errors.Join(err, a.History.Close())
 }

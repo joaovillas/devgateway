@@ -239,3 +239,81 @@ overrides:
 		t.Fatalf("erro deveria apontar latency.min na linha 10: %+v", e)
 	}
 }
+
+func TestOverrideSourceKindValidated(t *testing.T) {
+	doc := func(source string) string {
+		return `schemaVersion: 1
+name: s
+upstream: http://localhost:9000
+match:
+  path: /s/*
+overrides:
+  - name: learned
+    enabled: false
+    match:
+      path: /s/x
+    respond:
+      status: 200
+    source:
+` + source
+	}
+	for name, c := range map[string]struct {
+		source, field, msg string
+		line               int
+	}{
+		"desconhecida": {"      kind: guessed\n      exchange: 01J8ZK3Q4N6V7W8X9Y0Z1A2B3C\n", "overrides[0].source.kind", "guessed", 14},
+		"sem kind":     {"      exchange: 01J8ZK3Q4N6V7W8X9Y0Z1A2B3C\n", "overrides[0].source.kind", "obrigatório", 13},
+		"sem troca":    {"      kind: derived\n", "overrides[0].source.exchange", "troca", 13},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFiles(t, dir, map[string]string{"s.yaml": doc(c.source)})
+			_, _, err := loadDir(t, dir)
+			e := singleError(t, err)
+			if e.Field != c.field || e.Line != c.line || !strings.Contains(e.Msg, c.msg) {
+				t.Fatalf("erro deveria apontar %s na linha %d citando %q: %+v", c.field, c.line, c.msg, e)
+			}
+		})
+	}
+	for _, kind := range []string{SourceLearned, SourceDerived} {
+		dir := t.TempDir()
+		writeFiles(t, dir, map[string]string{"s.yaml": doc("      kind: " + kind + "\n      exchange: 01J8ZK3Q4N6V7W8X9Y0Z1A2B3C\n")})
+		if _, _, err := loadDir(t, dir); err != nil {
+			t.Fatalf("origem %s deveria ser aceita: %v", kind, err)
+		}
+	}
+}
+
+func TestDisabledOverrideStillValidated(t *testing.T) {
+	// Desligado não isenta: o override precisa valer quando for religado.
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"d.yaml": `schemaVersion: 1
+name: d
+upstream: http://localhost:9000
+match:
+  path: /d/*
+overrides:
+  - name: off
+    enabled: false
+    match:
+      path: /d/x
+    respond:
+      status: 503
+    probability: 1.5
+  - name: empty
+    enabled: false
+    match:
+      path: /d/y
+`})
+	_, _, err := loadDir(t, dir)
+	var es Errors
+	if !errors.As(err, &es) || len(es) != 2 {
+		t.Fatalf("esperados dois erros localizados, recebido: %v", err)
+	}
+	if es[0].Field != "overrides[0].probability" || es[0].Line != 13 {
+		t.Errorf("override desligado deveria ter a probabilidade validada: %+v", es[0])
+	}
+	if es[1].Field != "overrides[1]" || !strings.Contains(es[1].Msg, "respond") {
+		t.Errorf("override desligado sem efeito deveria ser recusado: %+v", es[1])
+	}
+}

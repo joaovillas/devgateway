@@ -169,3 +169,46 @@ func TestDefaultPathsSitNextToGatewayFile(t *testing.T) {
 		t.Fatalf("caminho do ambiente parte do diretório de trabalho: %q", s.RoutesDir)
 	}
 }
+
+// Requirement: Configuração do processo em gateway.json — modo aprendizado
+
+func TestLearningSetting(t *testing.T) {
+	s, _, err := LoadSettings(filepath.Join(t.TempDir(), "gateway.json"), envMap(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.LearningEnabled || s.Sources["learning.enabled"].Origin != OriginDefault {
+		t.Fatalf("aprendizado deveria vir desligado do padrão: %v %+v", s.LearningEnabled, s.Sources["learning.enabled"])
+	}
+
+	path := writeGateway(t, `{"learning":{"enabled":true}}`)
+	s, _, err = LoadSettings(path, envMap(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.LearningEnabled || s.Sources["learning.enabled"] != (Source{Origin: OriginFile, Name: path}) {
+		t.Fatalf("aprendizado deveria vir ligado do arquivo: %v %+v", s.LearningEnabled, s.Sources["learning.enabled"])
+	}
+
+	s, _, err = LoadSettings(path, envMap(map[string]string{"GATEWAY_LEARNING": "false"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.LearningEnabled || s.Sources["learning.enabled"] != (Source{Origin: OriginEnv, Name: "GATEWAY_LEARNING"}) {
+		t.Fatalf("GATEWAY_LEARNING deveria vencer o arquivo: %v %+v", s.LearningEnabled, s.Sources["learning.enabled"])
+	}
+	var found bool
+	for _, v := range s.Effective() {
+		if v.Key == "learning.enabled" {
+			found = v.Env == "GATEWAY_LEARNING" && v.Value == false && v.Source.Origin == OriginEnv
+		}
+	}
+	if !found {
+		t.Fatal("learning.enabled deveria constar da configuração efetiva com sua origem")
+	}
+
+	_, _, err = LoadSettings(path, envMap(map[string]string{"GATEWAY_LEARNING": "talvez"}))
+	if e := singleError(t, err); !strings.Contains(e.Error(), "GATEWAY_LEARNING") || e.Field != "learning.enabled" {
+		t.Fatalf("erro deveria nomear a variável e a chave: %+v", e)
+	}
+}

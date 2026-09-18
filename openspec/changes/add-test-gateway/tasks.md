@@ -15,7 +15,7 @@
 - [x] 2.6 Implementar a precedência ambiente sobre arquivo sobre padrão e a consulta de origem efetiva de cada valor, e verificar pelos três cenários da requirement correspondente
 - [x] 2.7 Implementar o snapshot imutável atrás de `atomic.Pointer` com índices pré-computados, e verificar por teste de concorrência com `-race` que leituras simultâneas à troca nunca observam estado parcial
 - [x] 2.8 Implementar a inicialização com portas separadas e recusa de portas iguais, e verificar pelos dois cenários da requirement de separação de portas e pelo cenário "Portas iguais" da validação
-- [ ] 2.9 Acrescentar ao documento de rota o campo `enabled` do override (padrão ligado), o bloco `source` de origem (aprendido ou derivado, troca de origem, corpo incompleto) e a troca de `preserveHost` por `rewriteHost`, e ao `gateway.json` a chave `learning.enabled` com variável de ambiente, e verificar por teste de ida e volta e pelos cenários de validação
+- [x] 2.9 Acrescentar ao documento de rota o campo `enabled` do override (padrão ligado), o bloco `source` de origem (aprendido ou derivado, troca de origem, corpo incompleto) e a troca de `preserveHost` por `rewriteHost`, e ao `gateway.json` a chave `learning.enabled` com variável de ambiente, e verificar por teste de ida e volta e pelos cenários de validação
 
 ## 3. Roteamento reverso
 
@@ -24,16 +24,16 @@
 - [x] 3.3 Implementar os cabeçalhos de encaminhamento com acúmulo de `X-Forwarded-For` e preservação opcional do `Host`, e verificar pelos três cenários da requirement de encaminhamento de cabeçalhos
 - [x] 3.4 Implementar as respostas de falha do upstream (`502` sem conexão, `504` por tempo limite, `404` sem rota) com corpo diagnóstico, e verificar pelos cenários correspondentes
 - [x] 3.5 Verificar a transparência do tráfego com um teste de ponta a ponta que exercita método e corpo preservados, status repassado e resposta `text/event-stream` chegando incrementalmente
-- [ ] 3.6 Tornar o encaminhamento transparente — `Host` original por padrão com `rewriteHost` opcional, `X-Forwarded-Host` e `X-Forwarded-Proto` preservados quando já presentes, cabeçalhos arbitrários e repetidos repassados — e acrescentar o cabeçalho `X-Gateway` na ida e na volta, e verificar pelos seis cenários da requirement de encaminhamento de cabeçalhos e pelos cenários da requirement de identificação do gateway
+- [x] 3.6 Tornar o encaminhamento transparente — `Host` original por padrão com `rewriteHost` opcional, `X-Forwarded-Host` e `X-Forwarded-Proto` preservados quando já presentes, cabeçalhos arbitrários e repetidos repassados — e acrescentar o cabeçalho `X-Gateway` na ida e na volta, e verificar pelos seis cenários da requirement de encaminhamento de cabeçalhos e pelos cenários da requirement de identificação do gateway (o cenário "Identificação com intervenção" depende dos overrides e é verificado de ponta a ponta em 6.10)
 
 ## 4. Armazenamento do histórico
 
-- [ ] 4.1 Definir a interface de armazenamento (registrar, listar com filtros, buscar por identificador, navegar por cursor, limpar) e a bateria de testes de contrato que roda contra qualquer implementação, e verificar que a bateria falha contra uma implementação vazia
-- [ ] 4.2 Implementar o backend em memória como anel de capacidade configurável, e verificar pela bateria de contrato e pelo cenário "Capacidade excedida em memória"
-- [ ] 4.3 Implementar o backend NDJSON com escrita append e leitura indexada, e verificar pela bateria de contrato e pelo cenário de sobrevivência ao reinício
-- [ ] 4.4 Implementar o backend SQLite com driver puro em Go, e verificar pela bateria de contrato, pelo cenário de sobrevivência ao reinício e por `go build` com `CGO_ENABLED=0` concluindo
-- [ ] 4.5 Implementar a seleção do backend por variável de ambiente com memória como padrão e recusa de iniciar quando o backend falha, e verificar pelos cenários "Memória é o padrão" e "Backend indisponível impede a inicialização"
-- [ ] 4.6 Implementar a troca a quente do backend do histórico (inicializa o novo, troca, fecha o antigo, sem migrar), e verificar pelos cenários "Backend do histórico trocado a quente" e "Backend novo indisponível preserva o atual"
+- [x] 4.1 Definir a interface de armazenamento (registrar, listar com filtros, buscar por identificador, navegar por cursor, limpar) e a bateria de testes de contrato que roda contra qualquer implementação, e verificar que a bateria falha contra uma implementação vazia
+- [x] 4.2 Implementar o backend em memória como anel de capacidade configurável, e verificar pela bateria de contrato e pelo cenário "Capacidade excedida em memória"
+- [x] 4.3 Implementar o backend NDJSON com escrita append e leitura indexada, e verificar pela bateria de contrato e pelo cenário de sobrevivência ao reinício
+- [x] 4.4 Implementar o backend SQLite com driver puro em Go, e verificar pela bateria de contrato, pelo cenário de sobrevivência ao reinício e por `go build` com `CGO_ENABLED=0` concluindo
+- [x] 4.5 Implementar a seleção do backend por variável de ambiente com memória como padrão e recusa de iniciar quando o backend falha, e verificar pelos cenários "Memória é o padrão" e "Backend indisponível impede a inicialização"
+- [x] 4.6 Implementar a troca a quente do backend do histórico (inicializa o novo, troca, fecha o antigo, sem migrar), e verificar pelos cenários "Backend do histórico trocado a quente" e "Backend novo indisponível preserva o atual"
 
 ## 5. Captura de tráfego
 
@@ -54,7 +54,7 @@
 - [ ] 6.7 Implementar a latência fixa ou sorteada em intervalo, aplicada após a resposta estar pronta, inclusive no caso de override sem `respond`, e verificar pelos cinco cenários da requirement de latência e queda
 - [ ] 6.8 Implementar a queda de conexão via `http.Hijacker` com degradação documentada em HTTP/2, e verificar pelo cenário "Queda encerra sem resposta" e pelo cenário de queda da spec `traffic-capture`
 - [ ] 6.9 Implementar a expiração por tempo de vida e por contagem de aplicações, com ambos consultáveis, e verificar pelos quatro cenários da requirement de expiração
-- [ ] 6.10 Implementar o cabeçalho de identificação da intervenção e a marcação na troca capturada, e verificar pelos dois cenários da requirement de identificação e pelos três cenários da requirement de distinção da spec `traffic-capture`
+- [ ] 6.10 Implementar o cabeçalho de identificação da intervenção e a marcação na troca capturada, e verificar pelos dois cenários da requirement de identificação, pelo cenário "Identificação com intervenção" da requirement de identificação do gateway da spec `gateway-routing` (o cliente recebe `X-Gateway: route=payments; override=payments/flaky; intervention=synthesized` quando o override sintetiza a resposta) e pelos três cenários da requirement de distinção da spec `traffic-capture`
 - [ ] 6.11 Implementar o liga/desliga do override, com desligados fora da seleção e da precedência, e verificar pelos três cenários da requirement de override ligado e desligado
 - [ ] 6.12 Implementar o modo aprendizado — detecção de método e path desconhecidos após resposta do upstream, geração do override desligado com resposta completa e origem, gravação atômica do documento e reconstrução do snapshot fora do caminho da requisição — e verificar pelos seis cenários da requirement de aprendizado de endpoints
 
