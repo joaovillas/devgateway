@@ -1,0 +1,182 @@
+package config
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"go.yaml.in/yaml/v3"
+)
+
+// Duration é um time.Duration serializado como texto ("150ms", "2s").
+type Duration time.Duration
+
+func (d Duration) String() string { return time.Duration(d).String() }
+
+func parseDuration(s string) (Duration, error) {
+	v, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("duração inválida %q (use, por exemplo, 150ms ou 2s)", s)
+	}
+	return Duration(v), nil
+}
+
+func (d Duration) MarshalJSON() ([]byte, error) { return json.Marshal(d.String()) }
+
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("duração deve ser texto, como \"2s\"")
+	}
+	v, err := parseDuration(s)
+	if err != nil {
+		return err
+	}
+	*d = v
+	return nil
+}
+
+func (d Duration) MarshalYAML() (any, error) { return d.String(), nil }
+
+func (d *Duration) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.ScalarNode {
+		return nodeErr(n, "duração deve ser texto, como 2s")
+	}
+	v, err := parseDuration(n.Value)
+	if err != nil {
+		return nodeErr(n, "%v", err)
+	}
+	*d = v
+	return nil
+}
+
+// Latency é um atraso fixo ("2s") ou um intervalo sorteado ({min, max}).
+type Latency struct {
+	Fixed *Duration `json:"-" yaml:"-"`
+	Min   *Duration `json:"min,omitempty" yaml:"min,omitempty"`
+	Max   *Duration `json:"max,omitempty" yaml:"max,omitempty"`
+}
+
+type latencyRange struct {
+	Min *Duration `json:"min" yaml:"min"`
+	Max *Duration `json:"max" yaml:"max"`
+}
+
+func (l Latency) MarshalJSON() ([]byte, error) {
+	if l.Fixed != nil {
+		return json.Marshal(l.Fixed)
+	}
+	return json.Marshal(latencyRange{l.Min, l.Max})
+}
+
+func (l *Latency) UnmarshalJSON(b []byte) error {
+	var d Duration
+	if json.Unmarshal(b, &d) == nil {
+		*l = Latency{Fixed: &d}
+		return nil
+	}
+	var r latencyRange
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&r); err != nil {
+		return fmt.Errorf("latência deve ser uma duração, como \"2s\", ou {\"min\", \"max\"}: %v", err)
+	}
+	*l = Latency{Min: r.Min, Max: r.Max}
+	return nil
+}
+
+func (l Latency) MarshalYAML() (any, error) {
+	if l.Fixed != nil {
+		return l.Fixed.String(), nil
+	}
+	return latencyRange{l.Min, l.Max}, nil
+}
+
+func (l *Latency) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind == yaml.ScalarNode {
+		var d Duration
+		if err := d.UnmarshalYAML(n); err != nil {
+			return err
+		}
+		*l = Latency{Fixed: &d}
+		return nil
+	}
+	if n.Kind != yaml.MappingNode {
+		return nodeErr(n, "latência deve ser uma duração, como 2s, ou um mapa com min e max")
+	}
+	var r latencyRange
+	if err := n.Decode(&r); err != nil {
+		return err
+	}
+	*l = Latency{Min: r.Min, Max: r.Max}
+	return nil
+}
+
+// Matcher compara um valor da requisição com exatamente um operador.
+// Na forma curta, um texto simples equivale a {equals: texto}.
+type Matcher struct {
+	Equals   *string `json:"equals,omitempty" yaml:"equals,omitempty"`
+	Regex    *string `json:"regex,omitempty" yaml:"regex,omitempty"`
+	JSON     any     `json:"json,omitempty" yaml:"json,omitempty"`
+	Contains *string `json:"contains,omitempty" yaml:"contains,omitempty"`
+}
+
+type matcherFields Matcher
+
+func (m Matcher) onlyEquals() bool {
+	return m.Equals != nil && m.Regex == nil && m.JSON == nil && m.Contains == nil
+}
+
+func (m Matcher) MarshalJSON() ([]byte, error) {
+	if m.onlyEquals() {
+		return json.Marshal(*m.Equals)
+	}
+	return json.Marshal(matcherFields(m))
+}
+
+func (m *Matcher) UnmarshalJSON(b []byte) error {
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		*m = Matcher{Equals: &s}
+		return nil
+	}
+	var f matcherFields
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&f); err != nil {
+		return fmt.Errorf("critério deve ser texto ou um mapa com equals, regex, json ou contains: %v", err)
+	}
+	*m = Matcher(f)
+	return nil
+}
+
+func (m Matcher) MarshalYAML() (any, error) {
+	if m.onlyEquals() {
+		return *m.Equals, nil
+	}
+	return matcherFields(m), nil
+}
+
+func (m *Matcher) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind == yaml.ScalarNode {
+		s := n.Value
+		*m = Matcher{Equals: &s}
+		return nil
+	}
+	if n.Kind != yaml.MappingNode {
+		return nodeErr(n, "critério deve ser texto ou um mapa com equals, regex, json ou contains")
+	}
+	var f matcherFields
+	if err := n.Decode(&f); err != nil {
+		return err
+	}
+	*m = Matcher(f)
+	return nil
+}
+
+// nodeErr produz um erro no mesmo formato "line N:" usado pelo decodificador
+// YAML, para que a tradução em erro de validação localize o campo.
+func nodeErr(n *yaml.Node, format string, args ...any) error {
+	return fmt.Errorf("line %d: %s", n.Line, fmt.Sprintf(format, args...))
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "ports": {
+    "traffic": 9080,
+    "admin": 9081
+  },
+  "seed": 42,
+  "history": {
+    "backend": "sqlite",
+    "path": "data/history.db",
+    "capacity": 500,
+    "record": true,
+    "expose": false
+  },
+  "capture": {
+    "maxBodyBytes": 32768
+  },
+  "routesDir": "env/routes"
+}

@@ -1,19 +1,19 @@
 ## 1. Fundação do projeto
 
-- [ ] 1.1 Inicializar o módulo Go e o layout `cmd/gateway`, `internal/...`, `web/`, e verificar que `go build ./...` conclui em um clone limpo
-- [ ] 1.2 Versionar um `web/dist/index.html` mínimo e a diretiva `//go:embed all:web/dist`, e verificar que `go build ./...` conclui sem que o frontend tenha sido construído
-- [ ] 1.3 Criar o `Makefile` (ou `Taskfile`) com alvos de build, teste e lint, e verificar que cada alvo roda do zero
+- [x] 1.1 Inicializar o módulo Go e o layout `cmd/gateway`, `internal/...`, `web/`, e verificar que `go build ./...` conclui em um clone limpo
+- [x] 1.2 Versionar um `web/dist/index.html` mínimo e a diretiva `//go:embed all:web/dist`, e verificar que `go build ./...` conclui sem que o frontend tenha sido construído
+- [x] 1.3 Criar o `Makefile` (ou `Taskfile`) com alvos de build, teste e lint, e verificar que cada alvo roda do zero
 - [ ] 1.4 Configurar CI rodando build, `go vet` e testes com `-race`, e verificar que o pipeline passa no primeiro commit
 
 ## 2. Configuração
 
-- [ ] 2.1 Definir as estruturas de `gateway.json` (portas, seed, armazenamento, exposição e registro do histórico, limites de captura, diretório de rotas, versão de schema) com chaves em inglês, e verificar por teste de serialização que um arquivo de exemplo carrega e reserializa sem perda de campos
-- [ ] 2.2 Definir a estrutura do documento de rota (nome, upstream, casamento, overrides, versão de schema) com chaves em inglês, e verificar por teste que um documento de exemplo carrega e reserializa sem perda
-- [ ] 2.3 Implementar a varredura do diretório de rotas e a fusão num snapshot, ignorando arquivos sem extensão reconhecida, e verificar pelos quatro cenários da requirement "Um documento por rota"
-- [ ] 2.4 Implementar a detecção de colisão entre documentos (nome repetido, host e padrão idênticos), e verificar pelos três cenários da requirement correspondente
-- [ ] 2.5 Implementar a validação com mensagem nomeando arquivo, campo e localização, incluindo a recusa por versão de schema superior, e verificar pelos quatro cenários da requirement de validação
-- [ ] 2.6 Implementar a precedência ambiente sobre arquivo sobre padrão e a consulta de origem efetiva de cada valor, e verificar pelos três cenários da requirement correspondente
-- [ ] 2.7 Implementar o snapshot imutável atrás de `atomic.Pointer` com índices pré-computados, e verificar por teste de concorrência com `-race` que leituras simultâneas à troca nunca observam estado parcial
+- [x] 2.1 Definir as estruturas de `gateway.json` (portas, seed, armazenamento, exposição e registro do histórico, limites de captura, diretório de rotas, versão de schema) com chaves em inglês, e verificar por teste de serialização que um arquivo de exemplo carrega e reserializa sem perda de campos
+- [x] 2.2 Definir a estrutura do documento de rota (nome, upstream, casamento, overrides, versão de schema) com chaves em inglês, e verificar por teste que um documento de exemplo carrega e reserializa sem perda
+- [x] 2.3 Implementar a varredura do diretório de rotas e a fusão num snapshot, ignorando arquivos sem extensão reconhecida, e verificar pelos quatro cenários da requirement "Um documento por rota"
+- [x] 2.4 Implementar a detecção de colisão entre documentos (nome repetido, host e padrão idênticos), e verificar pelos três cenários da requirement correspondente
+- [x] 2.5 Implementar a validação com mensagem nomeando arquivo, campo e localização, incluindo a recusa por versão de schema superior, e verificar pelos quatro cenários da requirement de validação
+- [x] 2.6 Implementar a precedência ambiente sobre arquivo sobre padrão e a consulta de origem efetiva de cada valor, e verificar pelos três cenários da requirement correspondente
+- [x] 2.7 Implementar o snapshot imutável atrás de `atomic.Pointer` com índices pré-computados, e verificar por teste de concorrência com `-race` que leituras simultâneas à troca nunca observam estado parcial
 - [ ] 2.8 Implementar a inicialização com portas separadas e recusa de portas iguais, e verificar pelos dois cenários da requirement de separação de portas e pelo cenário "Portas iguais" da validação
 
 ## 3. Roteamento reverso

@@ -1,0 +1,48 @@
+schemaVersion: 1
+name: payments
+upstream: http://localhost:9001
+match:
+  host: payments.local
+  path: /api/payments/*
+stripPrefix: true
+preserveHost: true
+timeout: 5s
+overrides:
+  - name: bilulu
+    match:
+      path: /api/payments/bilulu
+      method: POST
+      headers:
+        X-Tenant: acme
+        X-Trace:
+          regex: ^t-[0-9]+$
+      query:
+        debug:
+          contains: "1"
+      body:
+        json:
+          a: 1
+          b: [x, y]
+    respond:
+      status: 201
+      headers:
+        X-Source: override
+      body:
+        ok: true
+        items: [1, 2]
+    probability: 0.3
+    latency: 2s
+    drop: true
+    ttl: 30s
+    maxApplications: 5
+  - name: slow-charges
+    match:
+      pathRegex: ^/api/payments/charge/[0-9]+$
+    latency:
+      min: 100ms
+      max: 500ms
+  - name: text
+    match:
+      path: /api/payments/text
+    respond:
+      body: plain text
