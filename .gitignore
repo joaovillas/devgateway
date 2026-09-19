@@ -40,3 +40,7 @@ Thumbs.db
 
 # Release binaries (make release)
 /dist/
+
+# Ferramentas locais de processo (nao fazem parte do produto)
+.claude/
+.impeccable/
