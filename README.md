@@ -119,7 +119,7 @@ O painel fica em <http://localhost:8081>.
 
 Uma resposta interceptada traz `X-Gateway: route=payments; override=payments/flaky; intervention=synthesized`; uma encaminhada, só `X-Gateway: route=payments`. Um path que nenhuma rota casa recebe `404` com `{"error": "no_route"}`.
 
-Para ver tudo funcionando sem ter serviços próprios, [`examples/`](examples) tem dois serviços de brinquedo, rotas prontas e dois scripts: `examples/run.sh` sobe o ambiente, e `examples/e2e.sh` o verifica de ponta a ponta.
+Para ver tudo funcionando sem ter serviços próprios, [`examples/`](examples) tem dois serviços de brinquedo, rotas prontas e dois scripts: `examples/run.sh` sobe o ambiente, e `examples/e2e.sh` o verifica de ponta a ponta. O `run.sh` trabalha numa cópia em `examples/.run/` e a preserva entre execuções, com os serviços e as regras que você criar; `CLEAN=1 examples/run.sh` recomeça do exemplo original, guardando a cópia anterior num diretório `.bak-<data>`.
 
 ## Dois formatos: JSON no processo, YAML nas rotas
 

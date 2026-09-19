@@ -2,10 +2,11 @@
 # Sobe o ambiente de exemplo: os dois serviços de brinquedo e o gateway na
 # frente deles. Ctrl+C encerra tudo.
 #
-#   examples/run.sh            copia gateway.json e routes/ para examples/.run/
-#                              (recriada a cada execução) e sobe tudo
-#   KEEP=1 examples/run.sh     reaproveita examples/.run/, com o que o
-#                              aprendizado e o painel gravaram na última vez
+#   examples/run.sh            sobe tudo reaproveitando examples/.run/, com o
+#                              que o aprendizado e o painel gravaram antes;
+#                              só cria a cópia quando ela ainda não existe
+#   CLEAN=1 examples/run.sh    descarta examples/.run/ e recomeça do exemplo
+#                              original (apaga serviços e regras gravados ali)
 #   WEB=1 examples/run.sh      constrói o painel (web/dist) antes do gateway;
 #                              sem ele, o binário serve o placeholder
 #
@@ -19,8 +20,14 @@ root="$(cd "$here/.." && pwd)"
 work="$here/.run"
 exe="$(cd "$root" && go env GOEXE)"
 
-if [[ "${KEEP:-}" != 1 || ! -f "$work/gateway.json" ]]; then
-	rm -rf "$work"
+# Por padrão a cópia de trabalho é preservada: ela guarda os serviços e as
+# regras que o usuário criou pelo painel e o que o aprendizado gravou.
+if [[ "${CLEAN:-}" == 1 || ! -f "$work/gateway.json" ]]; then
+	if [[ -d "$work" ]]; then
+		backup="$work.bak-$(date +%Y%m%d-%H%M%S)"
+		echo "guardando a configuração anterior em $backup"
+		mv "$work" "$backup"
+	fi
 	mkdir -p "$work"
 	cp "$here/gateway.json" "$work/"
 	cp -r "$here/routes" "$work/routes"
