@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/config"
 )
 
 // Requirement: Pluggable history storage

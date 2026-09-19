@@ -4,7 +4,7 @@ export CGO_ENABLED ?= 0
 
 # Version stamped into the binary (shown by GET /api/status).
 VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-LDFLAGS   := -s -w -X github.com/gamerjp64/devgateway/internal/admin.Version=$(VERSION)
+LDFLAGS   := -s -w -X github.com/joaovillas/devgateway/internal/admin.Version=$(VERSION)
 PLATFORMS ?= linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 DIST      ?= dist
 IMAGE     ?= devgateway:$(VERSION)

@@ -5,7 +5,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/exchange"
 )
 
 // Memory keeps exchanges in memory with a fixed capacity: once it is

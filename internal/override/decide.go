@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/config"
 )
 
 // Source returns the randomness source for the request with sequence number

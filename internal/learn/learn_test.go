@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/gamerjp64/devgateway/internal/config"
-	"github.com/gamerjp64/devgateway/internal/config/writer"
-	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/config/writer"
+	"github.com/joaovillas/devgateway/internal/exchange"
 )
 
 func setup(t *testing.T) (string, *config.Live, *Learner) {

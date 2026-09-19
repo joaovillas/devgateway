@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/config"
-	"github.com/gamerjp64/devgateway/internal/exchange"
-	"github.com/gamerjp64/devgateway/internal/store"
+	"github.com/joaovillas/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/store"
 )
 
 // syncTimeout caps the wait for the already finished exchanges to be

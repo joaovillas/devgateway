@@ -1,6 +1,6 @@
 # devgateway
 
-[![CI](https://github.com/gamerjp64/devgateway/actions/workflows/ci.yml/badge.svg)](https://github.com/gamerjp64/devgateway/actions/workflows/ci.yml)
+[![CI](https://github.com/joaovillas/devgateway/actions/workflows/ci.yml/badge.svg)](https://github.com/joaovillas/devgateway/actions/workflows/ci.yml)
 
 A configurable development gateway: put your services behind one port and inject failures on demand.
 
@@ -60,7 +60,7 @@ Without Node, `go build ./cmd/devgateway` works too: the binary ships a placehol
 ### `go install`
 
 ```sh
-go install github.com/gamerjp64/devgateway/cmd/devgateway@latest
+go install github.com/joaovillas/devgateway/cmd/devgateway@latest
 ```
 
 This builds from the module cache, which has no `web/dist` build in it, so the binary serves the placeholder page instead of the panel. The proxy, the API and learning mode are complete. For the panel, build from a clone as above or use the Docker image.

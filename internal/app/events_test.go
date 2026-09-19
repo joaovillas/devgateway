@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/exchange"
 )
 
 // SSE stream of the admin API (Requirement: Real-time updates).

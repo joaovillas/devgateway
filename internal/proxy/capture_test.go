@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/capture"
-	"github.com/gamerjp64/devgateway/internal/config"
-	"github.com/gamerjp64/devgateway/internal/exchange"
-	"github.com/gamerjp64/devgateway/internal/store"
+	"github.com/joaovillas/devgateway/internal/capture"
+	"github.com/joaovillas/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/store"
 )
 
 // capGW is a test gateway with access to the history it writes into.

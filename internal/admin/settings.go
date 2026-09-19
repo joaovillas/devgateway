@@ -13,9 +13,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/gamerjp64/devgateway/internal/config"
-	"github.com/gamerjp64/devgateway/internal/config/writer"
-	"github.com/gamerjp64/devgateway/internal/store"
+	"github.com/joaovillas/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/config/writer"
+	"github.com/joaovillas/devgateway/internal/store"
 )
 
 func (h *Handler) settingsRoutes() {

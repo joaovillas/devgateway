@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gamerjp64/devgateway/internal/config"
-	"github.com/gamerjp64/devgateway/internal/exchange"
-	"github.com/gamerjp64/devgateway/internal/store"
+	"github.com/joaovillas/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/store"
 )
 
 // settingsFor builds the effective configuration the same way the process

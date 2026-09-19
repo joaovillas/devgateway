@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/config"
 )
 
 func loaderFor(path string) config.Loader {

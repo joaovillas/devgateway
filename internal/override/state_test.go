@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/config"
 )
 
 // clock is a test clock that only moves when told to.

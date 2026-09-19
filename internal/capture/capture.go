@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/exchange"
-	"github.com/gamerjp64/devgateway/internal/store"
+	"github.com/joaovillas/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/store"
 )
 
 // QueueSize is how many exchanges can wait to be written. With the queue full

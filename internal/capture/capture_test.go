@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/exchange"
-	"github.com/gamerjp64/devgateway/internal/store"
+	"github.com/joaovillas/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/store"
 )
 
 func newRecorder(t *testing.T) (*Recorder, *store.Memory) {

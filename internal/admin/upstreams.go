@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gamerjp64/devgateway/internal/upstream"
+	"github.com/joaovillas/devgateway/internal/upstream"
 )
 
 func (h *Handler) upstreamRoutes() {

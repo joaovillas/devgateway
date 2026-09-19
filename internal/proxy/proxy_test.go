@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/capture"
-	"github.com/gamerjp64/devgateway/internal/config"
-	"github.com/gamerjp64/devgateway/internal/store"
+	"github.com/joaovillas/devgateway/internal/capture"
+	"github.com/joaovillas/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/store"
 )
 
 // echo is what the test upstream reports back about the request it received.

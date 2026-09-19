@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/exchange"
-	"github.com/gamerjp64/devgateway/internal/store"
+	"github.com/joaovillas/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/store"
 )
 
 // TB is the subset of testing.TB the suite uses, so that it can run against

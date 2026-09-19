@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/config"
 )
 
 // Generalize replaces with segment parameters (":id", ":id2"...) the path

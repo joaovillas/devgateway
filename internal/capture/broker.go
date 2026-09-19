@@ -4,7 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/exchange"
 )
 
 // Broker hands the recorded exchanges to whoever is subscribed, such as the

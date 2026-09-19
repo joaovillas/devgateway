@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/config"
-	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/exchange"
 )
 
 // hopByHop are the headers that apply to a single connection and that HTTP

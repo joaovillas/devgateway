@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gamerjp64/devgateway/internal/exchange"
-	"github.com/gamerjp64/devgateway/internal/store"
-	"github.com/gamerjp64/devgateway/internal/store/storetest"
+	"github.com/joaovillas/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/store"
+	"github.com/joaovillas/devgateway/internal/store/storetest"
 )
 
 func openNDJSON(t storetest.TB, path string) store.Store {

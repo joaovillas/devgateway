@@ -3,7 +3,7 @@ package store
 import (
 	"fmt"
 
-	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/config"
 )
 
 // Open initializes the history backend picked by the configuration, with

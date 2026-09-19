@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/config"
 )
 
 func TestGeneralize(t *testing.T) {

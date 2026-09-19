@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gamerjp64/devgateway"
-	"github.com/gamerjp64/devgateway/internal/app"
-	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/joaovillas/devgateway"
+	"github.com/joaovillas/devgateway/internal/app"
+	"github.com/joaovillas/devgateway/internal/config"
 )
 
 func main() {

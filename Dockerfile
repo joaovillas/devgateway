@@ -24,7 +24,7 @@ RUN go mod download
 COPY . .
 COPY --from=web /src/web/dist ./web/dist
 RUN CGO_ENABLED=0 go build -trimpath \
-      -ldflags "-s -w -X github.com/gamerjp64/devgateway/internal/admin.Version=${VERSION}" \
+      -ldflags "-s -w -X github.com/joaovillas/devgateway/internal/admin.Version=${VERSION}" \
       -o /out/devgateway ./cmd/devgateway \
  && mkdir -p /out/data/routes
 

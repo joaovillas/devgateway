@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/config"
 )
 
 func prob(p float64) *float64 { return &p }

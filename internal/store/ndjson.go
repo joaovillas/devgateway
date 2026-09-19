@@ -13,7 +13,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/exchange"
 )
 
 // NDJSON writes one exchange per line to an append-only file, in the order

@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/config"
 )
 
 // maxBody caps the body of a write through the API.

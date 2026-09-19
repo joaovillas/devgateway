@@ -45,6 +45,8 @@ export function Switch({
 interface TextFieldProps {
   value: string;
   onCommit: (next: string) => void;
+  /** Cada tecla, para quem mostra o efeito do texto antes de gravá-lo (a prévia do encaminhamento). */
+  onDraft?: (text: string) => void;
   label: string;
   placeholder?: string;
   mono?: boolean;
@@ -61,6 +63,7 @@ interface TextFieldProps {
 export function TextField({
   value,
   onCommit,
+  onDraft,
   label,
   placeholder,
   mono,
@@ -85,6 +88,13 @@ export function TextField({
     }
   }, [value]);
 
+  // Rascunho e quem acompanha a digitação andam juntos: a prévia do
+  // encaminhamento muda a cada tecla, e Esc a devolve ao valor gravado.
+  const type = (t: string) => {
+    setDraft(t);
+    onDraft?.(t);
+  };
+
   const commit = () => {
     if (draft === value) {
       setProblem(null);
@@ -102,7 +112,7 @@ export function TextField({
     } else if (e.key === "Escape") {
       if (draft !== value || problem) {
         e.preventDefault();
-        setDraft(value);
+        type(value);
         setProblem(null);
       }
     }
@@ -128,7 +138,7 @@ export function TextField({
           focused.current = false;
           commit();
         }}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={(e) => type(e.target.value)}
         onKeyDown={onKey}
       />
       {problem ? (
@@ -274,6 +284,64 @@ export function Segmented<T extends string>({
           onKeyDown={(e) => move(e, i)}
         >
           {o.label}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Opções exclusivas empilhadas, uma por linha, para escolhas cuja consequência
+ * não cabe em uma palavra ("só o que vem depois de /viacep" contra "o path
+ * inteiro, /viacep/…"). Mesmo padrão de radio group do Segmented; `text` é o
+ * nome acessível, porque o rótulo visível tem partes em mono.
+ */
+export function Choice<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+}: {
+  value: T;
+  options: { value: T; label: ReactNode; text: string }[];
+  onChange: (v: T) => void;
+  label: string;
+}) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const idx = Math.max(
+    0,
+    options.findIndex((o) => o.value === value),
+  );
+  const move = (e: KeyboardEvent, i: number) => {
+    let next = -1;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (i + 1) % options.length;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (i - 1 + options.length) % options.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = options.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    refs.current[next]?.focus();
+    onChange(options[next]!.value);
+  };
+  return (
+    <span className="choice" role="radiogroup" aria-label={label}>
+      {options.map((o, i) => (
+        <button
+          key={o.value}
+          ref={(el) => {
+            refs.current[i] = el;
+          }}
+          type="button"
+          role="radio"
+          aria-checked={o.value === value}
+          aria-label={o.text}
+          tabIndex={i === idx ? 0 : -1}
+          className={"choice__opt" + (o.value === value ? " choice__opt--on" : "")}
+          onClick={() => onChange(o.value)}
+          onKeyDown={(e) => move(e, i)}
+        >
+          <span className="choice__mark" aria-hidden="true" />
+          <span className="choice__text">{o.label}</span>
         </button>
       ))}
     </span>

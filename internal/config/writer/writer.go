@@ -19,7 +19,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/config"
 )
 
 var (

@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/config"
 )
 
 // The admin API end to end: writes through the admin port, with the effect

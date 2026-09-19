@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/exchange"
 )
 
 // Record is the record of a request in flight. It is used by the goroutine

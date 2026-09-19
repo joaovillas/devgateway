@@ -62,6 +62,8 @@ interface RoutePanelProps {
   /** Simples (o padrão) ou avançado, lembrado entre visitas. */
   mode: DetailMode;
   onMode: (m: DetailMode) => void;
+  /** Porta de tráfego do processo: o endereço que o app chama na prévia do encaminhamento. */
+  trafficPort: number | undefined;
 }
 
 /**
@@ -121,6 +123,7 @@ export function RoutePanel(props: RoutePanelProps) {
           <NewServiceForm
             routes={routes}
             upstreams={props.upstreams}
+            trafficPort={props.trafficPort}
             onCreated={created}
             onCancel={props.onCancelCreate}
           />
@@ -252,6 +255,7 @@ function RouteBody({
   justCreated,
   mode,
   onMode,
+  trafficPort,
 }: RoutePanelProps & { guard: CommentsGuard; res: RouteResource | undefined; justCreated: string | null }) {
   if (routes.kind === "loading") return <Empty title="Carregando os serviços" />;
   if (routes.kind === "error") {
@@ -326,6 +330,7 @@ function RouteBody({
       onDeleted={() => onSelect(null)}
       mode={mode}
       onAdvanced={() => onMode("advanced")}
+      trafficPort={trafficPort}
     />
   );
 }
@@ -340,6 +345,7 @@ function RouteDetail({
   onDeleted,
   mode,
   onAdvanced,
+  trafficPort,
 }: {
   res: RouteResource;
   guard: CommentsGuard;
@@ -350,6 +356,7 @@ function RouteDetail({
   onDeleted: () => void;
   mode: DetailMode;
   onAdvanced: () => void;
+  trafficPort: number | undefined;
 }) {
   const r = res.route;
   const overrides = r.overrides ?? [];
@@ -365,7 +372,23 @@ function RouteDetail({
 
   return (
     <div className="route">
-      {simple ? <RouteSummary res={res} onAdvanced={onAdvanced} /> : null}
+      {simple ? (
+        <>
+          <RouteSummary res={res} onAdvanced={onAdvanced} />
+          <div className="route__preview">
+            <ForwardPreview
+              input={{
+                path: r.match.path ?? "",
+                host: r.match.host ?? "",
+                destination: r.upstream ?? "",
+                stripPrefix: r.stripPrefix === true,
+                rewriteHost: r.rewriteHost === true,
+                trafficPort,
+              }}
+            />
+          </div>
+        </>
+      ) : null}
       <div className="route__section">
         <h3 className="section-title">
           regras
@@ -420,7 +443,14 @@ function RouteDetail({
       </div>
 
       {simple ? null : (
-        <RouteFields res={res} doc={doc} guard={guard} onRenamed={onRenamed} onDeleted={onDeleted} />
+        <RouteFields
+          res={res}
+          doc={doc}
+          guard={guard}
+          onRenamed={onRenamed}
+          onDeleted={onDeleted}
+          trafficPort={trafficPort}
+        />
       )}
     </div>
   );
@@ -520,12 +550,14 @@ function RouteFields({
   guard,
   onRenamed,
   onDeleted,
+  trafficPort,
 }: {
   res: RouteResource;
   doc: GuardedDoc;
   guard: CommentsGuard;
   onRenamed: (name: string) => void;
   onDeleted: () => void;
+  trafficPort: number | undefined;
 }) {
   const name = res.route.name;
   const base = useMemo(() => strip(res.route), [res.route]);
@@ -547,6 +579,20 @@ function RouteFields({
   };
 
   const text = (key: "upstream", t: string) => w.change({ [key]: t.trim() || null });
+
+  // A prévia acompanha a digitação, não a gravação: o que está no campo agora
+  // vale sobre o que foi gravado, até o valor gravado mudar.
+  const [typing, setTyping] = useState<{ host?: string; path?: string; upstream?: string }>({});
+  useEffect(() => setTyping({}), [v.match.host, v.match.path, v.upstream]);
+  const preview = {
+    path: typing.path ?? v.match.path ?? "",
+    host: typing.host ?? v.match.host ?? "",
+    destination: typing.upstream ?? v.upstream ?? "",
+    stripPrefix: v.stripPrefix === true,
+    rewriteHost: v.rewriteHost === true,
+    trafficPort,
+  };
+  const pathExact = preview.path.trim() !== "" && !preview.path.trim().endsWith("/*");
 
   return (
     <div className="route__section">

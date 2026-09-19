@@ -14,11 +14,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gamerjp64/devgateway/internal/capture"
-	"github.com/gamerjp64/devgateway/internal/config"
-	"github.com/gamerjp64/devgateway/internal/exchange"
-	"github.com/gamerjp64/devgateway/internal/override"
-	"github.com/gamerjp64/devgateway/internal/upstream"
+	"github.com/joaovillas/devgateway/internal/capture"
+	"github.com/joaovillas/devgateway/internal/config"
+	"github.com/joaovillas/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/override"
+	"github.com/joaovillas/devgateway/internal/upstream"
 )
 
 // DefaultTimeout applies to routes that declare no timeout.

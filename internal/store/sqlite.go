@@ -14,7 +14,7 @@ import (
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 
-	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/joaovillas/devgateway/internal/exchange"
 )
 
 // foldEqual is strings.EqualFold exposed to SQL. SQLite's COLLATE NOCASE

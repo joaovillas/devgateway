@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/gamerjp64/devgateway/internal/upstream"
+	"github.com/joaovillas/devgateway/internal/upstream"
 )
 
 // Upstream availability for the map (Requirement: Topology map, scenario
