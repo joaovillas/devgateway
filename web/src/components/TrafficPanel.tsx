@@ -30,7 +30,7 @@ interface TrafficPanelProps {
   connection: ConnectionState;
   status: Load<Status>;
   routes: Load<RouteResource[]>;
-  /** Seleção da lista de serviços: serviço (rota) ou destino (upstream). */
+  /** Seleção do painel de serviços: serviço (rota) ou destino (upstream). */
   selection: Selection;
   /** Troca de rota pelo seletor da lista, sem mudar o que o painel de detalhe mostra. */
   onRoute: (name: string | null) => void;
@@ -263,7 +263,7 @@ export function TrafficPanel(props: TrafficPanelProps) {
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 
-/** Filtros do contrato: serviço (ou o destino da lista de serviços), método, status, intervenção e path. */
+/** Filtros do contrato: serviço (ou o destino do painel de serviços), método, status, intervenção e path. */
 function FilterBar({ routes, selection, onRoute, listFilter: f, onListFilter }: TrafficPanelProps) {
   const [path, setPath] = useState(f.path);
   // Filtro limpo de fora (botão "limpar"): o campo acompanha.

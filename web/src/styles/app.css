@@ -590,8 +590,17 @@ button {
   .svc__entry {
     display: none;
   }
+  /* Cabeçalho estreito: chave, busca e "+ serviço" dividem a linha com o
+     título e a contagem; a busca cede espaço antes da contagem. */
   .search {
-    flex-basis: 120px;
+    flex-basis: 96px;
+    min-width: 64px;
+  }
+  .panel[aria-labelledby="services-title"] .seg__opt {
+    padding-inline: var(--s-2);
+  }
+  .panel[aria-labelledby="services-title"] .panel__sub {
+    flex: none;
   }
   .svc__new kbd,
   .search__kbd {
@@ -599,6 +608,299 @@ button {
   }
   .svc__subx {
     display: none;
+  }
+}
+
+/* ---------- Mapa de serviços ---------- */
+
+/* Seu app → serviços → destinos em três colunas, com as ligações em SVG nas
+   faixas entre elas: as curvas nunca passam sobre um rótulo. O cabeçalho de
+   colunas e o campo compartilham a mesma grade. */
+.map {
+  --map-cols: 124px minmax(20px, 1fr) minmax(128px, 3.2fr) minmax(20px, 1fr) minmax(112px, 2.6fr);
+}
+.map__head,
+.map__field {
+  display: grid;
+  grid-template-columns: var(--map-cols);
+  padding-inline: var(--s-4);
+}
+
+/* Colante e opaco: os nós passam por trás ao rolar. */
+.map__head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  align-items: center;
+  height: var(--row-h);
+  background: var(--panel);
+  border-bottom: 1px solid var(--seam);
+  font-size: var(--text-caps);
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.map__desthead {
+  padding-left: var(--s-3);
+}
+
+.map__field {
+  grid-template-rows: var(--map-h);
+  padding-block: var(--s-4);
+  /* O campo do mapa é uma superfície: a grade de pontos de 1px do console,
+     na cor da costura, sob os nós. Textura, não cor de estado. */
+  background-image: radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 1px);
+  background-size: var(--grid-step) var(--grid-step);
+  background-position: calc(var(--s-4) - 1px) calc(var(--s-4) - 1px);
+}
+
+.map__col {
+  position: relative;
+  height: var(--map-h);
+  min-width: 0;
+}
+.map__col > .node {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+.map__edges {
+  display: block;
+  width: 100%;
+  height: var(--map-h);
+  overflow: visible;
+}
+.map__edges path {
+  stroke: var(--seam-strong);
+  stroke-width: 1;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  transition: stroke 160ms var(--ease-out), opacity 160ms var(--ease-out);
+}
+.map__edges .is-selected {
+  stroke: var(--override);
+}
+/* Destino fora do ar: a ligação até ele fica vermelha e tracejada. */
+.map__edges .is-down {
+  stroke: var(--fault);
+  stroke-dasharray: 3 3;
+}
+.map__edges .is-dim {
+  opacity: 0.3;
+}
+
+.node {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  height: var(--map-row);
+  padding-inline: var(--s-3);
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--radius);
+  background: var(--panel-raised);
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  /* O cabeçalho colante não esconde o nó que a seleção trouxe à vista. */
+  scroll-margin-block: calc(var(--row-h) + var(--s-3)) var(--s-3);
+  transition: opacity 160ms var(--ease-out), border-color 160ms var(--ease-out),
+    background-color 160ms var(--ease-out), top 160ms var(--ease-out);
+}
+/* Os nós presos à janela acompanham a rolagem sem atraso. */
+.map__col > .node--app,
+.map__col > .node--dest {
+  transition: opacity 160ms var(--ease-out), border-color 160ms var(--ease-out),
+    background-color 160ms var(--ease-out);
+}
+
+.node__name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.node--route .node__name {
+  font-weight: 600;
+  flex-shrink: 0;
+  max-width: 55%;
+}
+.node__meta {
+  flex: 1 1 0;
+  min-width: 0;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node__meta.dim {
+  color: var(--ink-3);
+}
+.node--dest .node__meta {
+  flex: 0 1 auto;
+  margin-left: auto;
+  text-align: right;
+  color: var(--ink-3);
+}
+.node__meta.is-fault {
+  color: var(--fault);
+}
+.node__short {
+  display: none;
+}
+
+/* Regra ativa: efeito e probabilidade na cor do que ela faz, e a
+   probabilidade também como fração da largura do nó, num traço de 2px. */
+.node__tag {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums slashed-zero;
+  white-space: nowrap;
+}
+.node__tag--synth,
+.node__tag--drop {
+  color: var(--fault);
+}
+.node__tag--delay {
+  color: var(--injected);
+}
+.node__tag.is-stale {
+  color: var(--ink-3);
+}
+.node__meter {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+}
+.node__meter--synth,
+.node__meter--drop {
+  background: var(--fault);
+}
+.node__meter--delay {
+  background: var(--injected);
+}
+
+button.node:hover {
+  border-color: var(--ink-3);
+}
+.node--ruled,
+button.node--ruled:hover {
+  border-color: var(--override);
+}
+.node--selected,
+button.node--selected:hover {
+  border-color: var(--override);
+  background: var(--override-dim);
+}
+.node--down,
+button.node--down:hover {
+  border-color: var(--fault);
+}
+.node--app {
+  background: var(--panel);
+}
+.node--app .node__meta {
+  flex: none;
+  color: var(--ink-3);
+}
+
+/* Fora da seleção, o nó recua pelo tom, não pela opacidade: fundo do painel,
+   costura fina e tinta --ink-3, para continuar legível e clicável. As cores de
+   estado viram cinza; o que está fora do foco não disputa atenção com o
+   caminho selecionado. */
+.node.is-dim {
+  background: var(--panel);
+  border-color: var(--seam);
+}
+.node.is-dim .node__name,
+.node.is-dim .node__meta,
+.node.is-dim .node__meta.is-fault,
+.node.is-dim .node__tag {
+  color: var(--ink-3);
+}
+.node.is-dim .node__meter {
+  background: var(--seam-strong);
+}
+.node.is-dim .dot {
+  opacity: 0.6;
+}
+.node.is-dim:hover,
+.node.is-dim:focus-visible {
+  border-color: var(--seam-strong);
+}
+.node.is-dim:hover .node__name,
+.node.is-dim:focus-visible .node__name {
+  color: var(--ink-2);
+}
+
+.node:focus-visible {
+  outline: 1px solid var(--override);
+  outline-offset: 1px;
+}
+
+.node--ghost {
+  border-style: dashed;
+  background: transparent;
+  color: var(--ink-3);
+}
+
+/* Compacto (mais de oito serviços): nós da altura de uma linha da lista. */
+.map--compact .node {
+  gap: var(--s-2);
+}
+
+/* Estreito: seu app vira a porta, o serviço perde a entrada (continua na dica
+   e no leitor de tela) e o destino vira a porta, que é o que os diferencia; o
+   "fora" fica em texto, para não depender só da cor. */
+@media (max-width: 640px) {
+  .map {
+    --map-cols: 44px minmax(10px, 1fr) minmax(0, 6fr) minmax(10px, 1fr) minmax(0, 3.6fr);
+  }
+  .map__head,
+  .map__field {
+    padding-inline: var(--s-3);
+  }
+  .map__head {
+    font-size: var(--text-md);
+  }
+  .map__head span:first-child {
+    visibility: hidden;
+  }
+  .node--route .node__meta,
+  .node--app .node__name {
+    display: none;
+  }
+  .node--dest .node__health:not(.is-fault) {
+    display: none;
+  }
+  .node .node__long {
+    display: none;
+  }
+  .node .node__short {
+    display: inline;
+  }
+  .node--dest .node__meta.is-fault {
+    flex: none;
+  }
+  .node--app .node__meta {
+    color: var(--ink-2);
+  }
+  .node {
+    padding-inline: var(--s-2);
+    gap: var(--s-2);
+  }
+  .node--route .node__name {
+    max-width: none;
+    flex-shrink: 1;
+  }
+  .node__tag {
+    margin-left: auto;
   }
 }
 

@@ -124,3 +124,45 @@ export function healthText(status: UpstreamHealth["status"], h: UpstreamHealth |
   }
   return { short: "sem tentativas", long: "nenhuma requisição encaminhada a ele recentemente" };
 }
+
+/** Um serviço como as duas visões (mapa e lista) o mostram. */
+export interface ServiceRow {
+  res: RouteResource;
+  name: string;
+  entry: string;
+  upstream: string | undefined;
+  status: UpstreamHealth["status"];
+  health: UpstreamHealth | undefined;
+  intervention: RouteIntervention | null;
+  /** Texto em minúsculas onde a busca procura: nome, entrada e destino. */
+  haystack: string;
+}
+
+/** Os serviços com o estado do destino e a regra ativa agora, na ordem de precedência. */
+export function serviceRows(routes: RouteResource[], health: UpstreamHealth[], now: number, at: number): ServiceRow[] {
+  const byUrl = new Map(health.map((h) => [h.upstream, h]));
+  return routes.map((res) => {
+    const upstream = res.route.upstream || undefined;
+    const h = upstream ? byUrl.get(upstream) : undefined;
+    const entry = entryText(res);
+    return {
+      res,
+      name: res.route.name,
+      entry,
+      upstream,
+      status: h?.status ?? "unknown",
+      health: h,
+      intervention: routeIntervention(res, now, at),
+      haystack: [res.route.name, entry, upstream ?? ""].join(" ").toLowerCase(),
+    };
+  });
+}
+
+/** Termos da busca, separados por espaço; um serviço casa quando contém todos. */
+export function searchTerms(query: string): string[] {
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+export function filterRows(rows: ServiceRow[], terms: string[]): ServiceRow[] {
+  return terms.length ? rows.filter((r) => terms.every((t) => r.haystack.includes(t))) : rows;
+}

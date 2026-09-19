@@ -7,6 +7,7 @@ colors:
   panel-raised: "#1b212b"
   seam: "#262e3a"
   seam-strong: "#354050"
+  grid-dot: "#2a3340"
   ink: "#d8dee7"
   ink-2: "#a3aebb"
   ink-3: "#808c9b"
@@ -116,6 +117,20 @@ components:
     typography: "{typography.panel-title}"
     padding: "0 12px"
     height: "30px"
+  map-node:
+    backgroundColor: "{colors.panel-raised}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.sm}"
+    padding: "0 8px"
+    height: "34px"
+  map-node-compact:
+    height: "26px"
+  map-node-selected:
+    backgroundColor: "{colors.override-dim}"
+    textColor: "{colors.ink}"
+  map-field:
+    backgroundColor: "{colors.panel}"
   service-row:
     textColor: "{colors.ink}"
     typography: "{typography.body}"
@@ -156,20 +171,20 @@ A cor não decora nada. Azul, âmbar, vermelho e verde são quatro estados com s
 Grafite frio em três degraus de superfície, tinta em três degraus de contraste e quatro cores de estado que só aparecem quando há algo a dizer.
 
 ### Primary
-- **Azul de Seleção** (`override`): tudo o que está selecionado, aberto ou sob override: serviço selecionado na lista, destino filtrado, linha aberta no tráfego, botão de cadastro com o formulário aberto, interruptor ligado, filtro ativo, anel de foco e cursor. Sua versão translúcida (`override-dim`) é o fundo de seleção, de texto selecionado e do brilho de chegada.
+- **Azul de Seleção** (`override`): tudo o que está selecionado, aberto ou sob override: serviço selecionado no mapa ou na lista, nó de serviço com regra ativa, caminho aceso no mapa, destino filtrado, linha aberta no tráfego, botão de cadastro com o formulário aberto, interruptor ligado, filtro ativo, anel de foco e cursor. Sua versão translúcida (`override-dim`) é o fundo de seleção, de texto selecionado e do brilho de chegada.
 
 ### Secondary
-- **Âmbar de Injeção** (`injected`): tempo e atrasos injetados pelo gateway: o segmento do waterfall, a etiqueta de atraso, o selo e o medidor da regra de atraso na lista de serviços e o trilho do controle de latência.
+- **Âmbar de Injeção** (`injected`): tempo e atrasos injetados pelo gateway: o segmento do waterfall, a etiqueta de atraso, o selo e o medidor da regra de atraso no mapa e na lista de serviços e o trilho do controle de latência.
 
 ### Tertiary
-- **Vermelho de Queda** (`fault`): o que o gateway derrubou ou sintetizou, e destino fora do ar: etiquetas, selo e medidor da regra, ponto e palavra "fora" no destino, status sintetizado. `fault-dim` tinge a barra superior inteira quando a conexão com o painel cai e o fundo da marca de status no estreito.
+- **Vermelho de Queda** (`fault`): o que o gateway derrubou ou sintetizou, e destino fora do ar: etiquetas, selo e medidor da regra, ponto, contorno e palavra "fora" no destino, ligação tracejada até ele no mapa, status sintetizado. `fault-dim` tinge a barra superior inteira quando a conexão com o painel cai e o fundo da marca de status no estreito.
 - **Verde Saudável** (`healthy`): somente o ponto de estado de destino no ar e de conexão saudável. Nunca preenche áreas.
 
 ### Neutral
 - **Chão Grafite** (`ground`): o fundo sob tudo, e o miolo recuado de campos, blocos de código e trilhos do waterfall.
 - **Painel** (`panel`): a superfície de cada painel fixo, da barra superior e dos cabeçalhos colantes.
 - **Painel Elevado** (`panel-raised`): botões, hover de linha, avisos de estado e rascunhos.
-- **Costura** (`seam`): as linhas de 1px entre painéis, linhas de tabela, divisões de seção. **Costura Forte** (`seam-strong`): contornos de controles, trilho do medidor de regra, barra de rolagem.
+- **Costura** (`seam`): as linhas de 1px entre painéis, linhas de tabela, divisões de seção. **Costura Forte** (`seam-strong`): contornos de controles e dos nós do mapa, ligações do mapa, trilho do medidor de regra, barra de rolagem. **Ponto da Grade** (`grid-dot`): a grade de pontos de 1px do campo do mapa, a cada 12px; textura, não estado.
 - **Tinta** (`ink`), **Tinta 2** (`ink-2`), **Tinta 3** (`ink-3`): texto primário, secundário (títulos de painel) e terciário (rótulos, metadados, gutter). `ink-3` é o piso: mantém 4.5:1 sobre `panel`, e nada legível fica abaixo dele.
 - **Tinta Plena** (`ink-bright`): só o hover de elementos já em tinta (botão principal, polegar do controle contínuo, link da barra). Hoje está literal no CSS; ao mexer, promova a variável.
 - **Tempo do Destino** (`time-upstream`) e **Tempo do Gateway** (`time-gateway`): os segmentos neutros do waterfall, para que só o âmbar injetado salte.
@@ -179,7 +194,7 @@ Grafite frio em três degraus de superfície, tinta em três degraus de contrast
 
 **A Regra do Vermelho do Tráfego.** Vermelho é o que o gateway fez com o tráfego (queda, sintetizado) ou destino fora do ar. Erro vindo do destino é tinta com sublinhado pontilhado; erro do próprio gateway é `ink-2`. Nenhum dos dois rouba o vermelho.
 
-**A Regra do Recuo por Tom.** Fora da seleção, o que recua perde cor de estado e desce para `panel`, `seam` e `ink-3`, sem cair abaixo do contraste legível. Opacidade só é usada no ponto de estado de um serviço recuado (0.6) e em controles desabilitados (0.5).
+**A Regra do Recuo por Tom.** Fora da seleção, o que recua perde cor de estado e desce para `panel`, `seam` e `ink-3`, sem cair abaixo do contraste legível. Opacidade só é usada no ponto de estado de um serviço recuado (0.6), nas ligações recuadas do mapa (0.3) e em controles desabilitados (0.5).
 
 ## Typography
 
@@ -191,7 +206,7 @@ Grafite frio em três degraus de superfície, tinta em três degraus de contrast
 
 ### Hierarchy
 - **Título de painel** (600, 15px em versalete, espaçamento 0.1em, `ink-2`): o nome de cada painel no cabeçalho de 30px, as abas e os títulos de seção dentro do painel do serviço. Versalete encolhe para a altura-x, por isso o tamanho nominal é 15px.
-- **Rótulo** (600 ou 400, 15px em versalete, espaçamento 0.08em, `ink-3`): cabeçalhos de coluna do tráfego e da lista de serviços, rótulos da barra superior e dos filtros, grupos de formulário. Sempre rotula o controle ou dado ao lado dele.
+- **Rótulo** (600 ou 400, 15px em versalete, espaçamento 0.08em, `ink-3`): cabeçalhos de coluna do tráfego, do mapa e da lista de serviços, rótulos da barra superior e dos filtros, grupos de formulário. Sempre rotula o controle ou dado ao lado dele.
 - **Título** (600, 15px): o nome da regra e, em mono, a requisição e o status no detalhe da troca.
 - **Corpo** (400, 13px, 1.4): todo o texto de interface. Textos corridos de estado e aviso param em 62 a 64ch.
 - **Dado** (400, 12px mono, tabular e zero cortado): métodos, paths, status, durações, probabilidades, portas, etiquetas e campos numéricos.
@@ -205,11 +220,11 @@ Grafite frio em três degraus de superfície, tinta em três degraus de contrast
 
 ## Layout
 
-O console ocupa a viewport inteira sem rolagem de página: uma barra de 30px e, abaixo, duas colunas em 3fr/2fr (60/40). A coluna esquerda empilha a lista de serviços (até metade da altura, ajustada ao que mostra, e dali em diante rola) e tráfego (o resto); a direita é inteira do serviço selecionado ou do cadastro de um novo, do processo ou do detalhe da troca. O YAML nunca aparece na tela. Os painéis se separam por `gap: 1px` sobre o fundo `seam`, e cada corpo de painel rola sozinho.
+O console ocupa a viewport inteira sem rolagem de página: uma barra de 30px e, abaixo, duas colunas em 3fr/2fr (60/40). A coluna esquerda empilha o painel de serviços, em mapa ou lista (até metade da altura, ajustada ao que mostra, e dali em diante rola) e tráfego (o resto); a direita é inteira do serviço selecionado ou do cadastro de um novo, do processo ou do detalhe da troca. O YAML nunca aparece na tela. Os painéis se separam por `gap: 1px` sobre o fundo `seam`, e cada corpo de painel rola sozinho.
 
 O ritmo usa a escala de 2, 4, 8, 12 e 16px. Recuo lateral de painel é 12px; controles e células usam 8px; seções dentro de um painel se separam por 16px e uma costura. Linhas de formulário são grade de rótulo de 108px e controle; configurações do processo são grade de rótulo, controle e origem.
 
-Abaixo de 900px os painéis empilham e a página rola; só as listas de tráfego (até 70vh) e de serviços (até 45vh) mantêm rolagem própria. Abaixo de 640px a lista de serviços perde a coluna de entrada e o resumo do cabeçalho, o tráfego perde as colunas de hora, serviço e intervenção, e o status sintetizado ganha uma caixa para não depender só da cor.
+Abaixo de 900px os painéis empilham e a página rola; só o tráfego (até 70vh) e o painel de serviços (até 45vh) mantêm rolagem própria. Abaixo de 640px o painel de serviços perde o resumo do cabeçalho, o mapa reduz seu app e destinos à porta e tira a entrada dos nós, a lista perde a coluna de entrada, o tráfego perde as colunas de hora, serviço e intervenção, e o status sintetizado ganha uma caixa para não depender só da cor.
 
 ## Elevation & Depth
 
@@ -224,7 +239,7 @@ O sistema é plano. A profundidade vem de três tons de superfície (`ground` < 
 
 Quase tudo é retangular com cantos de 2px: botões, campos, chips, blocos de código, rascunhos. As exceções têm função: o ponto de estado é círculo de 7px, o interruptor é pílula (raio 8px) com botão circular, e o polegar do controle contínuo é uma barra vertical de 8×16px com canto de 1px sobre trilho de 2px.
 
-O traço carrega significado. Contínuo é o normal; tracejado quer dizer "não é seu para mudar agora" ou "incompleto": campo travado pelo ambiente, seletor travado, procedência aprendida ou derivada, corpo cortado na captura. Pontilhado sob texto marca erro do destino.
+O traço carrega significado. Contínuo é o normal; tracejado quer dizer "não é seu para mudar agora" ou "incompleto": campo travado pelo ambiente, seletor travado, procedência aprendida ou derivada, corpo cortado na captura, ligação do mapa até um destino fora do ar (vermelha). Pontilhado sob texto marca erro do destino.
 
 ## Components
 
@@ -257,12 +272,18 @@ O console não tem cards. Os contêineres são o **painel** (fundo `panel`, cabe
 ### Navigation
 Não há navegação de páginas nem sidebar. A barra superior de 30px leva o nome em mono 600, itens separados por costura vertical com rótulos em versalete e pontos de estado, e um espaçador empurra histórico e aprendizado para a direita. Desconectada, a barra inteira recebe o véu `fault-dim`. As abas do painel de controles são rótulos em versalete: ativa em `ink` com traço de 1px colado à costura do cabeçalho.
 
-### Lista de serviços (assinatura)
-O modelo mental do dev, uma linha por serviço: seu app chama a **entrada**, o gateway redireciona ao **destino** e aplica as **regras**. O cabeçalho do painel leva "serviços" com a contagem em mono (ou "12 de 54" com busca), o resumo de regras ativas e destinos fora, e, fixos à direita, o campo de busca (`/`, filtra por nome, entrada e destino) e o botão "+ serviço" (`n`), que abre o cadastro no painel ao lado com ou sem seleção.
+### Painel de serviços (assinatura)
+O modelo mental do dev: seu app chama a **entrada**, o gateway redireciona ao **destino** e aplica as **regras**. O cabeçalho do painel leva "serviços" com a contagem em mono (ou "12 de 54" com busca), o resumo de regras ativas e destinos fora, e, fixos à direita, a chave segmentada "mapa | lista" (a escolha fica guardada no navegador; o padrão é o mapa), o campo de busca (`/`, filtra por nome, entrada e destino nas duas visões) e o botão "+ serviço" (`n`), que abre o cadastro no painel ao lado com ou sem seleção, em qualquer visão.
 
-Cada linha tem 26px, costura embaixo e colunas alinhadas sem tabela: ponto de estado do destino (verde no ar, vermelho fora, anel vazio sem tentativas), nome em 600, entrada em mono `ink-2` ("qualquer" em `ink-3` quando não casa host nem path), "→ destino" em mono (host:porta; "sem destino" em sans `ink-3`), com a palavra "fora" em vermelho quando o destino recusa conexões, e o selo da regra ativa alinhado à direita ("402 · 100%", "+2s · 100%", "queda · 50%", "+2" para as demais), na cor do efeito, sobre um medidor de 2px com trilho `seam-strong` e a fração aplicada. O cabeçalho de colunas é colante e opaco.
+**Mapa (visão padrão).** Três colunas, "seu app", "serviços" e "destinos", com cabeçalho colante e opaco em versalete, sobre o campo com a grade de pontos de 1px (`grid-dot` a cada 12px). Entre as colunas, faixas de SVG com curvas de 1px em `seam-strong`: seu app liga a cada serviço, cada serviço liga ao seu destino. As curvas moram só nas faixas, então nunca passam sobre um rótulo. Nós são retângulos de 2px com contorno `seam-strong` sobre `panel-raised`: 34px de altura com 8px de folga até oito serviços, 26px com 4px acima disso. Seu app mostra a porta de tráfego em mono; o serviço mostra o nome em 600 e a entrada em mono `ink-2` ("qualquer" e "sem destino" em `ink-3`); o destino mostra o ponto de estado, host:porta em mono e a saúde à direita ("no ar", "fora", "sem tentativas", "2/5 falhas"). Cada destino fica na altura média dos serviços que apontam para ele, sem colidir com o vizinho.
 
-Selecionar é o mesmo gesto do tráfego: fundo `override-dim` e traços azuis de 1px acima e abaixo. O destino é um botão próprio que filtra o tráfego por ele; filtrado, ganha contorno azul e os serviços que não vão para ele recuam para `ink-3`. Setas percorrem a coluna, → e ← alternam entre serviço e destino, Enter seleciona, Esc limpa. A lista rola sozinha e não sobrepõe nada com 50 ou mais serviços.
+Regra ativa: contorno azul no nó do serviço, o selo à direita ("402 · 100%", "+2s · 30%", "+2" para as demais) na cor do efeito e um medidor de 2px na base do nó com a fração aplicada. Destino fora do ar: contorno e palavra "fora" em vermelho, e as ligações até ele em vermelho tracejado (3/3), porque ali o caminho está incompleto. Selecionar um serviço ou um destino acende o caminho em azul (nó em `override-dim` com contorno azul, curvas azuis) e recua o resto pelo tom: nós em `panel`/`seam`/`ink-3`, curvas a 30% de opacidade. Setas percorrem a coluna, → vai do serviço ao seu destino, ← volta ao primeiro serviço dele, Enter seleciona, Esc limpa.
+
+Escala: com 50 ou mais serviços, a coluna de serviços rola dentro do painel e seu app e os destinos acompanham a janela visível como cabeçalhos colantes: ficam na altura natural enquanto ela está à vista e se prendem à borda da janela quando sairiam dela, mantendo ordem e espaçamento. Só os serviços à vista ganham curvas, então o feixe nunca atravessa a área visível rumo a nós escondidos. Abaixo de 640px, seu app vira só a porta, o serviço perde a entrada, o destino vira a porta (":9001") e a saúde some, menos "fora", que fica em texto.
+
+**Lista (visão alternativa).** Uma linha por serviço, com 26px, costura embaixo e colunas alinhadas sem tabela: ponto de estado do destino (verde no ar, vermelho fora, anel vazio sem tentativas), nome em 600, entrada em mono `ink-2` ("qualquer" em `ink-3` quando não casa host nem path), "→ destino" em mono (host:porta; "sem destino" em sans `ink-3`), com a palavra "fora" em vermelho quando o destino recusa conexões, e o selo da regra ativa alinhado à direita, na cor do efeito, sobre um medidor de 2px com trilho `seam-strong` e a fração aplicada. O cabeçalho de colunas é colante e opaco.
+
+Selecionar na lista é o mesmo gesto do tráfego: fundo `override-dim` e traços azuis de 1px acima e abaixo. O destino é um botão próprio que filtra o tráfego por ele; filtrado, ganha contorno azul e os serviços que não vão para ele recuam para `ink-3`. Setas percorrem a coluna, → e ← alternam entre serviço e destino, Enter seleciona, Esc limpa. A lista rola sozinha e não sobrepõe nada com 50 ou mais serviços.
 
 ### Tráfego com waterfall (assinatura)
 Tabela de linhas de 26px com cabeçalho colante em versalete e costura entre linhas. Hover em `panel-raised`, linha aberta em `override-dim` com traços azuis acima e abaixo. Cada linha termina num waterfall de 8px: destino em `time-upstream`, injetado em âmbar, gateway em `time-gateway`. No detalhe, o waterfall vira faixas de 12px sobre trilho `ground` com eixo e marcas mono de 11px.

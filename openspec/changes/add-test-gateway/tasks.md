@@ -74,7 +74,7 @@
 ## 8. Interface web
 
 - [x] 8.1 Montar o projeto Vite com React e TypeScript, o cliente da API e o build para `web/dist`, e verificar que o binário construído serve a interface na porta de administração sem acesso à rede externa, conforme os dois cenários da requirement de interface servida pelo próprio binário
-- [x] 8.2 Implementar a lista de serviços (entrada → destino) com busca para 50+ serviços, "+ serviço" sempre visível, destaque de regra ativa, sinalização de destino indisponível e filtragem por seleção de serviço ou destino, e verificar pelos seis cenários da requirement de lista de serviços
+- [x] 8.2 Implementar o painel de serviços em duas visões, o mapa (seu app → serviços → destinos, ligados; visão padrão) e a lista (entrada → destino), com a escolha lembrada entre sessões, busca e "+ serviço" sempre visíveis nas duas, escala a 50+ serviços, destaque de regra ativa, sinalização de destino indisponível e filtragem por seleção de serviço ou destino, e verificar pelos oito cenários da requirement de serviços em mapa e lista
 - [x] 8.3 Implementar os controles contínuos do override aplicados imediatamente, com restante de tempo e de aplicações e desligamento em um gesto, e verificar pelos três cenários da requirement de controle direto
 - [x] 8.4 Implementar a lista e o detalhe de tráfego com waterfall separando tempo de upstream e tempo injetado, sinalização de intervenção, navegação item a item e exibição de corpos truncados, e verificar pelos quatro cenários da requirement de inspeção com waterfall
 - [x] 8.5 Implementar a indicação de histórico desabilitado distinta de histórico vazio, e verificar pelos dois cenários da requirement correspondente

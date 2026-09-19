@@ -1,18 +1,30 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { RouteResource, UpstreamHealth } from "../api";
 import type { Load } from "../hooks";
 import { useNow } from "../hooks";
 import { percent } from "../format";
 import type { Selection } from "../selection";
-import { destinationText, entryText, hasTicking, healthText, routeIntervention, type RouteIntervention } from "../services";
+import {
+  destinationText,
+  filterRows,
+  hasTicking,
+  healthText,
+  searchTerms,
+  serviceRows,
+  type ServiceRow,
+} from "../services";
 import { useStale } from "../live";
+import { Segmented } from "./Controls";
 import { PlusIcon } from "./Icons";
 import { Panel } from "./Panel";
+import { ServiceMap } from "./ServiceMap";
 import { Empty, Failure, Loading } from "./States";
 
 interface ServicesPanelProps {
   routes: Load<RouteResource[]>;
   upstreams: Load<UpstreamHealth[]>;
+  /** Porta de tráfego, mostrada no nó "seu app" do mapa. */
+  trafficPort: number | undefined;
   selection: Selection;
   onSelect: (s: Selection) => void;
   onRetry: () => void;
@@ -21,16 +33,21 @@ interface ServicesPanelProps {
   onCreate: () => void;
 }
 
-interface ServiceRow {
-  res: RouteResource;
-  name: string;
-  entry: string;
-  upstream: string | undefined;
-  status: UpstreamHealth["status"];
-  health: UpstreamHealth | undefined;
-  intervention: RouteIntervention | null;
-  /** Texto em minúsculas onde a busca procura: nome, entrada e destino. */
-  haystack: string;
+export type ServicesView = "map" | "list";
+
+const VIEW_KEY = "gateway.painel.servicos";
+const VIEW_OPTIONS: { value: ServicesView; label: string }[] = [
+  { value: "map", label: "mapa" },
+  { value: "list", label: "lista" },
+];
+
+/** A visão lembrada entre sessões; o mapa é o padrão. */
+function readView(): ServicesView {
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === "list" ? "list" : "map";
+  } catch {
+    return "map";
+  }
 }
 
 /** Fora de campos de texto e de diálogos: onde os atalhos de uma tecla valem. */
@@ -41,19 +58,40 @@ function isTyping(t: EventTarget | null): boolean {
 }
 
 /**
- * A lista de serviços: cada linha é uma rota, com a entrada pela qual o app
- * chama o gateway, o destino para onde ele redireciona e a regra que está
- * intervindo agora. Busca e cadastro ficam fixos no alto.
+ * Os serviços: cada um é uma rota, com a entrada pela qual o app chama o
+ * gateway, o destino para onde ele redireciona e a regra que está intervindo
+ * agora. Duas visões do mesmo conjunto: o mapa (seu app → serviços →
+ * destinos, o padrão) e a lista densa. Busca e cadastro ficam fixos no alto
+ * e valem para as duas.
  */
-export function ServicesPanel({ routes, upstreams, selection, onSelect, onRetry, creating, onCreate }: ServicesPanelProps) {
+export function ServicesPanel({
+  routes,
+  upstreams,
+  trafficPort,
+  selection,
+  onSelect,
+  onRetry,
+  creating,
+  onCreate,
+}: ServicesPanelProps) {
   const [query, setQuery] = useState("");
+  const [view, setViewRaw] = useState<ServicesView>(readView);
   const searchRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const data = routes.kind === "ready" ? routes.data : null;
   // Instante em que o estado vivo chegou: base da conta local do TTL.
   const at = useMemo(() => Date.now(), [data]);
   const now = useNow(data ? hasTicking(data) : false);
   const stale = useStale();
+
+  const setView = useCallback((v: ServicesView) => {
+    setViewRaw(v);
+    try {
+      window.localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // Sem armazenamento, a escolha vale só para esta aba.
+    }
+  }, []);
 
   // "/" leva à busca e "n" abre o cadastro, de qualquer ponto fora de campos.
   useEffect(() => {
@@ -73,37 +111,9 @@ export function ServicesPanel({ routes, upstreams, selection, onSelect, onRetry,
   }, [onCreate]);
 
   const health = upstreams.kind === "ready" ? upstreams.data : [];
-  const rows: ServiceRow[] = useMemo(() => {
-    if (!data) return [];
-    const byUrl = new Map(health.map((h) => [h.upstream, h]));
-    return data.map((res) => {
-      const upstream = res.route.upstream || undefined;
-      const h = upstream ? byUrl.get(upstream) : undefined;
-      const entry = entryText(res);
-      return {
-        res,
-        name: res.route.name,
-        entry,
-        upstream,
-        status: h?.status ?? "unknown",
-        health: h,
-        intervention: routeIntervention(res, now, at),
-        haystack: [res.route.name, entry, upstream ?? ""].join(" ").toLowerCase(),
-      };
-    });
-  }, [data, health, now, at]);
-
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const shown = terms.length ? rows.filter((r) => terms.every((t) => r.haystack.includes(t))) : rows;
-
-  // A linha selecionada (por clique, link ou cadastro) fica à vista na lista.
-  const selKey = selection ? `${selection.kind}:${selection.name}` : "";
-  useEffect(() => {
-    if (selection?.kind !== "route") return;
-    const li = [...(listRef.current?.children ?? [])].find((el) => (el as HTMLElement).dataset.name === selection.name);
-    li?.scrollIntoView({ block: "nearest" });
-    // A lista só precisa rolar quando a seleção muda ou quando a linha aparece.
-  }, [selKey, shown.length]);
+  const rows: ServiceRow[] = useMemo(() => (data ? serviceRows(data, health, now, at) : []), [data, health, now, at]);
+  const terms = searchTerms(query);
+  const shown = filterRows(rows, terms);
 
   let sub;
   let body;
@@ -132,54 +142,31 @@ export function ServicesPanel({ routes, upstreams, selection, onSelect, onRetry,
         </span>
       </>
     );
-    body = (
-      <div className="svc">
-        {upstreams.kind === "error" ? (
-          <p className="notice notice--state svc__notice">
-            Estado dos destinos desconhecido: <span className="mono">GET /api/upstreams</span> respondeu{" "}
-            <span className="mono">{upstreams.error.code}</span>.
+    const notice =
+      upstreams.kind === "error" ? (
+        <p className="notice notice--state svc__notice">
+          Estado dos destinos desconhecido: <span className="mono">GET /api/upstreams</span> respondeu{" "}
+          <span className="mono">{upstreams.error.code}</span>.
+        </p>
+      ) : null;
+    const none =
+      shown.length === 0 ? (
+        <Empty title={`Nenhum serviço com “${query.trim()}”`}>
+          <p>
+            A busca olha o nome, a entrada e o destino.{" "}
+            <button type="button" className="link-button" onClick={() => setQuery("")}>
+              Limpar a busca
+            </button>
           </p>
-        ) : null}
-        <div className="svc__head" aria-hidden="true">
-          <span className="svc__main">
-            <span />
-            <span>serviço</span>
-            <span className="svc__entry">entrada</span>
-          </span>
-          <span>destino</span>
-          <span className="svc__rulehead">regra</span>
-        </div>
-        {shown.length === 0 ? (
-          <Empty title={`Nenhum serviço com “${query.trim()}”`}>
-            <p>
-              A busca olha o nome, a entrada e o destino.{" "}
-              <button type="button" className="link-button" onClick={() => setQuery("")}>
-                Limpar a busca
-              </button>
-            </p>
-          </Empty>
+        </Empty>
+      ) : null;
+    body = (
+      <div className={view === "map" ? "svc svc--map" : "svc"} ref={bodyRef}>
+        {notice}
+        {view === "map" ? (
+          (none ?? <ServiceMap rows={shown} trafficPort={trafficPort} selection={selection} stale={stale} onSelect={onSelect} />)
         ) : (
-          <ul
-            ref={listRef}
-            className="svc__list"
-            aria-label="Serviços. Setas para percorrer, Enter para selecionar, seta para a direita vai ao destino, Esc limpa a seleção."
-            onKeyDown={onArrowKeys}
-          >
-            {shown.map((r, i) => (
-              <Row
-                key={r.name}
-                row={r}
-                tabbable={
-                  selection?.kind === "route"
-                    ? r.name === selection.name || (i === 0 && !shown.some((x) => x.name === selection.name))
-                    : i === 0
-                }
-                selection={selection}
-                stale={stale}
-                onSelect={onSelect}
-              />
-            ))}
-          </ul>
+          <ServiceList rows={shown} none={none} selection={selection} stale={stale} onSelect={onSelect} />
         )}
       </div>
     );
@@ -187,6 +174,7 @@ export function ServicesPanel({ routes, upstreams, selection, onSelect, onRetry,
 
   const tools = (
     <>
+      <Segmented<ServicesView> value={view} options={VIEW_OPTIONS} onChange={setView} label="Visão dos serviços" />
       <span className="search">
         <input
           ref={searchRef}
@@ -207,7 +195,7 @@ export function ServicesPanel({ routes, upstreams, selection, onSelect, onRetry,
               e.currentTarget.blur();
             } else if (e.key === "ArrowDown") {
               e.preventDefault();
-              listRef.current?.querySelector<HTMLElement>("[data-col=main]")?.focus();
+              bodyRef.current?.querySelector<HTMLElement>("[data-col=main], [data-map-col=route]")?.focus();
             } else if (e.key === "Enter" && shown[0] && terms.length) {
               e.preventDefault();
               onSelect({ kind: "route", name: shown[0].name });
@@ -232,6 +220,69 @@ export function ServicesPanel({ routes, upstreams, selection, onSelect, onRetry,
     <Panel id="services" title="serviços" sub={sub} tools={tools}>
       {body}
     </Panel>
+  );
+}
+
+/** A visão em lista: uma linha por serviço, com colunas alinhadas. */
+function ServiceList({
+  rows: shown,
+  none,
+  selection,
+  stale,
+  onSelect,
+}: {
+  rows: ServiceRow[];
+  none: ReactNode;
+  selection: Selection;
+  stale: boolean;
+  onSelect: (s: Selection) => void;
+}) {
+  const listRef = useRef<HTMLUListElement>(null);
+
+  // A linha selecionada (por clique, link ou cadastro) fica à vista na lista.
+  const selKey = selection ? `${selection.kind}:${selection.name}` : "";
+  useEffect(() => {
+    if (selection?.kind !== "route") return;
+    const li = [...(listRef.current?.children ?? [])].find((el) => (el as HTMLElement).dataset.name === selection.name);
+    li?.scrollIntoView({ block: "nearest" });
+    // A lista só precisa rolar quando a seleção muda ou quando a linha aparece.
+  }, [selKey, shown.length]);
+
+  return (
+    <>
+      <div className="svc__head" aria-hidden="true">
+        <span className="svc__main">
+          <span />
+          <span>serviço</span>
+          <span className="svc__entry">entrada</span>
+        </span>
+        <span>destino</span>
+        <span className="svc__rulehead">regra</span>
+      </div>
+      {none ?? (
+        <ul
+          ref={listRef}
+          className="svc__list"
+          aria-label="Serviços. Setas para percorrer, Enter para selecionar, seta para a direita vai ao destino, Esc limpa a seleção."
+          onKeyDown={onArrowKeys}
+        >
+          {shown.map((r, i) => (
+            <Row
+              key={r.name}
+              row={r}
+              tabbable={
+                selection?.kind === "route"
+                  ? r.name === selection.name || (i === 0 && !shown.some((x) => x.name === selection.name))
+                  : i === 0
+              }
+              selection={selection}
+              stale={stale}
+              onSelect={onSelect}
+            />
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 

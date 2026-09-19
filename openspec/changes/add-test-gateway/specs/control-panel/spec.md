@@ -18,23 +18,33 @@ O gateway SHALL servir a interface web a partir do próprio executável, na port
 - **WHEN** a interface é aberta com rotas e overrides já configurados
 - **THEN** ela exibe essas rotas e overrides sem exigir nenhuma ação de sincronização
 
-### Requirement: Lista de serviços
+### Requirement: Serviços em mapa e lista
 
-A interface SHALL apresentar a configuração como uma lista de serviços, em que cada serviço corresponde a uma rota e mostra seu nome, a entrada (o casamento de host e path pelo qual o app chama o gateway) e o destino (o upstream para onde o gateway redireciona). A lista MUST continuar legível e operável com ao menos 50 serviços, com busca por nome, entrada ou destino. A ação de cadastrar um novo serviço MUST estar sempre visível, qualquer que seja a seleção. Serviços com regra ativa MUST ser visualmente distinguíveis dos demais, e selecionar um serviço ou um destino MUST filtrar a inspeção de tráfego para ele.
+A interface SHALL apresentar a configuração em duas visões do mesmo conjunto de serviços, em que cada serviço corresponde a uma rota e mostra seu nome, a entrada (o casamento de host e path pelo qual o app chama o gateway) e o destino (o upstream para onde o gateway redireciona). A visão padrão MUST ser o mapa, com o seu app, os serviços e os destinos em colunas ligadas; a lista densa MUST estar disponível como visão alternativa, e a escolha entre elas MUST ser lembrada entre sessões. A busca por nome, entrada ou destino e a ação de cadastrar um novo serviço MUST valer nas duas visões e estar sempre visíveis, qualquer que seja a seleção. As duas visões MUST continuar legíveis e operáveis com ao menos 50 serviços. Serviços com regra ativa MUST ser visualmente distinguíveis dos demais, e selecionar um serviço ou um destino MUST filtrar a inspeção de tráfego para ele.
 
-#### Scenario: Serviços listados com entrada e destino
+#### Scenario: Topologia exibida
 
-- **WHEN** existem três serviços apontando para dois destinos
-- **THEN** a lista exibe os três serviços, cada um com sua entrada e seu destino
+- **WHEN** existem três serviços apontando para dois destinos e o painel é aberto pela primeira vez
+- **THEN** o mapa exibe o seu app ligado aos três serviços, cada serviço com sua entrada e ligado ao seu destino, e os dois destinos, um para cada grupo de serviços
+
+#### Scenario: Lista como visão alternativa
+
+- **WHEN** a visão em lista é escolhida e o painel é recarregado
+- **THEN** a lista exibe os mesmos serviços, cada um com sua entrada e seu destino, e continua sendo a visão exibida
 
 #### Scenario: Muitos serviços
 
+- **WHEN** existem 50 serviços
+- **THEN** o mapa e a lista os exibem sem sobreposição nem perda de legibilidade, com a coluna de serviços rolando dentro do painel e o seu app e os destinos ligados aos serviços à vista
+
+#### Scenario: Busca nas duas visões
+
 - **WHEN** existem 50 serviços e o nome de um deles é digitado na busca
-- **THEN** a lista passa a mostrar só os serviços que casam com o texto, sem sobreposição nem perda de legibilidade
+- **THEN** a visão exibida passa a mostrar só os serviços que casam com o texto e, no mapa, só os destinos deles
 
 #### Scenario: Novo serviço sempre alcançável
 
-- **WHEN** um serviço está selecionado
+- **WHEN** um serviço está selecionado, no mapa ou na lista
 - **THEN** a ação de cadastrar um novo serviço continua visível e abre o cadastro sem exigir desfazer a seleção
 
 #### Scenario: Serviço com regra ativa é destacado
@@ -44,13 +54,13 @@ A interface SHALL apresentar a configuração como uma lista de serviços, em qu
 
 #### Scenario: Seleção filtra o tráfego
 
-- **WHEN** um serviço é selecionado na lista
-- **THEN** a inspeção de tráfego passa a exibir somente as trocas desse serviço
+- **WHEN** um serviço é selecionado no mapa ou na lista
+- **THEN** a inspeção de tráfego passa a exibir somente as trocas desse serviço, e o mapa recua o que não pertence ao caminho selecionado
 
 #### Scenario: Destino indisponível é sinalizado
 
 - **WHEN** um destino vem recusando conexões nas requisições recentes
-- **THEN** a lista sinaliza o destino dos serviços afetados como indisponível
+- **THEN** o mapa sinaliza o destino e as ligações até ele como indisponíveis, e a lista sinaliza o destino dos serviços afetados
 
 ### Requirement: Vocabulário do usuário
 
@@ -64,7 +74,7 @@ A interface SHALL nomear os conceitos pelo que o desenvolvedor reconhece, e não
 
 ### Requirement: Controle direto do override na rota
 
-A interface SHALL permitir ajustar probabilidade, latência e queda de conexão diretamente sobre o override, no painel do serviço selecionado na lista, por controle contínuo, aplicando a alteração imediatamente, sem etapa separada de confirmação ou salvamento. Quando o override possui tempo de vida ou limite de aplicações, a interface MUST exibir o restante de cada um.
+A interface SHALL permitir ajustar probabilidade, latência e queda de conexão diretamente sobre o override, no painel do serviço selecionado no mapa ou na lista, por controle contínuo, aplicando a alteração imediatamente, sem etapa separada de confirmação ou salvamento. Quando o override possui tempo de vida ou limite de aplicações, a interface MUST exibir o restante de cada um.
 
 #### Scenario: Ajuste aplicado imediatamente
 

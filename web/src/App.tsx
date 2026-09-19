@@ -82,7 +82,7 @@ export function App() {
     }
   }, []);
 
-  // Selecionar um serviço na lista traz os controles dele para a frente e
+  // Selecionar um serviço no mapa ou na lista traz os controles dele para a frente e
   // fecha o cadastro que estivesse aberto.
   const setSelection = useCallback(
     (s: Selection) => {
@@ -180,7 +180,7 @@ export function App() {
     },
     [reloadRoutes, setSelection],
   );
-  // Seletor de serviço da lista de tráfego: filtra como a lista de serviços, sem trocar a aba do detalhe.
+  // Seletor de serviço da lista de tráfego: filtra como o painel de serviços, sem trocar a aba do detalhe.
   const filterRoute = useCallback(
     (name: string | null) => setSelectionRaw(name ? { kind: "route", name } : null),
     [setSelectionRaw],
@@ -221,6 +221,7 @@ export function App() {
           <ServicesPanel
             routes={routes}
             upstreams={upstreams}
+            trafficPort={status.kind === "ready" ? status.data.ports.traffic : undefined}
             selection={selection}
             onSelect={setSelection}
             onRetry={reloadRoutes}

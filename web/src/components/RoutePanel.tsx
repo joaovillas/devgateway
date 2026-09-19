@@ -60,7 +60,7 @@ interface RoutePanelProps {
 }
 
 /**
- * Painel de detalhe, na coluna direita: o serviço selecionado na lista
+ * Painel de detalhe, na coluna direita: o serviço selecionado no painel de serviços
  * (regras e campos da rota) ou o cadastro de um novo, o processo
  * (gateway.json) ou a troca aberta no tráfego.
  */
@@ -238,7 +238,7 @@ function RouteBody({
     return (
       <Empty title="Serviços indisponíveis">
         <p>
-          <span className="mono">GET /api/routes</span> falhou ({routes.error.code}). O detalhe está na lista de
+          <span className="mono">GET /api/routes</span> falhou ({routes.error.code}). O detalhe está no painel de
           serviços.{" "}
           <button type="button" className="link-button" onClick={onRetry}>
             Tentar de novo
@@ -276,7 +276,7 @@ function RouteBody({
     return (
       <div className="state">
         <p className="state__title">Nenhum serviço selecionado</p>
-        <p>Selecione um serviço na lista para ajustar as regras dele, ou cadastre um novo.</p>
+        <p>Selecione um serviço no mapa ou na lista para ajustar as regras dele, ou cadastre um novo.</p>
         <p>
           <button type="button" className="text-button" onClick={onCreate}>
             <PlusIcon /> serviço
