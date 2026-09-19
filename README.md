@@ -1,76 +1,99 @@
-# gateway
+# devgateway
 
-Gateway HTTP para ambientes de desenvolvimento. Fica na frente dos serviços que você roda localmente, encaminha o tráfego para cada um por path ou por host e deixa você **interferir nesse tráfego de propósito**: responder no lugar do serviço, falhar numa fração das chamadas, atrasar, derrubar a conexão. Tudo o que passa por ele fica registrado com o tempo decomposto entre o que o serviço levou e o que o gateway injetou.
+[![CI](https://github.com/gamerjp64/devgateway/actions/workflows/ci.yml/badge.svg)](https://github.com/gamerjp64/devgateway/actions/workflows/ci.yml)
 
-É um binário Go único, sem dependências em tempo de execução, com o painel web embutido.
+A configurable development gateway: put your services behind one port and inject failures on demand.
 
-- **Porta de tráfego** (padrão `8080`): onde o seu cliente fala. O gateway é transparente: método, path, query, corpo, cabeçalhos e `Host` seguem como chegaram. Ele só acrescenta os `X-Forwarded-*` e um cabeçalho próprio, `X-Gateway`.
-- **Porta de administração** (padrão `8081`): o painel web e a API REST que o painel usa. Tudo o que o painel faz tem um equivalente por `curl` em [`docs/api.md`](docs/api.md).
+devgateway sits in front of the services you run locally, routes traffic to each one by path or by host, and lets you **interfere with that traffic on purpose**: answer in place of a service, fail a fraction of the calls, add latency, drop the connection. Everything that goes through it is recorded, with the time split between what the service took and what the gateway injected.
 
-Sumário: [instalação](#instalação) · [primeiros passos](#primeiros-passos) · [`gateway.json`](#gatewayjson) · [documentos de rota](#documentos-de-rota) · [variáveis de ambiente](#variáveis-de-ambiente) · [o override](#o-override-mock-e-caos-são-a-mesma-coisa) · [modo aprendizado](#modo-aprendizado) · [reconfiguração a quente](#reconfiguração-a-quente) · [paridade](#paridade-entre-arquivo-api-e-painel) · [limites assumidos](#limites-assumidos) · [desenvolvimento](#desenvolvimento)
+It is a single Go binary, with no runtime dependencies and the web panel built in.
 
-## Instalação
+- **Traffic port** (`8080` by default): where your client talks. The gateway is transparent — method, path, query, body, headers and `Host` go through as they arrived. It only adds the `X-Forwarded-*` headers and one of its own, `X-Gateway`.
+- **Admin port** (`8081` by default): the web panel and the REST API the panel uses. Everything the panel does has a `curl` equivalent in [`docs/api.md`](docs/api.md).
 
-### Binário
+Contents: [why](#why-devgateway-exists) · [install](#install) · [quick start](#quick-start) · [`gateway.json`](#gatewayjson) · [route documents](#route-documents) · [environment variables](#environment-variables) · [the override](#the-override-mocking-and-chaos-are-the-same-thing) · [the panel](#the-panel) · [learning mode](#learning-mode) · [hot reconfiguration](#hot-reconfiguration) · [the API](#the-api) · [example environment](#example-environment) · [development](#development) · [assumed limits](#assumed-limits)
 
-Precisa de Go 1.26 e, para o painel, Node 24.
+## Why devgateway exists
 
-Na raiz de um clone do repositório:
+Mock servers such as MockServer and Smocker let you stand in for a service; chaos tools let you break one. Doing both usually means running two things, learning two vocabularies, and keeping two sets of rules in sync with the same endpoint.
+
+devgateway has a single concept, the **override**: a selection criterion, an optional declared response, and the modifiers `probability`, `latency`, `drop`, `ttl` and `maxApplications`. A mock is an override that always applies. Chaos is the same override with a probability. Slowness is the same override with no declared response. One rule, one document, one place to look.
+
+Two more consequences fall out of that:
+
+- **A route forwards by default.** You do not have to describe a whole service to intercept one endpoint of it. Everything you did not override still reaches the real upstream.
+- **Everything is a file.** Routes are YAML documents on disk; the process is a `gateway.json`. The API and the panel edit those same files, so what you tried by hand is what you commit.
+
+## Install
+
+### Binary
+
+Needs Go 1.26 and, for the panel, Node 24.
+
+From the root of a clone of the repository:
 
 ```sh
 make release
 ```
 
-`make release` constrói o painel (`web/dist`) e gera um binário estático (`CGO_ENABLED=0`) por plataforma em `dist/`:
+`make release` builds the panel (`web/dist`) and produces one static binary (`CGO_ENABLED=0`) per platform in `dist/`:
 
 ```text
-dist/gateway_<versão>_linux_amd64
-dist/gateway_<versão>_linux_arm64
-dist/gateway_<versão>_darwin_amd64
-dist/gateway_<versão>_darwin_arm64
-dist/gateway_<versão>_windows_amd64.exe
+dist/devgateway_<version>_linux_amd64
+dist/devgateway_<version>_linux_arm64
+dist/devgateway_<version>_darwin_amd64
+dist/devgateway_<version>_darwin_arm64
+dist/devgateway_<version>_windows_amd64.exe
 ```
 
-Copie o da sua plataforma para um diretório do `PATH` com o nome `gateway` (`gateway.exe` no Windows). Não há mais nada a instalar.
+Copy the one for your platform into a directory on your `PATH` as `devgateway` (`devgateway.exe` on Windows). There is nothing else to install.
 
-Sem `make` (no Windows, por exemplo), os mesmos passos à mão, só para a plataforma atual:
+Without `make` (on Windows, for instance), the same steps by hand, for the current platform only:
 
 ```sh
 cd web && npm ci && npm run build && cd ..
-CGO_ENABLED=0 go build -trimpath -o gateway ./cmd/gateway     # gateway.exe no Windows
+CGO_ENABLED=0 go build -trimpath -o devgateway ./cmd/devgateway     # devgateway.exe on Windows
 ```
 
-Sem Node, `go build ./cmd/gateway` também funciona: o binário sai com uma página provisória no lugar do painel, e a API e o proxy funcionam normalmente.
+Without Node, `go build ./cmd/devgateway` works too: the binary ships a placeholder page instead of the panel, and the API and the proxy work as usual.
+
+### `go install`
+
+```sh
+go install github.com/gamerjp64/devgateway/cmd/devgateway@latest
+```
+
+This builds from the module cache, which has no `web/dist` build in it, so the binary serves the placeholder page instead of the panel. The proxy, the API and learning mode are complete. For the panel, build from a clone as above or use the Docker image.
 
 ### Docker
 
-Na raiz de um clone do repositório:
+From the root of a clone of the repository:
 
 ```sh
-docker build -t gateway .
-docker run --rm -p 8080:8080 -p 8081:8081 gateway
+docker build -t devgateway .
+docker run --rm -p 8080:8080 -p 8081:8081 devgateway
 ```
 
-Assim ele sobe sem rotas; crie-as pelo painel em <http://localhost:8081> ou pela API. Para usar os seus arquivos, monte o diretório que contém `gateway.json` e `routes/` em `/data`:
+That starts with no routes; create them in the panel at <http://localhost:8081> or through the API. To use your own files, mount the directory holding `gateway.json` and `routes/` at `/data`:
 
 ```sh
-docker run --rm -p 8080:8080 -p 8081:8081 -v "$PWD:/data" gateway
+docker run --rm -p 8080:8080 -p 8081:8081 -v "$PWD:/data" devgateway
 ```
 
-No Git Bash do Windows, que reescreve caminhos passados a programas nativos, use `MSYS_NO_PATHCONV=1 docker run ... -v "$(pwd -W):/data" gateway`; no PowerShell, `-v "${PWD}:/data"`.
+In Git Bash on Windows, which rewrites paths passed to native programs, use `MSYS_NO_PATHCONV=1 docker run ... -v "$(pwd -W):/data" devgateway`; in PowerShell, `-v "${PWD}:/data"`.
 
-O `Dockerfile` constrói o painel com Node, o binário com Go e entrega uma imagem final mínima (distroless, sem shell) com só o binário, rodando como usuário sem privilégio. Na imagem:
+The `Dockerfile` builds the panel with Node and the binary with Go, and ships a minimal final image (distroless, no shell) holding only the binary, running as an unprivileged user. In the image:
 
-- a configuração é lida de `/data/gateway.json` (`GATEWAY_CONFIG`), e as rotas de `/data/routes`;
-- `/data` é um volume. A API e o modo aprendizado gravam nesses arquivos, então o diretório precisa aceitar escrita pelo usuário do contêiner. No Linux, acrescente `--user "$(id -u):$(id -g)"` para gravar como você;
-- sem `gateway.json`, o gateway sobe com os padrões e sem rotas, e cria o arquivo na primeira alteração pela API ou pelo painel;
-- para falar com serviços que rodam na máquina hospedeira, use `http://host.docker.internal:<porta>` como `upstream` (no Linux, com `--add-host=host.docker.internal:host-gateway`).
+- the configuration is read from `/data/gateway.json` (`GATEWAY_CONFIG`), and the routes from `/data/routes`;
+- `/data` is a volume. The API and learning mode write to those files, so the directory has to be writable by the container user. On Linux, add `--user "$(id -u):$(id -g)"` to write as yourself;
+- with no `gateway.json`, the gateway starts with the defaults and no routes, and creates the file on the first change made through the API or the panel;
+- to reach services running on the host machine, use `http://host.docker.internal:<port>` as the `upstream` (on Linux, with `--add-host=host.docker.internal:host-gateway`).
 
-`make docker` faz o `docker build` gravando a versão do código na imagem.
+`make docker` runs `docker build` stamping the code's version into the image.
 
-## Primeiros passos
+## Quick start
 
-Num diretório vazio, crie `gateway.json`:
+In an empty directory, create `gateway.json`:
 
 ```json
 {
@@ -80,7 +103,7 @@ Num diretório vazio, crie `gateway.json`:
 }
 ```
 
-e `routes/payments.yaml`, apontando para um serviço seu (aqui, um que atende em `localhost:9001`):
+and `routes/payments.yaml`, pointing at a service of yours (here, one listening on `localhost:9001`):
 
 ```yaml
 schemaVersion: 1
@@ -98,41 +121,39 @@ overrides:
     respond:
       status: 503
       body:
-        error: indisponível
+        error: unavailable
 ```
 
-Suba o gateway no mesmo diretório:
+Start the gateway in that directory:
 
 ```sh
-gateway                        # ou: gateway -config caminho/do/gateway.json
+devgateway                     # or: devgateway -config path/to/gateway.json
 ```
 
-e fale com ele:
+and talk to it:
 
 ```sh
-curl -i localhost:8080/payments/balance      # 30% das vezes, 503 sintetizado
-curl -s localhost:8081/api/status            # estado do processo
-curl -s localhost:8081/api/exchanges         # o que passou pelo gateway
+curl -i localhost:8080/payments/balance      # a synthesized 503, 30% of the time
+curl -s localhost:8081/api/status            # process state
+curl -s localhost:8081/api/exchanges         # what went through the gateway
 ```
 
-O painel fica em <http://localhost:8081>.
+The panel is at <http://localhost:8081>.
 
-Uma resposta interceptada traz `X-Gateway: route=payments; override=payments/flaky; intervention=synthesized`; uma encaminhada, só `X-Gateway: route=payments`. Um path que nenhuma rota casa recebe `404` com `{"error": "no_route"}`.
+An intercepted response carries `X-Gateway: route=payments; override=payments/flaky; intervention=synthesized`; a forwarded one, just `X-Gateway: route=payments`. A path no route matches gets a `404` with `{"error": "no_route"}`.
 
-Para ver tudo funcionando sem ter serviços próprios, [`examples/`](examples) tem dois serviços de brinquedo, rotas prontas e dois scripts: `examples/run.sh` sobe o ambiente, e `examples/e2e.sh` o verifica de ponta a ponta. O `run.sh` trabalha numa cópia em `examples/.run/` e a preserva entre execuções, com os serviços e as regras que você criar; `CLEAN=1 examples/run.sh` recomeça do exemplo original, guardando a cópia anterior num diretório `.bak-<data>`.
+## Two formats: JSON for the process, YAML for the routes
 
-## Dois formatos: JSON no processo, YAML nas rotas
+One format per kind of reader:
 
-O critério é um formato por tipo de leitor:
+- **`gateway.json`** configures the process (ports, seed, history, learning). It is read by machines and by bootstrap scripts, almost never edited by hand, and JSON has no type ambiguity.
+- **`routes/*.yaml`** describes the routes, one document per route. These are edited by hand all the time, and YAML takes comments and multi-line bodies and has less punctuation. One file per route also keeps two people creating different routes out of each other's merge conflicts.
 
-- **`gateway.json`** configura o processo (portas, seed, histórico, aprendizado). É lido por máquina e por scripts de bootstrap, quase nunca editado à mão, e JSON não tem ambiguidade de tipos.
-- **`routes/*.yaml`** descreve as rotas, um documento por rota. São editados à mão o tempo todo, e YAML aceita comentários, corpos multilinha e tem menos pontuação. Um arquivo por rota também evita conflito de merge quando duas pessoas criam rotas diferentes.
-
-Os dois declaram `schemaVersion`. O gateway recusa um documento com versão maior que a que ele conhece, em vez de interpretá-lo pela metade.
+Both declare a `schemaVersion`. The gateway refuses a document whose version is newer than the one it knows, instead of reading half of it.
 
 ## `gateway.json`
 
-Todos os campos são opcionais: o que falta vem da variável de ambiente ou do padrão. O arquivo também é opcional; sem ele, o gateway sobe com os padrões e avisa no log.
+Every field is optional: what is missing comes from the environment variable, or from the default. The file itself is optional too; without it the gateway starts on the defaults and says so in the log.
 
 ```json
 {
@@ -159,25 +180,25 @@ Todos os campos são opcionais: o que falta vem da variável de ambiente ou do p
 }
 ```
 
-| Chave | Padrão | Significado |
+| Key | Default | Meaning |
 |---|---|---|
-| `ports.traffic` | `8080` | porta do tráfego encaminhado |
-| `ports.admin` | `8081` | porta do painel e da API; precisa ser diferente da de tráfego |
-| `seed` | ausente | semente dos sorteios; ausente, a aleatoriedade não se repete entre execuções |
-| `history.backend` | `memory` | `memory` (anel em memória), `ndjson` (um arquivo, uma troca por linha) ou `sqlite` (arquivo local, driver puro em Go) |
-| `history.path` | `gateway-history.ndjson` ou `gateway-history.db` | arquivo do `ndjson` e do `sqlite` |
-| `history.capacity` | `1000` | trocas mantidas pelo backend `memory` |
-| `history.record` | `true` | registra as trocas |
-| `history.expose` | `true` | permite ler o histórico pela API e pelo painel |
-| `capture.maxBodyBytes` | `65536` | corpos maiores são truncados na captura (o tráfego não é afetado) |
-| `learning.enabled` | `false` | [modo aprendizado](#modo-aprendizado) |
-| `routesDir` | `routes` | diretório dos documentos de rota |
+| `ports.traffic` | `8080` | port for forwarded traffic |
+| `ports.admin` | `8081` | port for the panel and the API; must differ from the traffic port |
+| `seed` | absent | seed for the draws; absent, randomness does not repeat across runs |
+| `history.backend` | `memory` | `memory` (in-memory ring), `ndjson` (one file, one exchange per line) or `sqlite` (local file, pure-Go driver) |
+| `history.path` | `gateway-history.ndjson` or `gateway-history.db` | file used by `ndjson` and `sqlite` |
+| `history.capacity` | `1000` | exchanges kept by the `memory` backend |
+| `history.record` | `true` | record the exchanges |
+| `history.expose` | `true` | allow reading the history through the API and the panel |
+| `capture.maxBodyBytes` | `65536` | larger bodies are truncated on capture (traffic is unaffected) |
+| `learning.enabled` | `false` | [learning mode](#learning-mode) |
+| `routesDir` | `routes` | directory holding the route documents |
 
-Caminhos relativos (`history.path`, `routesDir`) partem do diretório do próprio `gateway.json`, não de onde o processo roda. Se o backend do histórico não inicializa (um arquivo sem permissão de escrita, por exemplo), o gateway recusa subir em vez de cair para memória sem avisar.
+Relative paths (`history.path`, `routesDir`) resolve against the directory of `gateway.json` itself, not against the process's working directory. If the history backend fails to initialize (a file with no write permission, say), the gateway refuses to start instead of silently falling back to memory.
 
-## Documentos de rota
+## Route documents
 
-Cada arquivo `.yaml` ou `.yml` em `routes/` é uma rota; os demais arquivos são ignorados. Dois documentos com o mesmo `name`, ou com o mesmo host e o mesmo path, impedem a carga, e a mensagem nomeia os dois arquivos. Um erro de validação nomeia arquivo, campo, linha e coluna.
+Every `.yaml` or `.yml` file in `routes/` is one route; other files are ignored. Two documents with the same `name`, or with the same host and path, stop the load, and the message names both files. A validation error names file, field, line and column.
 
 ```yaml
 # routes/payments.yaml
@@ -185,14 +206,14 @@ schemaVersion: 1
 name: payments
 upstream: http://localhost:9001
 match:
-  path: /payments/*          # curinga de sufixo; sem *, path exato
-  # host: pagamentos.local   # alternativa (ou complemento) ao path
-stripPrefix: true            # /payments/balance chega ao upstream como /balance
-rewriteHost: false           # true: o upstream recebe o próprio host em vez do Host original
-timeout: 5s                  # sem resposta nesse tempo, o cliente recebe 504
+  path: /payments/*          # suffix wildcard; without *, an exact path
+  # host: payments.local     # instead of, or on top of, the path
+stripPrefix: true            # /payments/balance reaches the upstream as /balance
+rewriteHost: false           # true: the upstream gets its own host instead of the original Host
+timeout: 5s                  # no response within this time and the client gets a 504
 
 overrides:
-  # Resposta forçada: sem probability, vale sempre que o critério casa.
+  # Forced response: with no probability, it applies whenever the criteria match.
   - name: charge-declined
     match:
       path: /payments/charges
@@ -206,7 +227,7 @@ overrides:
       body:
         error: card_declined
 
-  # Falha em 30% das consultas; as demais seguem para o upstream.
+  # Fails 30% of the lookups; the rest go to the upstream.
   - name: balance-flaky
     match:
       path: /payments/balance
@@ -219,7 +240,7 @@ overrides:
       body:
         error: balance_unavailable
 
-  # Só latência: sem respond, a resposta vem do upstream, atrasada.
+  # Latency only: with no respond, the response comes from the upstream, late.
   - name: lookup-slow
     match:
       pathRegex: ^/payments/charges/[^/]+$
@@ -228,8 +249,8 @@ overrides:
       min: 200ms
       max: 900ms
 
-  # Derruba a conexão sem resposta em 10% das chamadas, por 10 minutos
-  # ou 50 aplicações, o que vier primeiro.
+  # Drops the connection with no response on 10% of the calls, for 10 minutes
+  # or 50 applications, whichever comes first.
   - name: flaky-network
     match:
       path: /payments/*
@@ -238,7 +259,7 @@ overrides:
     ttl: 10m
     maxApplications: 50
 
-  # Desligado: fica no documento, mas não intervém.
+  # Off: it stays in the document, but never intervenes.
   - name: maintenance
     enabled: false
     match:
@@ -247,86 +268,97 @@ overrides:
       status: 503
 ```
 
-Rota:
+Route:
 
-| Campo | Significado |
+| Field | Meaning |
 |---|---|
-| `name` | nome único da rota |
-| `upstream` | URL do serviço. Sem ele, só os overrides respondem, e o resto recebe `501` |
-| `match.path` | path exato (`/health`) ou curinga de sufixo (`/api/payments/*`); parâmetros de segmento (`:id`) só no path de um override |
-| `match.host` | casa pelo `Host` da requisição; rotas com host têm precedência |
-| `stripPrefix` | remove a parte fixa do padrão antes de encaminhar |
-| `rewriteHost` | troca o `Host` original pelo do upstream (servidores com virtual host) |
-| `timeout` | tempo limite de resposta do upstream (`504` ao estourar); sem conexão, `502` |
-| `overrides` | lista de overrides |
+| `name` | unique route name |
+| `upstream` | the service's URL. Without it, only the overrides answer, and everything else gets a `501` |
+| `match.path` | exact path (`/health`) or suffix wildcard (`/api/payments/*`); segment parameters (`:id`) only in an override's path |
+| `match.host` | matches on the request's `Host`; routes with a host take precedence |
+| `stripPrefix` | strips the fixed part of the pattern before forwarding |
+| `rewriteHost` | replaces the original `Host` with the upstream's (for virtual-host servers) |
+| `timeout` | how long to wait for the upstream (`504` when it runs out); with no connection, `502` |
+| `overrides` | list of overrides |
 
-Entre as rotas, a mais específica vence: host antes de path, path exato antes de curinga, curinga mais longo antes do mais curto.
+Among routes, the most specific one wins: host before path, exact path before wildcard, longer wildcard before shorter.
 
 Override:
 
-| Campo | Significado |
+| Field | Meaning |
 |---|---|
-| `name` | nome único dentro da rota; o override é identificado como `rota/nome` |
-| `enabled` | `false` desliga; ausente equivale a ligado |
-| `match.path` / `match.pathRegex` | path exato (`/viacep/01001000/json`), com parâmetros de segmento (`/viacep/:id/json`), curinga de sufixo (`/viacep/*`) ou expressão regular (um dos dois campos). Cada `:nome` casa exatamente um segmento não vazio: `/viacep/:id/json` casa com `/viacep/40415345/json`, não com `/viacep/40415345/extra/json`. O nome segue `[A-Za-z_][A-Za-z0-9_]*`, não se repete no mesmo path e não divide o segmento com o curinga. O path é o que o cliente enviou, antes do `stripPrefix` |
-| `match.method` | método HTTP |
-| `match.headers`, `match.query` | por nome, um texto (igualdade) ou um objeto com um de `equals`, `regex`, `json`, `contains` |
-| `match.body` | o mesmo, aplicado ao corpo (`json` compara a estrutura, ignorando formatação e ordem das chaves) |
-| `respond.status` | padrão `200` |
-| `respond.headers` | cada cabeçalho é um texto ou uma lista (cabeçalho repetido, como vários `Set-Cookie`) |
-| `respond.body` | texto, ou estrutura YAML enviada como JSON (com `Content-Type: application/json` inferido) |
-| `probability` | fração das requisições selecionadas em que o override vale; padrão `1.0` |
-| `latency` | atraso fixo (`2s`) ou sorteado em intervalo (`{min: 200ms, max: 900ms}`) |
-| `drop` | encerra a conexão sem resposta |
-| `ttl` | tempo de vida a partir do registro do override |
-| `maxApplications` | número de aplicações até expirar |
-| `source` | escrito pelo gateway nos overrides aprendidos ou derivados de uma troca; aponta a troca de origem |
+| `name` | unique within the route; the override is identified as `route/name` |
+| `enabled` | `false` turns it off; absent means on |
+| `match.path` / `match.pathRegex` | exact path (`/zip/01001000/json`), path with segment parameters (`/zip/:id/json`), suffix wildcard (`/zip/*`) or regular expression (one of the two fields). Each `:name` matches exactly one non-empty segment: `/zip/:id/json` matches `/zip/40415345/json`, not `/zip/40415345/extra/json`. The name follows `[A-Za-z_][A-Za-z0-9_]*`, does not repeat within a path, and does not share a segment with the wildcard. The path is the one the client sent, before `stripPrefix` |
+| `match.method` | HTTP method |
+| `match.headers`, `match.query` | by name, either a string (equality) or an object with one of `equals`, `regex`, `json`, `contains` |
+| `match.body` | the same, applied to the body (`json` compares structure, ignoring formatting and key order) |
+| `respond.status` | `200` by default |
+| `respond.headers` | each header is a string or a list (for a repeated header, such as several `Set-Cookie`) |
+| `respond.body` | text, or a YAML structure sent as JSON (with `Content-Type: application/json` inferred) |
+| `probability` | fraction of the selected requests the override applies to; `1.0` by default |
+| `latency` | fixed delay (`2s`) or one drawn from a range (`{min: 200ms, max: 900ms}`) |
+| `drop` | closes the connection with no response |
+| `ttl` | lifetime, counted from when the override was registered |
+| `maxApplications` | number of applications before it expires |
+| `source` | written by the gateway on learned or derived overrides; points at the exchange it came from |
 
-Quando mais de um override casa, vale o mais específico: path exato; depois path com parâmetros de segmento (entre eles, o de mais segmentos literais); depois expressão regular; depois curinga, do mais longo ao mais curto; e, em empate, o que declara mais critérios. O que ainda empatar é resolvido pela ordem no documento. Overrides desligados ou expirados ficam fora dessa disputa.
+When more than one override matches, the most specific wins: exact path; then path with segment parameters (among those, the one with more literal segments); then regular expression; then wildcard, longest first; and, on a tie, the one declaring more criteria. Anything still tied is settled by the order in the document. Overrides that are off or expired stay out of that contest.
 
-## Variáveis de ambiente
+## Environment variables
 
-A precedência é **ambiente, depois `gateway.json`, depois o padrão**. Um valor vindo do ambiente fica travado: a API e o painel recusam alterá-lo (`409 locked`, nomeando a variável). `GET /api/settings` mostra a origem efetiva de cada valor, para responder "por que está usando memória se eu configurei SQLite?" num comando.
+Precedence is **environment, then `gateway.json`, then the default**. A value coming from the environment is locked: the API and the panel refuse to change it (`409 locked`, naming the variable). `GET /api/settings` shows the effective origin of every value, so "why is it using memory when I configured SQLite?" is one command away.
 
-| Variável | Chave em `gateway.json` | Valores |
+| Variable | Key in `gateway.json` | Values |
 |---|---|---|
-| `GATEWAY_CONFIG` | (nenhuma) | caminho do `gateway.json`; padrão `./gateway.json`. A opção `-config` tem o mesmo efeito |
-| `GATEWAY_TRAFFIC_PORT` | `ports.traffic` | inteiro |
-| `GATEWAY_ADMIN_PORT` | `ports.admin` | inteiro |
-| `GATEWAY_SEED` | `seed` | inteiro não negativo |
-| `GATEWAY_HISTORY_BACKEND` | `history.backend` | `memory`, `ndjson` ou `sqlite` |
-| `GATEWAY_HISTORY_PATH` | `history.path` | caminho do arquivo (relativo ao diretório de trabalho) |
-| `GATEWAY_HISTORY_CAPACITY` | `history.capacity` | inteiro |
-| `GATEWAY_HISTORY_RECORD` | `history.record` | `true` ou `false` |
-| `GATEWAY_HISTORY_EXPOSE` | `history.expose` | `true` ou `false` |
-| `GATEWAY_CAPTURE_MAX_BODY_BYTES` | `capture.maxBodyBytes` | inteiro, em bytes |
-| `GATEWAY_LEARNING` | `learning.enabled` | `true` ou `false` |
-| `GATEWAY_ROUTES_DIR` | `routesDir` | diretório (relativo ao diretório de trabalho) |
+| `GATEWAY_CONFIG` | (none) | path to `gateway.json`; `./gateway.json` by default. The `-config` flag does the same |
+| `GATEWAY_TRAFFIC_PORT` | `ports.traffic` | integer |
+| `GATEWAY_ADMIN_PORT` | `ports.admin` | integer |
+| `GATEWAY_SEED` | `seed` | non-negative integer |
+| `GATEWAY_HISTORY_BACKEND` | `history.backend` | `memory`, `ndjson` or `sqlite` |
+| `GATEWAY_HISTORY_PATH` | `history.path` | file path (relative to the working directory) |
+| `GATEWAY_HISTORY_CAPACITY` | `history.capacity` | integer |
+| `GATEWAY_HISTORY_RECORD` | `history.record` | `true` or `false` |
+| `GATEWAY_HISTORY_EXPOSE` | `history.expose` | `true` or `false` |
+| `GATEWAY_CAPTURE_MAX_BODY_BYTES` | `capture.maxBodyBytes` | integer, in bytes |
+| `GATEWAY_LEARNING` | `learning.enabled` | `true` or `false` |
+| `GATEWAY_ROUTES_DIR` | `routesDir` | directory (relative to the working directory) |
 
-Uma variável vazia é tratada como ausente. O caso típico é o backend do histórico mudar por máquina, enquanto as rotas são as mesmas:
+An empty variable counts as absent. The usual case is the history backend differing per machine while the routes stay the same:
 
 ```sh
-GATEWAY_HISTORY_BACKEND=sqlite GATEWAY_HISTORY_PATH=ci-history.db gateway
+GATEWAY_HISTORY_BACKEND=sqlite GATEWAY_HISTORY_PATH=ci-history.db devgateway
 ```
 
-## O override: mock e caos são a mesma coisa
+## The override: mocking and chaos are the same thing
 
-Não há um mecanismo de mock e outro de caos. Há o override: um critério de seleção, uma resposta declarada e os modificadores `probability`, `latency`, `drop`, `ttl` e `maxApplications`.
+There is no mocking mechanism and a separate chaos mechanism. There is the override: a selection criterion, a declared response and the modifiers `probability`, `latency`, `drop`, `ttl` and `maxApplications`.
 
-- **Mock** é um override com `probability: 1.0` (ou sem `probability`): toda requisição selecionada recebe a resposta declarada.
-- **Caos** é o mesmo override com `probability: 0.3`: 30% recebem a resposta declarada, e os outros 70% seguem para o upstream como se o override não existisse.
-- **Só latência**: sem `respond`, o override não intercepta; a resposta vem do upstream, atrasada.
-- **Queda**: `drop: true` fecha a conexão sem resposta.
+- **A mock** is an override with `probability: 1.0` (or with no `probability`): every selected request gets the declared response.
+- **Chaos** is the same override with `probability: 0.3`: 30% get the declared response, and the other 70% go to the upstream as if the override did not exist.
+- **Latency only**: with no `respond`, the override does not intercept; the response comes from the upstream, late.
+- **A drop**: `drop: true` closes the connection with no response.
 
-A rota encaminha tudo por padrão; os overrides interceptam só o que selecionam. Na ordem fixa do caminho da requisição, o gateway sorteia primeiro se o override vale, depois a queda e o atraso, e só então responde (sintetizando ou indo ao upstream). O atraso é aplicado com a resposta pronta, antes de escrevê-la: por isso o tempo injetado e o tempo do upstream são medidos separadamente e **se somam**. No histórico, cada troca traz `timing.upstreamMs`, `timing.injectedMs` e `timing.gatewayMs`, que o painel desenha como waterfall.
+The route forwards everything by default; overrides intercept only what they select. In the fixed order of the request path, the gateway first draws whether the override applies, then the drop and the delay, and only then answers (synthesizing, or going to the upstream). The delay is applied with the response ready, just before writing it: that is why injected time and upstream time are measured separately and **add up**. In the history, every exchange carries `timing.upstreamMs`, `timing.injectedMs` and `timing.gatewayMs`, which the panel draws as a waterfall.
 
-Com `seed` definido, o sorteio de cada requisição deriva de `(seed, número de sequência de chegada)`: a mesma sequência de requisições produz as mesmas decisões em outra execução.
+With a `seed` set, each request's draw derives from `(seed, arrival sequence number)`: the same sequence of requests produces the same decisions in another run.
 
-A API cria overrides também a partir de uma troca capturada (`POST /api/routes/{rota}/overrides/derive`), com a resposta real pré-preenchida; no painel, é o botão de criar override na troca aberta.
+The API can also build an override out of a captured exchange (`POST /api/routes/{route}/overrides/derive`), with the real response prefilled; in the panel, that is the "create override" button on an open exchange.
 
-## Modo aprendizado
+## The panel
 
-Com `learning.enabled` ligado, cada combinação nova de método e path que passa por uma rota e é respondida pelo upstream vira um override **desligado** no documento da rota, com o status, os cabeçalhos e o corpo observados e um bloco `source` apontando a troca de origem:
+The panel is served on the admin port, embedded in the binary, with no CDN and no network access of its own. It is a client of the documented API and nothing more — anything it does, you can do with `curl`.
+
+- **Map**: the routes and their upstreams, with recent availability of each upstream, taken from the forwarding attempts themselves (the gateway does not probe anything).
+- **Traffic**: the exchanges as they happen, over a live stream, with filters (route, method, path, status range, intervened or not, time window) and per-exchange detail: request and response, headers, bodies, and the waterfall splitting upstream time from injected time.
+- **Route**: the route, its overrides, and the continuous controls (probability, latency, TTL, applications) next to the YAML document, live and editable. What you change in the controls shows up in the document, and the other way around.
+- **Process**: the effective settings with the origin of each value, learning mode, and the history backend, all changeable without a restart.
+
+The detail pane has a simple and an advanced mode. Simple is the default and fits a rule into two lines; a rule using anything beyond path and method is flagged, so nothing is hidden without saying so. Advanced shows everything.
+
+## Learning mode
+
+With `learning.enabled` on, every new combination of method and path that goes through a route and is answered by the upstream becomes a **disabled** override in the route's document, carrying the observed status, headers and body, plus a `source` block pointing at the exchange it came from:
 
 ```yaml
   - name: get-catalog-products-p3
@@ -340,85 +372,103 @@ Com `learning.enabled` ligado, cada combinação nova de método e path que pass
         Content-Type: application/json
       body:
         id: p3
-        name: Lapiseira 0,5 mm
+        name: Mechanical pencil 0.5 mm
     source:
       kind: learned
       exchange: 01M2V1XH0K450DW9ZKFEPGG80J
       at: 2026-09-18T20:04:24.72Z
 ```
 
-Desligado, ele não muda o tráfego. Ele é o ponto de partida para o próximo gesto: ligar, ajustar a resposta ou dar uma probabilidade de falha. O aprendizado grava depois de a resposta ser entregue, fora do caminho da requisição.
+Being off, it changes no traffic. It is the starting point for the next move: turn it on, edit the response, or give it a failure probability. Learning writes after the response has been delivered, off the request path.
 
-O path gravado é generalizado: um segmento que parece identificar um registro — só dígitos, UUID, ou alfanumérico com dígitos e ao menos 8 caracteres — vira parâmetro de segmento (`:id`, `:id2`…), e o resto fica literal. `GET /viacep/40415345/json` e depois `GET /viacep/01001000/json` geram um único override, `get-viacep-id-json`, com path `/viacep/:id/json` e a resposta da primeira troca; `/api/users/me` e `/api/users/42` geram dois, `/api/users/me` e `/api/users/:id`, porque `me` não é identificador. A heurística é conservadora: `json`, `charge` ou `ch_123` ficam literais, e um identificador não reconhecido (um slug, por exemplo) só custa uma regra a mais, que você generaliza trocando o segmento por `:id`.
+The recorded path is generalized: a segment that looks like a record identifier — all digits, a UUID, or alphanumeric with digits and at least 8 characters — becomes a segment parameter (`:id`, `:id2`…), and the rest stays literal. `GET /zip/40415345/json` followed by `GET /zip/01001000/json` produce a single override, `get-zip-id-json`, with path `/zip/:id/json` and the first exchange's response; `/api/users/me` and `/api/users/42` produce two, `/api/users/me` and `/api/users/:id`, because `me` is not an identifier. The heuristic is conservative: `json`, `charge` and `ch_123` stay literal, and an identifier it does not recognize (a slug, say) only costs one extra rule, which you generalize by replacing the segment with `:id`.
 
-Uma combinação já é conhecida quando a rota tem override, ligado ou não, do mesmo método com o path generalizado igual ou cujo path (exato ou com parâmetros) casa com a requisição; curingas e expressões regulares não contam, para que os endpoints sob eles também sejam aprendidos. Ao gravar um override generalizado, os aprendidos de path exato que ele cobre — ainda desligados e sem outros critérios — são substituídos por ele, no mesmo lugar do documento. Um aprendido que você ligou ou restringiu fica, e continua valendo antes do generalizado.
+A combination counts as known when the route has an override, on or off, for the same method with the same generalized path, or whose path (exact or parameterized) matches the request; wildcards and regular expressions do not count, so the endpoints under them get learned too. When a generalized override is written, the learned exact-path ones it covers — still disabled and with no other criteria — are replaced by it, in the same spot in the document. A learned override you turned on or narrowed stays, and keeps winning over the generalized one.
 
-Ligue e desligue sem reiniciar:
+Turn it on and off without restarting:
 
 ```sh
 curl -s -X PUT localhost:8081/api/learning -H 'Content-Type: application/json' -d '{"enabled":true}'
 ```
 
-O modo vale para todas as rotas. Veja os [limites](#limites-assumidos) sobre paths com identificadores e sobre comentários.
+The mode applies to every route. See the [limits](#assumed-limits) on paths with identifiers and on comments.
 
-## Reconfiguração a quente
+## Hot reconfiguration
 
-Nada exige reiniciar o processo:
+Nothing requires restarting the process:
 
-- **Rotas e overrides**: toda escrita pela API ou pelo painel valida, grava o documento e aplica. Depois de editar os arquivos à mão, `curl -s -X POST localhost:8081/api/reload` relê tudo. Um documento inválido é recusado, e a configuração anterior continua em vigor.
-- **Processo, inclusive portas e backend do histórico**: `PATCH /api/settings` altera o `gateway.json` e aplica:
+- **Routes and overrides**: every write through the API or the panel validates, writes the document and applies it. After editing the files by hand, `curl -s -X POST localhost:8081/api/reload` rereads everything. An invalid document is refused, and the previous configuration stays in force.
+- **The process, ports and history backend included**: `PATCH /api/settings` changes `gateway.json` and applies it:
 
   ```sh
   curl -s -X PATCH localhost:8081/api/settings \
     -H 'Content-Type: application/merge-patch+json' -d '{"ports":{"traffic":9080}}'
   ```
 
-  A porta nova é aberta antes de a antiga fechar. Se não abrir, nada muda (`409 port_unavailable`). A porta antiga para de aceitar conexões e termina as requisições em curso. A troca do backend do histórico segue o mesmo protocolo.
-- Requisições em curso terminam com a configuração em que começaram; a troca da configuração é atômica.
+  The new port is opened before the old one closes. If it cannot be opened, nothing changes (`409 port_unavailable`). The old port stops accepting connections and finishes the requests in flight. Switching the history backend follows the same protocol.
+- Requests in flight finish under the configuration they started with; the configuration swap is atomic.
 
-## Paridade entre arquivo, API e painel
+## The API
 
-Tudo o que se configura nos arquivos também se configura pela API, e o painel é só um cliente dessa API. O painel mostra, ao lado dos controles, o documento YAML ou JSON correspondente, atualizado ao vivo e editável.
+Everything you configure in the files you can also configure through the API, and the panel is just a client of that API. Next to the controls, the panel shows the matching YAML or JSON document, live and editable.
 
-| No arquivo | Na API |
+| In the file | In the API |
 |---|---|
-| criar `routes/x.yaml` | `POST /api/routes` ou `PUT /api/routes/x/document` |
-| editar um campo da rota | `PATCH /api/routes/x` |
-| editar o YAML à mão | `PUT /api/routes/x/document` |
-| apagar `routes/x.yaml` | `DELETE /api/routes/x` |
-| acrescentar, editar ou remover um override | `POST`, `PATCH` e `DELETE /api/routes/x/overrides[/y]` |
-| `enabled: false` num override | `PATCH /api/routes/x/overrides/y` com `{"enabled": false}` |
-| editar `gateway.json` | `PATCH /api/settings` ou `PUT /api/settings/document` |
+| create `routes/x.yaml` | `POST /api/routes` or `PUT /api/routes/x/document` |
+| edit a field of the route | `PATCH /api/routes/x` |
+| edit the YAML by hand | `PUT /api/routes/x/document` |
+| delete `routes/x.yaml` | `DELETE /api/routes/x` |
+| add, edit or remove an override | `POST`, `PATCH` and `DELETE /api/routes/x/overrides[/y]` |
+| `enabled: false` on an override | `PATCH /api/routes/x/overrides/y` with `{"enabled": false}` |
+| edit `gateway.json` | `PATCH /api/settings` or `PUT /api/settings/document` |
 | `learning.enabled` | `PUT /api/learning` |
-| editar os arquivos fora do painel | `POST /api/reload` |
+| edit the files outside the panel | `POST /api/reload` |
 
-Escrever pela API reescreve **só** o documento da rota tocada, de forma atômica; os outros ficam byte a byte iguais. A referência completa, com um exemplo de `curl` por operação, está em [`docs/api.md`](docs/api.md).
+A write through the API rewrites **only** the touched route's document, atomically; the others stay byte for byte the same.
 
-## Limites assumidos
+The full reference — every endpoint, the live SSE stream, the error codes and a `curl` example per operation — is in [`docs/api.md`](docs/api.md).
 
-Decisões conscientes, com o custo à vista:
+## Example environment
 
-- **Comentários se perdem na escrita e no aprendizado.** Quando a API, o painel ou o modo aprendizado grava um documento de rota, ele é reserializado: comentários e a ordem original das chaves daquele documento se perdem. O dano fica contido à rota tocada, e o painel avisa antes da primeira escrita num documento com comentários. Se os comentários importam, mantenha o original versionado e trabalhe numa cópia (é o que `examples/run.sh` faz).
-- **O determinismo é por ordem de chegada.** O seed fixa as decisões por número de sequência, não por conteúdo. Reproduzir uma execução exige reenviar as requisições na mesma ordem; requisições concorrentes podem chegar em ordem diferente de uma execução para outra, então a reprodutibilidade estrita pede envio serial.
-- **A queda de conexão é degradada em HTTP/2.** Em HTTP/1.1 o gateway fecha o socket sem resposta. Em HTTP/2 não há socket próprio da requisição, e a queda vira o cancelamento abrupto do stream. A troca capturada registra qual dos dois aconteceu em `dropMode` (`hijack`, `stream_reset`, ou `abort` quando a conexão HTTP/1.x não permite sequestro).
-- **Identificadores que a heurística não reconhece geram um override por valor.** O aprendizado generaliza dígitos, UUIDs e códigos alfanuméricos com dígitos, mas um slug como `/posts/meu-titulo` ou um código curto como `ch_123` vira um override por valor. Troque o segmento por `:id` num deles e remova os demais; daí em diante os valores que ele cobre são conhecidos e não geram regra nova. `GET /api/learning` conta os aprendidos por rota.
-- **Trocar o backend do histórico não migra as trocas.** As trocas anteriores continuam no backend antigo, intactas (o arquivo NDJSON ou SQLite continua no disco); o novo começa vazio. A resposta da API e o painel avisam no momento da troca.
+To see the whole thing working without services of your own, [`examples/`](examples) has two toy services, ready-made routes and two scripts: `examples/run.sh` brings the environment up, and `examples/e2e.sh` checks it end to end. `run.sh` works on a copy in `examples/.run/` and keeps it between runs, along with the services and rules you create; `CLEAN=1 examples/run.sh` starts over from the original example, moving the previous copy to a `.bak-<date>` directory.
 
-Também ficam de fora, por ora: TLS na porta de tráfego (o gateway fala HTTP com o cliente e HTTP ou HTTPS com o upstream), autenticação na porta de administração (o uso previsto é local) e retenção automática nos backends persistentes.
-
-## Desenvolvimento
+## Development
 
 ```sh
 make test          # go test ./...
-make race          # testes com -race (exige CGO e um compilador C)
-make lint          # gofmt e go vet
-make build         # bin/gateway com o web/dist atual
-make web           # constrói o painel em web/dist
-make web-clean     # volta web/dist ao placeholder versionado
-make release       # painel + binários por plataforma em dist/
-make docker        # imagem Docker
+make race          # tests with -race (needs CGO and a C compiler)
+make lint          # gofmt and go vet
+make build         # bin/devgateway with the current web/dist
+make web           # builds the panel into web/dist
+make web-clean     # restores web/dist to the committed placeholder
+make release       # panel + per-platform binaries in dist/
+make docker        # Docker image
 ```
 
-- Código Go em `cmd/gateway` e `internal/`; o painel em `web/` (Vite, React e TypeScript; ver [`web/README.md`](web/README.md)).
-- O `web/dist/index.html` versionado é um placeholder, para que `go build` funcione num clone sem Node. Depois de `make web`, não faça commit dele; `make web-clean` o restaura.
-- O planejamento está em `openspec/changes/add-test-gateway/`.
+- Go code in `cmd/devgateway` and `internal/`; the panel in `web/` (Vite, React and TypeScript; see [`web/README.md`](web/README.md)).
+- The committed `web/dist/index.html` is a placeholder, so that `go build` works in a clone without Node. After `make web`, do not commit it; `make web-clean` restores it.
+- Without a C toolchain (`make race` needs one), the race detector runs in a container:
+
+  ```sh
+  docker run --rm -v "$PWD:/src" -w /src golang:1.26 go test -race -count=1 ./...
+  ```
+
+- CI runs `make build`, `make lint` and `make race` on every push and pull request.
+
+## Assumed limits
+
+Deliberate decisions, with the cost in plain sight:
+
+- **Comments are lost on writes and on learning.** When the API, the panel or learning mode writes a route document, it is reserialized: comments and the original key order of that document are lost. The damage is confined to the route touched, and the panel warns before the first write to a document with comments. If the comments matter, keep the original under version control and work on a copy (that is what `examples/run.sh` does).
+- **Determinism is by arrival order.** The seed pins the decisions by sequence number, not by content. Reproducing a run means sending the requests again in the same order; concurrent requests can arrive in a different order from one run to the next, so strict reproducibility calls for sending them serially.
+- **Connection drops degrade on HTTP/2.** Over HTTP/1.1 the gateway closes the socket with no response. Over HTTP/2 there is no socket of the request's own, and the drop becomes an abrupt stream cancellation. The captured exchange records which of the two happened in `dropMode` (`hijack`, `stream_reset`, or `abort` when the HTTP/1.x connection cannot be hijacked).
+- **Identifiers the heuristic does not recognize produce one override per value.** Learning generalizes digits, UUIDs and alphanumeric codes with digits, but a slug like `/posts/my-title` or a short code like `ch_123` becomes one override per value. Replace the segment with `:id` in one of them and delete the rest; from then on the values it covers are known and produce no new rules. `GET /api/learning` counts the learned overrides per route.
+- **Switching the history backend does not migrate the exchanges.** Earlier exchanges stay in the old backend, intact (the NDJSON or SQLite file is still on disk); the new one starts empty. The API response and the panel say so at the moment of the switch.
+
+Also out of scope for now: TLS on the traffic port (the gateway speaks HTTP to the client and HTTP or HTTPS to the upstream), authentication on the admin port (the intended use is local) and automatic retention in the persistent backends.
+
+## License
+
+MIT. Copyright (c) joaovillas. See [LICENSE](LICENSE).
+
+How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md). Reporting a vulnerability: [SECURITY.md](SECURITY.md). Expected conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).

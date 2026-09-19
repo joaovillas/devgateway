@@ -21,7 +21,7 @@ func readTestdata(t *testing.T, name string) []byte {
 	return b
 }
 
-// genericYAML decodifica sem tipo, para comparar documentos chave a chave.
+// genericYAML decodes without a type, to compare documents key by key.
 func genericYAML(t *testing.T, b []byte) any {
 	t.Helper()
 	var v any
@@ -43,16 +43,16 @@ func TestGatewayFileRoundTrip(t *testing.T) {
 	}
 	g2, err := ParseGatewayFile("gateway.json", out)
 	if err != nil {
-		t.Fatalf("reserialização não recarrega: %v\n%s", err, out)
+		t.Fatalf("what was written back does not load again: %v\n%s", err, out)
 	}
 	if !reflect.DeepEqual(g, g2) {
-		t.Fatalf("estrutura mudou na ida e volta:\n%+v\n%+v", g, g2)
+		t.Fatalf("the structure changed on the round trip:\n%+v\n%+v", g, g2)
 	}
 	var a, b any
 	json.Unmarshal(src, &a)
 	json.Unmarshal(out, &b)
 	if !reflect.DeepEqual(a, b) {
-		t.Fatalf("campos perdidos na reserialização:\noriginal: %v\nsaída:    %v", a, b)
+		t.Fatalf("fields lost when writing back:\noriginal: %v\noutput:   %v", a, b)
 	}
 }
 
@@ -68,18 +68,18 @@ func TestRouteRoundTrip(t *testing.T) {
 	}
 	r2, err := ParseRoute("payments.yaml", out)
 	if err != nil {
-		t.Fatalf("reserialização não recarrega: %v\n%s", err, out)
+		t.Fatalf("what was written back does not load again: %v\n%s", err, out)
 	}
 	if !reflect.DeepEqual(r, r2) {
-		t.Fatalf("estrutura mudou na ida e volta:\n%+v\n%+v", r, r2)
+		t.Fatalf("the structure changed on the round trip:\n%+v\n%+v", r, r2)
 	}
 	if a, b := genericYAML(t, src), genericYAML(t, out); !reflect.DeepEqual(a, b) {
-		t.Fatalf("campos perdidos na reserialização:\noriginal: %v\nsaída:    %v", a, b)
+		t.Fatalf("fields lost when writing back:\noriginal: %v\noutput:   %v", a, b)
 	}
 }
 
 func TestRouteRoundTripThroughJSON(t *testing.T) {
-	// A API de administração recebe e devolve rotas em JSON.
+	// The admin API takes and returns routes as JSON.
 	r, err := ParseRoute("payments.yaml", readTestdata(t, "route-full.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +95,7 @@ func TestRouteRoundTripThroughJSON(t *testing.T) {
 	y1, _ := MarshalRoute(r)
 	y2, _ := MarshalRoute(r2)
 	if string(y1) != string(y2) {
-		t.Fatalf("rota mudou ao passar por JSON:\n%s\n---\n%s", y1, y2)
+		t.Fatalf("the route changed on its way through JSON:\n%s\n---\n%s", y1, y2)
 	}
 }
 
@@ -104,11 +104,11 @@ func TestUnknownFieldIsLocated(t *testing.T) {
 	_, err := ParseRoute("routes/x.yaml", src)
 	es, ok := err.(Errors)
 	if !ok || len(es) != 1 {
-		t.Fatalf("esperado um erro localizado, recebido %v", err)
+		t.Fatalf("expected a single located error, got %v", err)
 	}
 	e := es[0]
 	if e.File != "routes/x.yaml" || e.Field != "match.paht" || e.Line != 6 {
-		t.Fatalf("localização errada: %+v", e)
+		t.Fatalf("wrong location: %+v", e)
 	}
 }
 
@@ -118,18 +118,18 @@ func TestNewRouteFieldsParsed(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !r.RewriteHost {
-		t.Fatal("rewriteHost deveria ser lido")
+		t.Fatal("rewriteHost should have been read")
 	}
 	byName := map[string]Override{}
 	for _, o := range r.Overrides {
 		byName[o.Name] = o
 	}
-	if o := byName["bilulu"]; !o.Enabled() || o.On != nil || o.Source != nil {
-		t.Fatalf("sem enabled o override é ligado e sem origem: %+v", o)
+	if o := byName["full"]; !o.Enabled() || o.On != nil || o.Source != nil {
+		t.Fatalf("without enabled the override is on and has no source: %+v", o)
 	}
 	learned := byName["learned-get"]
 	if learned.Enabled() {
-		t.Fatal("enabled: false deveria desligar o override")
+		t.Fatal("enabled: false should turn the override off")
 	}
 	want := &OverrideSource{
 		Kind:           SourceLearned,
@@ -139,25 +139,25 @@ func TestNewRouteFieldsParsed(t *testing.T) {
 	}
 	if s := learned.Source; s == nil || s.Kind != want.Kind || s.Exchange != want.Exchange ||
 		!s.At.Equal(want.At) || s.BodyIncomplete != want.BodyIncomplete {
-		t.Fatalf("origem lida errada: %+v, esperada %+v", learned.Source, want)
+		t.Fatalf("source read wrong: %+v, expected %+v", learned.Source, want)
 	}
 	derived := byName["derived-charge"]
 	if !derived.Enabled() || derived.On == nil || derived.Source == nil || derived.Source.Kind != SourceDerived {
-		t.Fatalf("enabled: true explícito e origem derivada deveriam ser lidos: %+v", derived)
+		t.Fatalf("an explicit enabled: true and a derived source should both be read: %+v", derived)
 	}
 	if want := time.Date(2026, 9, 18, 10, 15, 30, 0, time.UTC); !derived.Source.At.Equal(want) {
-		t.Fatalf("instante com fuso deveria ser lido: %v", derived.Source.At)
+		t.Fatalf("a timestamp with an offset should be read: %v", derived.Source.At)
 	}
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"payments.yaml": string(readTestdata(t, "route-full.yaml"))})
 	if _, _, err := loadDir(t, dir); err != nil {
-		t.Fatalf("documento completo deveria ser válido: %v", err)
+		t.Fatalf("the complete document should be valid: %v", err)
 	}
 }
 
 func TestOverrideToggleKeepsFields(t *testing.T) {
-	// Desligar e religar um override preserva todos os seus demais campos,
-	// inclusive ao passar pelo documento serializado.
+	// Turning an override off and back on preserves all its other fields,
+	// even on the way through the serialized document.
 	r, err := ParseRoute("payments.yaml", readTestdata(t, "route-full.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -174,19 +174,19 @@ func TestOverrideToggleKeepsFields(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	if r2.Overrides[0].Enabled() {
-		t.Fatalf("override deveria continuar desligado após reserialização:\n%s", out)
+		t.Fatalf("the override should still be off after being written back:\n%s", out)
 	}
 	on := true
 	r2.Overrides[0].On = &on
 	got := r2.Overrides[0]
 	got.On = nil
 	if !reflect.DeepEqual(got, orig) || !r2.Overrides[0].Enabled() {
-		t.Fatalf("religar deveria restaurar o override:\n%+v\n%+v", got, orig)
+		t.Fatalf("turning it back on should restore the override:\n%+v\n%+v", got, orig)
 	}
 }
 
 func TestNewFieldsThroughJSON(t *testing.T) {
-	// Os campos novos chegam pela API em JSON com as mesmas chaves do YAML.
+	// The new fields arrive through the API as JSON with the same keys as in YAML.
 	src := []byte(`{"schemaVersion":1,"name":"j","upstream":"http://localhost:9000",
 "match":{"path":"/j/*"},"rewriteHost":true,
 "overrides":[{"name":"l","enabled":false,"match":{"path":"/j/x","method":"GET"},
@@ -200,11 +200,11 @@ func TestNewFieldsThroughJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, r := range map[string]Route{"json": viaJSON, "documento": viaYAML} {
+	for name, r := range map[string]Route{"json": viaJSON, "document": viaYAML} {
 		o := r.Overrides[0]
 		if !r.RewriteHost || o.Enabled() || o.Source == nil || o.Source.Kind != SourceLearned ||
 			!o.Source.BodyIncomplete || !o.Source.At.Equal(time.Date(2026, 9, 18, 10, 15, 30, 0, time.UTC)) {
-			t.Fatalf("%s: campos novos lidos errado: %+v %+v", name, r, o.Source)
+			t.Fatalf("%s: new fields read wrong: %+v %+v", name, r, o.Source)
 		}
 	}
 	b, err := json.Marshal(viaJSON)
@@ -215,7 +215,7 @@ func TestNewFieldsThroughJSON(t *testing.T) {
 	json.Unmarshal(src, &a)
 	json.Unmarshal(b, &c)
 	if !reflect.DeepEqual(a, c) {
-		t.Fatalf("campos perdidos na ida e volta por JSON:\noriginal: %v\nsaída:    %v", a, c)
+		t.Fatalf("fields lost on the round trip through JSON:\noriginal: %v\noutput:   %v", a, c)
 	}
 }
 
@@ -225,12 +225,12 @@ func TestGatewayFileLearning(t *testing.T) {
 		t.Fatal(err)
 	}
 	if g.Learning == nil || g.Learning.Enabled == nil || !*g.Learning.Enabled {
-		t.Fatalf("learning.enabled deveria ser lido: %+v", g.Learning)
+		t.Fatalf("learning.enabled should have been read: %+v", g.Learning)
 	}
 }
 
-// Um cabeçalho da resposta declarada tem um valor (texto) ou vários (lista),
-// em YAML e em JSON, e a forma sobrevive à ida e volta.
+// A header of the declared response carries one value (text) or several (a
+// list), in YAML and in JSON, and the form survives the round trip.
 func TestRespondHeaderValues(t *testing.T) {
 	src := []byte(`schemaVersion: 1
 name: h
@@ -254,58 +254,58 @@ overrides:
 	}
 	want := map[string]HeaderValues{"Content-Type": {"text/plain"}, "Set-Cookie": {"a=1; Path=/", "b=2"}}
 	if got := r.Overrides[0].Respond.Headers; !reflect.DeepEqual(got, want) {
-		t.Fatalf("cabeçalhos lidos errado: %q", got)
+		t.Fatalf("headers read wrong: %q", got)
 	}
 	out, err := MarshalRoute(r)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(out), "Content-Type: text/plain\n") {
-		t.Fatalf("um valor único deveria ser gravado como texto:\n%s", out)
+		t.Fatalf("a single value should be written as text:\n%s", out)
 	}
 	back, err := ParseRoute("h.yaml", out)
 	if err != nil || !reflect.DeepEqual(back.Overrides[0].Respond.Headers, want) {
-		t.Fatalf("a lista deveria sobreviver à ida e volta: %v %q", err, back.Overrides[0].Respond.Headers)
+		t.Fatalf("the list should survive the round trip: %v %q", err, back.Overrides[0].Respond.Headers)
 	}
 	var viaJSON Respond
 	if err := json.Unmarshal([]byte(`{"headers":{"Content-Type":"text/plain","Set-Cookie":["a=1; Path=/","b=2"]}}`), &viaJSON); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(viaJSON.Headers, want) {
-		t.Fatalf("cabeçalhos lidos errado por JSON: %q", viaJSON.Headers)
+		t.Fatalf("headers read wrong through JSON: %q", viaJSON.Headers)
 	}
 	b, _ := json.Marshal(viaJSON)
 	if string(b) != `{"headers":{"Content-Type":"text/plain","Set-Cookie":["a=1; Path=/","b=2"]}}` {
-		t.Fatalf("serialização JSON inesperada: %s", b)
+		t.Fatalf("unexpected JSON serialization: %s", b)
 	}
 	if err := json.Unmarshal([]byte(`{"headers":{"X":1}}`), &viaJSON); err == nil {
-		t.Fatal("um valor numérico deveria ser recusado")
+		t.Fatal("a numeric value should have been rejected")
 	}
 }
 
 func TestRespondHeaderWithoutValuesRejected(t *testing.T) {
-	o := Override{Name: "v", Match: OverrideMatch{Path: "/x"}, Respond: &Respond{Headers: map[string]HeaderValues{"X-Vazio": {}}}}
+	o := Override{Name: "v", Match: OverrideMatch{Path: "/x"}, Respond: &Respond{Headers: map[string]HeaderValues{"X-Empty": {}}}}
 	err := ValidateOverride("v.yaml", o)
 	var es Errors
-	if !errors.As(err, &es) || len(es) != 1 || es[0].Field != "override.respond.headers.X-Vazio" {
-		t.Fatalf("a lista vazia deveria ser recusada: %v", err)
+	if !errors.As(err, &es) || len(es) != 1 || es[0].Field != "override.respond.headers.X-Empty" {
+		t.Fatalf("the empty list should have been rejected: %v", err)
 	}
-	o.Respond.Headers["X-Vazio"] = HeaderValues{"v"}
+	o.Respond.Headers["X-Empty"] = HeaderValues{"v"}
 	if err := ValidateOverride("v.yaml", o); err != nil {
-		t.Fatalf("o override deveria ser válido: %v", err)
+		t.Fatalf("the override should be valid: %v", err)
 	}
 }
 
 func TestHasComments(t *testing.T) {
 	for doc, want := range map[string]bool{
-		"# topo\nname: a\n":                         true,
-		"name: a # na linha\n":                      true,
-		"name: a\nmatch:\n  # dentro\n  path: /x\n": true,
+		"# on top\nname: a\n":                       true,
+		"name: a # on the line\n":                   true,
+		"name: a\nmatch:\n  # inside\n  path: /x\n": true,
 		"name: a\nmatch:\n  path: /x\n":             false,
-		"name: 'a # não é comentário'\n":            false,
+		"name: 'a # not a comment'\n":               false,
 	} {
 		if got := HasComments([]byte(doc)); got != want {
-			t.Errorf("HasComments(%q) = %v, esperado %v", doc, got, want)
+			t.Errorf("HasComments(%q) = %v, expected %v", doc, got, want)
 		}
 	}
 }

@@ -12,26 +12,26 @@ import (
 	"strings"
 )
 
-// PathPattern é um path exato, um path com parâmetros de segmento
-// ("/viacep/:id/json") ou um curinga de sufixo, já decomposto.
+// PathPattern is an exact path, a path with segment parameters
+// ("/zip/:id/json") or a suffix wildcard, already broken apart.
 type PathPattern struct {
 	Raw      string
-	Prefix   string // parte fixa de um curinga: "/api" em "/api/*"
+	Prefix   string // fixed part of a wildcard: "/api" in "/api/*"
 	Wildcard bool
-	// Segs decompõe o path (ou a parte fixa do curinga) quando ele tem
-	// parâmetros de segmento; nil num path sem parâmetros.
+	// Segs breaks the path (or the fixed part of the wildcard) into segments
+	// when it has segment parameters; nil for a path without parameters.
 	Segs []PathSegment
 }
 
-// PathSegment é um segmento de um path com parâmetros: um literal, que casa
-// só com ele mesmo, ou um parâmetro (Param não vazio), que casa com
-// exatamente um segmento não vazio.
+// PathSegment is one segment of a path with parameters: a literal, which
+// matches only itself, or a parameter (Param not empty), which matches
+// exactly one non-empty segment.
 type PathSegment struct {
 	Literal string
 	Param   string
 }
 
-// ParamPrefix marca um parâmetro de segmento: ":id" em "/viacep/:id/json".
+// ParamPrefix marks a segment parameter: ":id" in "/zip/:id/json".
 const ParamPrefix = ":"
 
 func ParsePathPattern(p string) PathPattern {
@@ -53,11 +53,11 @@ func ParsePathPattern(p string) PathPattern {
 	return pp
 }
 
-// HasParams informa se o path tem parâmetros de segmento.
+// HasParams reports whether the path has segment parameters.
 func (p PathPattern) HasParams() bool { return p.Segs != nil }
 
-// Literals conta os segmentos literais de um path com parâmetros: entre
-// paths com parâmetros, o de mais literais é o mais específico.
+// Literals counts the literal segments of a path with parameters: among paths
+// with parameters, the one with more literals is the more specific.
 func (p PathPattern) Literals() int {
 	n := 0
 	for _, s := range p.Segs {
@@ -68,9 +68,9 @@ func (p PathPattern) Literals() int {
 	return n
 }
 
-// Match informa se o path casa. "/api/*" casa com "/api" e com tudo sob
-// "/api/"; "/viacep/:id/json" casa com "/viacep/40415345/json", mas não com
-// "/viacep//json" nem com "/viacep/1/extra/json".
+// Match reports whether the path matches. "/api/*" matches "/api" and
+// everything under "/api/"; "/zip/:id/json" matches "/zip/40415345/json",
+// but neither "/zip//json" nor "/zip/1/extra/json".
 func (p PathPattern) Match(path string) bool {
 	if p.Segs != nil {
 		return p.matchSegments(path)
@@ -81,8 +81,8 @@ func (p PathPattern) Match(path string) bool {
 	return path == p.Prefix || strings.HasPrefix(path, p.Prefix+"/")
 }
 
-// matchSegments casa segmento a segmento. Com curinga, os segmentos além da
-// parte fixa são livres, como em "/api/*".
+// matchSegments matches segment by segment. With a wildcard, the segments
+// beyond the fixed part are free, as in "/api/*".
 func (p PathPattern) matchSegments(path string) bool {
 	rest, ok := strings.CutPrefix(path, "/")
 	if !ok {
@@ -105,7 +105,7 @@ func (p PathPattern) matchSegments(path string) bool {
 	return true
 }
 
-// Strip remove a parte fixa do curinga, preservando ao menos "/".
+// Strip drops the fixed part of the wildcard, keeping at least "/".
 func (p PathPattern) Strip(path string) string {
 	rest := strings.TrimPrefix(path, p.Prefix)
 	if rest == "" || rest[0] != '/' {
@@ -114,7 +114,7 @@ func (p PathPattern) Strip(path string) string {
 	return rest
 }
 
-// rank ordena padrões: exato antes de curinga, curinga longo antes de curto.
+// rank orders patterns: exact before wildcard, long wildcard before short one.
 func (p PathPattern) rank() (int, int) {
 	if !p.Wildcard {
 		return 2, len(p.Raw)
@@ -122,7 +122,8 @@ func (p PathPattern) rank() (int, int) {
 	return 1, len(p.Prefix)
 }
 
-// CompiledMatcher é um Matcher com expressão regular e JSON já preparados.
+// CompiledMatcher is a Matcher with its regular expression and JSON already
+// prepared.
 type CompiledMatcher struct {
 	Matcher
 	re   *regexp.Regexp
@@ -132,7 +133,7 @@ type CompiledMatcher struct {
 func compileMatcher(m Matcher) (CompiledMatcher, error) {
 	c := CompiledMatcher{Matcher: m}
 	if m.Regex != nil {
-		c.re = regexp.MustCompile(*m.Regex) // já validado
+		c.re = regexp.MustCompile(*m.Regex) // already validated
 	}
 	if m.JSON != nil {
 		v, err := normalizeJSON(m.JSON)
@@ -144,7 +145,7 @@ func compileMatcher(m Matcher) (CompiledMatcher, error) {
 	return c, nil
 }
 
-// MatchString aplica o operador ao valor observado na requisição.
+// MatchString applies the operator to the value observed in the request.
 func (c CompiledMatcher) MatchString(s string) bool {
 	switch {
 	case c.Equals != nil:
@@ -163,12 +164,13 @@ func (c CompiledMatcher) MatchString(s string) bool {
 	return false
 }
 
-// normalizeJSON leva um valor vindo do YAML ou do JSON à forma de
-// encoding/json (números como float64), para comparar sem depender da origem.
+// normalizeJSON brings a value that came from YAML or JSON into the shape
+// encoding/json produces (numbers as float64), so comparisons do not depend
+// on where the value came from.
 func normalizeJSON(v any) (any, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
-		return nil, fmt.Errorf("valor não representável em JSON: %v", err)
+		return nil, fmt.Errorf("value cannot be represented in JSON: %v", err)
 	}
 	var out any
 	if err := json.Unmarshal(b, &out); err != nil {
@@ -178,18 +180,18 @@ func normalizeJSON(v any) (any, error) {
 }
 
 func jsonEqual(a, b any) bool {
-	ab, _ := json.Marshal(a) // encoding/json ordena as chaves dos mapas
+	ab, _ := json.Marshal(a) // encoding/json sorts map keys
 	bb, _ := json.Marshal(b)
 	return bytes.Equal(ab, bb)
 }
 
-// CompiledRoute é uma rota validada, com upstream e padrões interpretados.
+// CompiledRoute is a validated route, with its upstream and patterns parsed.
 type CompiledRoute struct {
 	Doc      Route
 	File     string
-	Upstream *url.URL // nil quando a rota não declara upstream
+	Upstream *url.URL // nil when the route declares no upstream
 	Path     *PathPattern
-	// Overrides em ordem de precedência: o primeiro que casa é o aplicado.
+	// Overrides in precedence order: the first one that matches is applied.
 	Overrides []*CompiledOverride
 
 	index *nodeIndex
@@ -197,7 +199,7 @@ type CompiledRoute struct {
 
 func (r *CompiledRoute) Name() string { return r.Doc.Name }
 
-// Pattern descreve o casamento da rota para mensagens e listagens.
+// Pattern describes how the route matches, for messages and listings.
 func (r *CompiledRoute) Pattern() string {
 	switch {
 	case r.Doc.Match.Host != "" && r.Path != nil:
@@ -208,7 +210,7 @@ func (r *CompiledRoute) Pattern() string {
 	return r.Path.Raw
 }
 
-// Override devolve o override de nome dado, ou nil.
+// Override returns the override with the given name, or nil.
 func (r *CompiledRoute) Override(name string) *CompiledOverride {
 	for _, o := range r.Overrides {
 		if o.Doc.Name == name {
@@ -218,25 +220,26 @@ func (r *CompiledRoute) Override(name string) *CompiledOverride {
 	return nil
 }
 
-// CompiledOverride é um override validado, com critérios e resposta prontos.
+// CompiledOverride is a validated override, with its criteria and response
+// ready to use.
 type CompiledOverride struct {
 	Doc       Override
 	Route     string
-	Order     int // posição no documento, último critério de desempate
+	Order     int // position in the document, the last tie-breaker
 	Path      *PathPattern
 	PathRegex *regexp.Regexp
-	Headers   map[string]CompiledMatcher // chaves canônicas
+	Headers   map[string]CompiledMatcher // canonical keys
 	Query     map[string]CompiledMatcher
 	Body      *CompiledMatcher
-	// Resposta pré-serializada; ContentType vazio quando nada se infere.
+	// Pre-serialized response; ContentType is empty when nothing can be inferred.
 	RespondBody        []byte
 	RespondContentType string
 }
 
-// ID identifica o override globalmente: rota/override.
+// ID identifies the override globally: route/override.
 func (o *CompiledOverride) ID() string { return o.Route + "/" + o.Doc.Name }
 
-// Criteria conta os critérios além do path, para desempate por especificidade.
+// Criteria counts the criteria beyond the path, to break specificity ties.
 func (o *CompiledOverride) Criteria() int {
 	n := len(o.Headers) + len(o.Query)
 	if o.Doc.Match.Method != "" {
@@ -248,12 +251,13 @@ func (o *CompiledOverride) Criteria() int {
 	return n
 }
 
-// pathRank ordena os critérios de path do mais ao menos específico: exato;
-// com parâmetros de segmento, desempatado pelo número de segmentos literais;
-// expressão regular; curinga, do mais longo ao mais curto. A spec põe o
-// parâmetro de segmento entre o exato e o curinga e não posiciona a expressão
-// regular; ela fica depois do parâmetro de segmento, cuja estrutura mostra o
-// quanto ele é estreito, e antes do curinga, que costuma ser mais largo.
+// pathRank orders path criteria from the most to the least specific: exact;
+// with segment parameters, broken by the number of literal segments; regular
+// expression; wildcard, from the longest to the shortest. The spec puts the
+// segment parameter between the exact path and the wildcard and says nothing
+// about where the regular expression goes; it sits after the segment
+// parameter, whose structure shows how narrow it is, and before the wildcard,
+// which is usually broader.
 func (o *CompiledOverride) pathRank() (int, int) {
 	switch {
 	case o.PathRegex != nil:
@@ -269,7 +273,7 @@ func (o *CompiledOverride) pathRank() (int, int) {
 func compileRoute(file string, r Route) (*CompiledRoute, []issue) {
 	c := &CompiledRoute{Doc: r, File: file}
 	if r.Upstream != "" {
-		c.Upstream, _ = url.Parse(r.Upstream) // já validado
+		c.Upstream, _ = url.Parse(r.Upstream) // already validated
 	}
 	if r.Match.Path != "" {
 		p := ParsePathPattern(r.Match.Path)
@@ -335,7 +339,7 @@ func compileOverride(route string, i int, o Override) (*CompiledOverride, []issu
 		default:
 			js, err := json.Marshal(b)
 			if err != nil {
-				is = append(is, issuef(base+".respond.body", "corpo não representável em JSON: %v", err))
+				is = append(is, issuef(base+".respond.body", "body cannot be represented in JSON: %v", err))
 			}
 			c.RespondBody = js
 			c.RespondContentType = "application/json"
@@ -344,7 +348,7 @@ func compileOverride(route string, i int, o Override) (*CompiledOverride, []issu
 	return c, is
 }
 
-// hostRank: rota com host vem antes de rota sem host.
+// hostRank: a route with a host comes before a route without one.
 func (r *CompiledRoute) hostRank() int {
 	if r.Doc.Match.Host != "" {
 		return 1
@@ -359,7 +363,7 @@ func (r *CompiledRoute) pathRank() (int, int) {
 	return r.Path.rank()
 }
 
-// sortRoutes ordena da rota mais específica para a menos específica.
+// sortRoutes orders routes from the most to the least specific.
 func sortRoutes(rs []*CompiledRoute) {
 	slices.SortStableFunc(rs, func(a, b *CompiledRoute) int {
 		ar, al := a.pathRank()

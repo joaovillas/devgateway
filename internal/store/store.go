@@ -1,76 +1,77 @@
-// Package store define o armazenamento do histórico de trocas e suas
-// implementações: memória, arquivo NDJSON e SQLite.
+// Package store defines the storage for the exchange history and its
+// implementations: memory, NDJSON file and SQLite.
 package store
 
 import (
 	"context"
 	"errors"
 
-	"github.com/gamerjp64/gateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/exchange"
 )
 
 var (
-	// ErrNotFound: nenhuma troca com o identificador pedido.
-	ErrNotFound = errors.New("troca não encontrada")
-	// ErrNoMore: a navegação chegou ao fim do histórico nessa direção.
-	ErrNoMore = errors.New("não há mais trocas nessa direção")
-	// ErrBadCursor: o cursor de paginação não foi emitido por este store.
-	ErrBadCursor = errors.New("cursor de paginação inválido")
-	// ErrDuplicateID: já existe no histórico uma troca com o identificador
-	// que se tentou registrar; o registro é recusado e nada muda.
-	ErrDuplicateID = errors.New("já existe uma troca com esse identificador")
+	// ErrNotFound: no exchange with the requested ID.
+	ErrNotFound = errors.New("exchange not found")
+	// ErrNoMore: navigation reached the end of the history in that direction.
+	ErrNoMore = errors.New("no more exchanges in that direction")
+	// ErrBadCursor: the pagination cursor was not issued by this store.
+	ErrBadCursor = errors.New("invalid pagination cursor")
+	// ErrDuplicateID: the history already holds an exchange with the ID that
+	// was being recorded; the record is rejected and nothing changes.
+	ErrDuplicateID = errors.New("an exchange with that ID already exists")
 )
 
-// Direction orienta a navegação item a item.
+// Direction points item-by-item navigation.
 type Direction int
 
 const (
-	// Older anda para trás no tempo.
+	// Older walks back in time.
 	Older Direction = iota
-	// Newer anda para frente no tempo.
+	// Newer walks forward in time.
 	Newer
 )
 
-// Page pede uma página da listagem. Cursor vazio começa pela troca mais nova.
+// Page requests one page of the listing. An empty Cursor starts at the
+// newest exchange.
 type Page struct {
 	Limit  int
 	Cursor string
 }
 
-// ListResult é uma página, da troca mais nova para a mais antiga. Next vazio
-// indica que não há continuação.
+// ListResult is one page, newest exchange first. An empty Next means there
+// is nothing more to fetch.
 type ListResult struct {
 	Items []exchange.Exchange
 	Next  string
 }
 
-// Store guarda o histórico. A ordem do histórico é cronológica pela chegada
-// da requisição: instante de início, depois número de sequência e, só para
-// desempatar, a ordem de registro. Como a captura registra a troca quando
-// ela termina, uma troca lenta entra no histórico depois de outras que
-// chegaram depois dela, mas ocupa a posição da sua chegada. Todas as
-// implementações precisam passar pela mesma bateria de contrato (pacote
-// storetest).
+// Store holds the history. History order is chronological by request
+// arrival: start instant, then sequence number and, only to break ties, the
+// order in which the exchange was recorded. Since capture records an
+// exchange once it finishes, a slow exchange enters the history after others
+// that arrived later, but it takes the position of its arrival. Every
+// implementation has to pass the same contract suite (package storetest).
 type Store interface {
-	// Record acrescenta a troca ao histórico, ou devolve ErrDuplicateID se
-	// o identificador já constar dele.
+	// Record appends the exchange to the history, or returns ErrDuplicateID
+	// if the ID is already in it.
 	Record(ctx context.Context, e *exchange.Exchange) error
 	List(ctx context.Context, f exchange.Filter, p Page) (ListResult, error)
 	Get(ctx context.Context, id string) (exchange.Exchange, error)
-	// Neighbor devolve a troca vizinha de id na direção pedida, entre as que
-	// satisfazem o filtro. A própria troca id não precisa satisfazê-lo.
+	// Neighbor returns the exchange next to id in the requested direction,
+	// among those that satisfy the filter. Exchange id itself need not
+	// satisfy it.
 	Neighbor(ctx context.Context, id string, d Direction, f exchange.Filter) (exchange.Exchange, error)
 	Clear(ctx context.Context) error
 	Close() error
 }
 
-// DefaultLimit e MaxLimit delimitam o tamanho de página.
+// DefaultLimit and MaxLimit bound the page size.
 const (
 	DefaultLimit = 50
 	MaxLimit     = 500
 )
 
-// NormalizeLimit aplica o padrão e o teto de página.
+// NormalizeLimit applies the default and the page size cap.
 func NormalizeLimit(n int) int {
 	switch {
 	case n <= 0:

@@ -1,6 +1,6 @@
-// Comando payments: serviço de pagamentos de brinquedo para o ambiente de
-// exemplo. Responde JSON, tem um endpoint lento (a criação de cobrança) e um
-// fluxo SSE de eventos. Nada é persistido: as cobranças vivem na memória.
+// Command payments is a toy payment service for the example environment.
+// It answers JSON, has one slow endpoint (creating a charge) and an SSE
+// event stream. Nothing is persisted: charges live in memory.
 package main
 
 import (
@@ -30,12 +30,12 @@ type store struct {
 }
 
 func main() {
-	addr := flag.String("addr", "127.0.0.1:9001", "endereço em que o serviço atende")
+	addr := flag.String("addr", "127.0.0.1:9001", "address the service listens on")
 	flag.Parse()
 
 	s := &store{charges: map[string]charge{}}
-	s.add(4990, "BRL")
-	s.add(12000, "BRL")
+	s.add(4990, "USD")
+	s.add(12000, "USD")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -43,8 +43,8 @@ func main() {
 	})
 	mux.HandleFunc("GET /balance", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"available": map[string]any{"amount": 152340, "currency": "BRL"},
-			"pending":   map[string]any{"amount": 8800, "currency": "BRL"},
+			"available": map[string]any{"amount": 152340, "currency": "USD"},
+			"pending":   map[string]any{"amount": 8800, "currency": "USD"},
 		})
 	})
 	mux.HandleFunc("GET /charges", func(w http.ResponseWriter, r *http.Request) {
@@ -58,8 +58,8 @@ func main() {
 		}
 		writeJSON(w, http.StatusOK, c)
 	})
-	// A criação é o endpoint lento: simula a ida a um adquirente, entre
-	// 400 ms e 1,2 s.
+	// Creating a charge is the slow endpoint: it fakes a round trip to an
+	// acquirer, between 400 ms and 1.2 s.
 	mux.HandleFunc("POST /charges", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Amount   int    `json:"amount"`
@@ -70,7 +70,7 @@ func main() {
 			return
 		}
 		if in.Currency == "" {
-			in.Currency = "BRL"
+			in.Currency = "USD"
 		}
 		select {
 		case <-time.After(400*time.Millisecond + rand.N(800*time.Millisecond)):
@@ -79,17 +79,17 @@ func main() {
 		}
 		writeJSON(w, http.StatusCreated, s.add(in.Amount, in.Currency))
 	})
-	// Fluxo SSE: um evento por segundo até o cliente desconectar.
+	// SSE stream: one event per second until the client disconnects.
 	mux.HandleFunc("GET /events", func(w http.ResponseWriter, r *http.Request) {
 		fl, ok := w.(http.Flusher)
 		if !ok {
-			http.Error(w, "streaming não suportado", http.StatusInternalServerError)
+			http.Error(w, "streaming not supported", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, ": fluxo de eventos de pagamento\n\n")
+		fmt.Fprint(w, ": payment event stream\n\n")
 		fl.Flush()
 		kinds := []string{"charge.created", "charge.paid", "charge.refunded", "payout.sent"}
 		t := time.NewTicker(time.Second)
@@ -108,7 +108,7 @@ func main() {
 		}
 	})
 
-	log.Printf("payments atendendo em http://%s", *addr)
+	log.Printf("payments listening on http://%s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, mux))
 }
 

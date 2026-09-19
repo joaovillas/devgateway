@@ -13,14 +13,14 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/gamerjp64/gateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/exchange"
 )
 
-// NDJSON grava uma troca por linha num arquivo, só por acréscimo, na ordem
-// em que as trocas terminam. Um índice em memória, em ordem crescente de
-// chave (orderKey), guarda a posição de cada linha e os campos usados nos
-// filtros, de modo que consultar não exige reler o arquivo e ler uma troca
-// exige uma única leitura posicionada.
+// NDJSON writes one exchange per line to an append-only file, in the order
+// the exchanges finish. An in-memory index, in ascending key (orderKey)
+// order, holds the position of each line and the fields used by the filters,
+// so that querying never has to reread the file and reading one exchange
+// takes a single positioned read.
 type NDJSON struct {
 	mu    sync.RWMutex
 	path  string
@@ -28,18 +28,19 @@ type NDJSON struct {
 	size  int64
 	index []ndEntry
 	byID  map[string]orderKey
-	// lines conta as trocas lidas ou gravadas desde a abertura: é a posição
-	// de registro da próxima, a mesma que ela terá ao reabrir o arquivo.
+	// lines counts the exchanges read or written since the file was opened:
+	// it is the record position of the next one, the same one it will get
+	// when the file is reopened.
 	lines uint64
-	// base é a época do histórico: avança a cada limpeza, para que um cursor
-	// emitido antes dela não alcance trocas novas. Ela é gravada na primeira
-	// linha do arquivo limpo (baseLine) e sobrevive ao reinício.
+	// base is the history epoch: it is bumped on every clear, so that a
+	// cursor issued before it cannot reach the new exchanges. It is written
+	// on the first line of the cleared file (baseLine) and survives restarts.
 	base uint64
 }
 
-// basePrefix marca a linha de controle que guarda a base das chaves de
-// ordem. Uma troca serializada sempre começa por {"id":, então as duas nunca
-// se confundem.
+// basePrefix marks the control line that holds the base of the order keys. A
+// serialized exchange always starts with {"id":, so the two can never be
+// confused.
 var basePrefix = []byte(`{"_base":`)
 
 type baseLine struct {
@@ -50,12 +51,12 @@ type ndEntry struct {
 	key    orderKey
 	offset int64
 	length int
-	meta   exchange.Exchange // sem cabeçalhos nem corpos
+	meta   exchange.Exchange // no headers, no bodies
 }
 
-// OpenNDJSON abre (ou cria) o arquivo e reconstrói o índice. Uma última
-// linha incompleta, deixada por uma interrupção no meio da escrita, é
-// descartada; linhas ilegíveis no meio do arquivo são ignoradas.
+// OpenNDJSON opens (or creates) the file and rebuilds the index. An
+// incomplete last line, left behind by an interrupted write, is dropped;
+// unreadable lines in the middle of the file are skipped.
 func OpenNDJSON(path string) (*NDJSON, error) {
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -81,7 +82,7 @@ func (s *NDJSON) load() error {
 		line, err := r.ReadBytes('\n')
 		if errors.Is(err, io.EOF) {
 			if len(line) > 0 {
-				// Linha sem terminador: escrita interrompida. Descarta.
+				// Line without a terminator: interrupted write. Drop it.
 				if err := s.f.Truncate(offset); err != nil {
 					return err
 				}
@@ -97,8 +98,8 @@ func (s *NDJSON) load() error {
 				s.base = b.Base
 			}
 		} else {
-			// Um identificador repetido (arquivo editado à mão) fica com a
-			// primeira ocorrência, como se a segunda tivesse sido recusada.
+			// A repeated ID (hand-edited file) keeps the first occurrence,
+			// as if the second one had been rejected.
 			var e exchange.Exchange
 			if json.Unmarshal(line, &e) == nil {
 				if _, dup := s.byID[e.ID]; !dup {
@@ -112,7 +113,7 @@ func (s *NDJSON) load() error {
 	return nil
 }
 
-// search devolve a posição da primeira troca com chave não anterior a k.
+// search returns the position of the first exchange whose key is not before k.
 func (s *NDJSON) search(k orderKey) int {
 	i, _ := slices.BinarySearchFunc(s.index, k, func(e ndEntry, k orderKey) int { return e.key.compare(k) })
 	return i
@@ -139,7 +140,7 @@ func (s *NDJSON) Record(_ context.Context, e *exchange.Exchange) error {
 		return ErrDuplicateID
 	}
 	if _, err := s.f.WriteAt(line, s.size); err != nil {
-		return fmt.Errorf("gravando histórico em %s: %w", s.path, err)
+		return fmt.Errorf("writing history to %s: %w", s.path, err)
 	}
 	s.add(s.size, len(line), e)
 	s.size += int64(len(line))
@@ -150,7 +151,7 @@ func (s *NDJSON) read(i int) (exchange.Exchange, error) {
 	en := s.index[i]
 	buf := make([]byte, en.length)
 	if _, err := s.f.ReadAt(buf, en.offset); err != nil {
-		return exchange.Exchange{}, fmt.Errorf("lendo histórico em %s: %w", s.path, err)
+		return exchange.Exchange{}, fmt.Errorf("reading history from %s: %w", s.path, err)
 	}
 	var e exchange.Exchange
 	if err := json.Unmarshal(bytes.TrimSuffix(buf, []byte("\n")), &e); err != nil {
@@ -170,9 +171,10 @@ func (s *NDJSON) List(_ context.Context, f exchange.Filter, p Page) (ListResult,
 			return ListResult{}, err
 		}
 		if c.Epoch != s.base {
-			return ListResult{}, nil // cursor anterior à última limpeza
+			return ListResult{}, nil // cursor predates the last clear
 		}
-		// O cursor é a chave da última troca entregue; segue-se da anterior.
+		// The cursor is the key of the last exchange delivered; the listing
+		// resumes from the one before it.
 		start = s.search(c.Key) - 1
 	}
 	var res ListResult
@@ -182,7 +184,8 @@ func (s *NDJSON) List(_ context.Context, f exchange.Filter, p Page) (ListResult,
 			continue
 		}
 		if len(res.Items) == limit {
-			// Há mais uma troca que casa: a página continua depois da última entregue.
+			// One more exchange matches: the page continues after the last
+			// one delivered.
 			res.Next = encodeCursor(s.base, last)
 			break
 		}
@@ -230,27 +233,27 @@ func (s *NDJSON) Clear(context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.f.Truncate(0); err != nil {
-		return fmt.Errorf("limpando histórico em %s: %w", s.path, err)
+		return fmt.Errorf("clearing history at %s: %w", s.path, err)
 	}
 	s.base++
 	s.lines = 0
 	s.size = 0
 	s.index = nil
 	s.byID = map[string]orderKey{}
-	// A nova base abre o arquivo limpo, para que o reinício a recupere.
+	// The new base opens the cleared file, so that a restart picks it up.
 	line, err := json.Marshal(baseLine{Base: s.base})
 	if err != nil {
 		return err
 	}
 	line = append(line, '\n')
 	if _, err := s.f.WriteAt(line, 0); err != nil {
-		return fmt.Errorf("limpando histórico em %s: %w", s.path, err)
+		return fmt.Errorf("clearing history at %s: %w", s.path, err)
 	}
 	s.size = int64(len(line))
 	return nil
 }
 
-// Path é o arquivo do histórico.
+// Path is the history file.
 func (s *NDJSON) Path() string { return s.path }
 
 func (s *NDJSON) Close() error {

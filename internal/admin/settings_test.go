@@ -15,10 +15,10 @@ func TestTouchedKeys(t *testing.T) {
 		{map[string]any{"ports": nil}, []string{"ports.admin", "ports.traffic"}},
 		{map[string]any{"ports": map[string]any{}}, nil},
 		{map[string]any{"history": map[string]any{"backend": "sqlite", "path": nil}}, []string{"history.backend", "history.path"}},
-		{map[string]any{"schemaVersion": 1, "desconhecido": 2}, nil},
+		{map[string]any{"schemaVersion": 1, "unknown": 2}, nil},
 	} {
 		if got := touchedKeys(c.patch, ""); !slices.Equal(got, c.want) {
-			t.Errorf("%v: %v, esperado %v", c.patch, got, c.want)
+			t.Errorf("%v: %v, want %v", c.patch, got, c.want)
 		}
 	}
 }

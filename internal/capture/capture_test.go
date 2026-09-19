@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/exchange"
-	"github.com/gamerjp64/gateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/store"
 )
 
 func newRecorder(t *testing.T) (*Recorder, *store.Memory) {
@@ -37,15 +37,15 @@ func stored(t *testing.T, r *Recorder, st store.Store) []exchange.Exchange {
 
 var on = Options{Record: true, MaxBodyBytes: 1024}
 
-// Requirement: Decomposição da latência
+// Requirement: Latency breakdown
 
 func TestSynthesizedResponseHasNoUpstreamTime(t *testing.T) {
 	r, st := newRecorder(t)
 	w := httptest.NewRecorder()
 	rec := r.Begin(w, httptest.NewRequest(http.MethodGet, "/x", nil), on)
 	rec.SetRoute("payments", "")
-	rec.Intervene("payments/falha", "synthesized")
-	if err := rec.Delay(t.Context(), "payments/falha", 60*time.Millisecond); err != nil {
+	rec.Intervene("payments/failure", "synthesized")
+	if err := rec.Delay(t.Context(), "payments/failure", 60*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 	rec.Writer().WriteHeader(http.StatusServiceUnavailable)
@@ -53,16 +53,16 @@ func TestSynthesizedResponseHasNoUpstreamTime(t *testing.T) {
 
 	e := stored(t, r, st)[0]
 	if e.Timing.UpstreamMs != 0 {
-		t.Fatalf("resposta sintetizada não deveria contabilizar upstream: %+v", e.Timing)
+		t.Fatalf("a synthesized response should not count upstream time: %+v", e.Timing)
 	}
 	if e.Timing.InjectedMs < 60 || e.Timing.InjectedMs > 300 {
-		t.Fatalf("o atraso medido deveria constar como injetado: %+v", e.Timing)
+		t.Fatalf("the measured delay should show up as injected: %+v", e.Timing)
 	}
-	if e.Status != 503 || e.Outcome != exchange.OutcomeSynthesized || e.Override != "payments/falha" {
-		t.Fatalf("status %d, resultado %s, override %q", e.Status, e.Outcome, e.Override)
+	if e.Status != 503 || e.Outcome != exchange.OutcomeSynthesized || e.Override != "payments/failure" {
+		t.Fatalf("status %d, outcome %s, override %q", e.Status, e.Outcome, e.Override)
 	}
 	if strings.Join(e.Interventions, ",") != "synthesized,delayed" {
-		t.Fatalf("intervenções %v", e.Interventions)
+		t.Fatalf("interventions %v", e.Interventions)
 	}
 }
 
@@ -76,10 +76,10 @@ func TestInjectedDelayIsDiscountedFromUpstream(t *testing.T) {
 	rec.Finish()
 	tm := stored(t, r, st)[0].Timing
 	if tm.UpstreamMs < 30 || tm.UpstreamMs > 90 {
-		t.Fatalf("o atraso deveria ser descontado do tempo de upstream: %+v", tm)
+		t.Fatalf("the delay should be subtracted from the upstream time: %+v", tm)
 	}
 	if tm.InjectedMs < 100 {
-		t.Fatalf("tempo injetado %+v", tm)
+		t.Fatalf("injected time %+v", tm)
 	}
 }
 
@@ -90,14 +90,14 @@ func TestDelayStopsWhenClientGivesUp(t *testing.T) {
 	defer cancel()
 	start := time.Now()
 	if err := rec.Delay(ctx, "a/b", 5*time.Second); err == nil {
-		t.Fatal("esperado o erro do contexto")
+		t.Fatal("want the context's error")
 	}
 	if time.Since(start) > time.Second {
-		t.Fatal("o atraso deveria terminar quando o cliente desiste")
+		t.Fatal("the delay should end when the client gives up")
 	}
 }
 
-// Requirement: Registro das trocas HTTP
+// Requirement: Recording of the HTTP exchanges
 
 func TestSequenceIsMonotonicEvenWithoutRecording(t *testing.T) {
 	r, st := newRecorder(t)
@@ -117,12 +117,12 @@ func TestSequenceIsMonotonicEvenWithoutRecording(t *testing.T) {
 	seen := map[uint64]bool{}
 	for s := range seqs {
 		if s < 1 || s > 100 || seen[s] {
-			t.Fatalf("sequência %d repetida ou fora de 1..100", s)
+			t.Fatalf("sequence number %d repeated or outside 1..100", s)
 		}
 		seen[s] = true
 	}
 	if n := len(stored(t, r, st)); n != 50 {
-		t.Fatalf("só as requisições com registro ligado deveriam ser gravadas: %d", n)
+		t.Fatalf("only the requests with recording on should be written: %d", n)
 	}
 }
 
@@ -131,16 +131,16 @@ func TestWriterKeepsFlushAndUnwrap(t *testing.T) {
 	w := httptest.NewRecorder()
 	rec := r.Begin(w, httptest.NewRequest(http.MethodGet, "/x", nil), on)
 	cw := rec.Writer()
-	io.WriteString(cw, "parte")
+	io.WriteString(cw, "part")
 	if err := http.NewResponseController(cw).Flush(); err != nil {
-		t.Fatalf("o Flush deveria chegar ao writer do servidor: %v", err)
+		t.Fatalf("the Flush should reach the server's writer: %v", err)
 	}
 	if !w.Flushed {
-		t.Fatal("o writer do servidor não recebeu o Flush")
+		t.Fatal("the server's writer did not get the Flush")
 	}
 	cw.(http.Flusher).Flush()
 	if u, ok := cw.(interface{ Unwrap() http.ResponseWriter }); !ok || u.Unwrap() != w {
-		t.Fatal("o writer deveria expor o original por Unwrap")
+		t.Fatal("the writer should expose the original one through Unwrap")
 	}
 	rec.Finish()
 }
@@ -152,18 +152,18 @@ func TestInformationalResponsesDoNotFixStatus(t *testing.T) {
 	rec.Writer().WriteHeader(http.StatusCreated)
 	rec.Finish()
 	if e := stored(t, r, st)[0]; e.Status != http.StatusCreated {
-		t.Fatalf("o status final deveria ser 201, registrado %d", e.Status)
+		t.Fatalf("the final status should be 201, recorded %d", e.Status)
 	}
 }
 
 func TestDroppedHasNoStatus(t *testing.T) {
 	r, st := newRecorder(t)
 	rec := r.Begin(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/x", nil), on)
-	rec.Dropped("a/queda", "hijack")
+	rec.Dropped("a/drop", "hijack")
 	rec.Finish()
 	e := stored(t, r, st)[0]
-	if e.Status != 0 || e.Outcome != exchange.OutcomeDropped || e.DropMode != "hijack" || e.Override != "a/queda" {
-		t.Fatalf("queda registrada como status %d, resultado %s, modo %q, override %q", e.Status, e.Outcome, e.DropMode, e.Override)
+	if e.Status != 0 || e.Outcome != exchange.OutcomeDropped || e.DropMode != "hijack" || e.Override != "a/drop" {
+		t.Fatalf("drop recorded as status %d, outcome %s, mode %q, override %q", e.Status, e.Outcome, e.DropMode, e.Override)
 	}
 }
 
@@ -176,19 +176,19 @@ func TestRequestBodyNotFullyReadIsMarked(t *testing.T) {
 	rec.Finish()
 	e := stored(t, r, st)[0]
 	if e.Request.Size != 100 || !e.Request.Truncated || string(e.Request.Body) != "aaaaaaaaaa" {
-		t.Fatalf("corpo lido pela metade: tamanho %d, truncado %v, corpo %q", e.Request.Size, e.Request.Truncated, e.Request.Body)
+		t.Fatalf("body read only halfway: size %d, truncated %v, body %q", e.Request.Size, e.Request.Truncated, e.Request.Body)
 	}
 }
 
 func TestDrainRequestCapturesUnforwardedBody(t *testing.T) {
 	r, st := newRecorder(t)
-	req := httptest.NewRequest(http.MethodPost, "/x", strings.NewReader("corpo inteiro"))
+	req := httptest.NewRequest(http.MethodPost, "/x", strings.NewReader("complete body"))
 	rec := r.Begin(httptest.NewRecorder(), req, on)
 	rec.DrainRequest()
 	rec.Finish()
 	e := stored(t, r, st)[0]
-	if string(e.Request.Body) != "corpo inteiro" || e.Request.Truncated || e.Request.Size != 13 {
-		t.Fatalf("corpo não encaminhado: %q, truncado %v, tamanho %d", e.Request.Body, e.Request.Truncated, e.Request.Size)
+	if string(e.Request.Body) != "complete body" || e.Request.Truncated || e.Request.Size != 13 {
+		t.Fatalf("body that was not forwarded: %q, truncated %v, size %d", e.Request.Body, e.Request.Truncated, e.Request.Size)
 	}
 }
 
@@ -199,7 +199,7 @@ func TestZeroLimitCapturesNoBody(t *testing.T) {
 	rec.Finish()
 	e := stored(t, r, st)[0]
 	if len(e.Response.Body) != 0 || !e.Response.Truncated || e.Response.Size != 3 {
-		t.Fatalf("limite zero: corpo %q, truncado %v, tamanho %d", e.Response.Body, e.Response.Truncated, e.Response.Size)
+		t.Fatalf("zero limit: body %q, truncated %v, size %d", e.Response.Body, e.Response.Truncated, e.Response.Size)
 	}
 }
 
@@ -213,11 +213,11 @@ func TestCloseWritesPendingExchanges(t *testing.T) {
 	r.Close()
 	res, _ := st.List(t.Context(), exchange.Filter{}, store.Page{})
 	if len(res.Items) != 10 {
-		t.Fatalf("o encerramento deveria gravar a fila pendente: %d de 10", len(res.Items))
+		t.Fatalf("shutdown should write the pending queue: %d out of 10", len(res.Items))
 	}
-	r.Close() // idempotente
+	r.Close() // idempotent
 	if err := r.Sync(t.Context()); err != nil {
-		t.Fatalf("Sync depois de Close não deveria falhar: %v", err)
+		t.Fatalf("Sync after Close should not fail: %v", err)
 	}
 }
 
@@ -232,7 +232,7 @@ func TestBrokerDeliversInOrder(t *testing.T) {
 	}
 	for i := range 3 {
 		if e := <-s.C; e.Seq != uint64(i) {
-			t.Fatalf("esperada a troca %d, recebida %d", i, e.Seq)
+			t.Fatalf("want exchange %d, got %d", i, e.Seq)
 		}
 	}
 }
@@ -253,13 +253,13 @@ func TestBrokerNeverBlocksOnSlowSubscriber(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("a publicação esperou por um assinante lento")
+		t.Fatal("publishing waited on a slow subscriber")
 	}
 	if slow.Dropped() != 48 || len(fast.C) != 50 {
-		t.Fatalf("o lento deveria perder 48 e o rápido receber 50: perdidas %d, recebidas %d", slow.Dropped(), len(fast.C))
+		t.Fatalf("the slow one should lose 48 and the fast one should get 50: dropped %d, received %d", slow.Dropped(), len(fast.C))
 	}
 	if slow.TakeDropped() != 48 || slow.Dropped() != 0 {
-		t.Fatal("TakeDropped deveria devolver e zerar a contagem")
+		t.Fatal("TakeDropped should return the count and zero it")
 	}
 }
 
@@ -270,10 +270,10 @@ func TestBrokerCloseStopsDelivery(t *testing.T) {
 	s.Close()
 	b.Publish(exchange.Exchange{})
 	if _, ok := <-s.C; ok {
-		t.Fatal("a assinatura fechada não deveria receber trocas")
+		t.Fatal("a closed subscription should not get exchanges")
 	}
 	if b.Subscribers() != 0 {
-		t.Fatalf("assinaturas abertas: %d", b.Subscribers())
+		t.Fatalf("open subscriptions: %d", b.Subscribers())
 	}
 }
 
@@ -290,11 +290,11 @@ func TestRecorderPublishesOnlyRecorded(t *testing.T) {
 	}
 	r.Sync(t.Context())
 	if len(s.C) != 1 {
-		t.Fatalf("só a troca registrada deveria ser publicada: %d", len(s.C))
+		t.Fatalf("only the recorded exchange should be published: %d", len(s.C))
 	}
 }
 
-// syncBuffer é um destino de log seguro para escrita concorrente.
+// syncBuffer is a log destination that is safe for concurrent writes.
 type syncBuffer struct {
 	mu sync.Mutex
 	b  strings.Builder
@@ -312,69 +312,70 @@ func (s *syncBuffer) String() string {
 	return s.b.String()
 }
 
-// Uma troca fechada depois de Close não tem quem a grave: ela é descartada
-// com aviso no log, em vez de sumir sem rastro na fila.
+// An exchange finished after Close has no one left to write it: it is dropped
+// with a warning in the log, instead of vanishing into the queue without a
+// trace.
 func TestExchangeFinishedAfterCloseIsLogged(t *testing.T) {
 	st := store.NewMemory(100)
 	var logs syncBuffer
 	r := NewRecorder(st, nil, slog.New(slog.NewTextHandler(&logs, nil)))
-	rec := r.Begin(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/tardia", nil), on)
+	rec := r.Begin(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/late", nil), on)
 	r.Close()
 	rec.Finish()
 	r.Sync(t.Context())
 	if res, _ := st.List(t.Context(), exchange.Filter{}, store.Page{}); len(res.Items) != 0 {
-		t.Fatalf("nenhuma troca deveria ser gravada depois do encerramento: %d", len(res.Items))
+		t.Fatalf("no exchange should be written after shutdown: %d", len(res.Items))
 	}
-	if l := logs.String(); !strings.Contains(l, "registro do histórico já foi encerrado") || !strings.Contains(l, "/tardia") {
-		t.Fatalf("a troca descartada deveria ir para o log: %q", l)
+	if l := logs.String(); !strings.Contains(l, "history recording has already been shut down") || !strings.Contains(l, "/late") {
+		t.Fatalf("the dropped exchange should go to the log: %q", l)
 	}
 }
 
-// Wait espera os registros abertos, para que o encerramento grave as trocas
-// que ainda estavam em curso (como as de conexões sequestradas).
+// Wait waits for the open records, so that shutdown writes the exchanges that
+// were still in flight (such as those of hijacked connections).
 func TestWaitForOpenRecords(t *testing.T) {
 	r, st := newRecorder(t)
-	rec := r.Begin(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/aberta", nil), on)
+	rec := r.Begin(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/open", nil), on)
 	if r.Open() != 1 {
-		t.Fatalf("esperado um registro aberto, há %d", r.Open())
+		t.Fatalf("want one open record, there are %d", r.Open())
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
 	defer cancel()
 	if err := r.Wait(ctx); err == nil {
-		t.Fatal("com um registro aberto, Wait deveria esperar até o prazo")
+		t.Fatal("with an open record, Wait should wait until the deadline")
 	}
 	go func() {
 		time.Sleep(20 * time.Millisecond)
 		rec.Finish()
 	}()
 	if err := r.Wait(t.Context()); err != nil {
-		t.Fatalf("Wait deveria terminar quando o registro fecha: %v", err)
+		t.Fatalf("Wait should end when the record closes: %v", err)
 	}
 	r.Close()
-	if res, _ := st.List(t.Context(), exchange.Filter{}, store.Page{}); len(res.Items) != 1 || res.Items[0].Path != "/aberta" {
-		t.Fatalf("a troca esperada deveria ter sido gravada: %v", res.Items)
+	if res, _ := st.List(t.Context(), exchange.Filter{}, store.Page{}); len(res.Items) != 1 || res.Items[0].Path != "/open" {
+		t.Fatalf("the exchange that was waited on should have been written: %v", res.Items)
 	}
-	// Um registro com a gravação desligada também conta até fechar.
+	// A record with writing turned off also counts until it closes.
 	off := r.Begin(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/x", nil), Options{})
 	off.Finish()
 	off.Finish()
 	if r.Open() != 0 {
-		t.Fatalf("fechar duas vezes não deveria descontar duas vezes: %d", r.Open())
+		t.Fatalf("closing twice should not count down twice: %d", r.Open())
 	}
 }
 
-// Num upgrade de protocolo o ReverseProxy não chama WriteHeader: a resposta
-// anotada por Upgrade vale, a menos que o writer tenha escrito outra.
+// On a protocol upgrade the ReverseProxy does not call WriteHeader: the
+// response noted by Upgrade holds, unless the writer has written another one.
 func TestUpgradeResponseIsRecorded(t *testing.T) {
 	r, st := newRecorder(t)
 	rec := r.Begin(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/ws", nil), on)
 	h := http.Header{"Upgrade": {"websocket"}, "Connection": {"Upgrade"}}
 	rec.Upgrade(http.StatusSwitchingProtocols, h)
-	h.Set("Upgrade", "alterado")
+	h.Set("Upgrade", "changed")
 	rec.Finish()
 	e := stored(t, r, st)[0]
 	if e.Status != http.StatusSwitchingProtocols || e.Response.Headers.Get("Upgrade") != "websocket" {
-		t.Fatalf("upgrade registrado com status %d e cabeçalhos %v", e.Status, e.Response.Headers)
+		t.Fatalf("upgrade recorded with status %d and headers %v", e.Status, e.Response.Headers)
 	}
 
 	rec = r.Begin(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/ws2", nil), on)
@@ -382,12 +383,12 @@ func TestUpgradeResponseIsRecorded(t *testing.T) {
 	rec.Writer().WriteHeader(http.StatusBadGateway)
 	rec.Finish()
 	if e := stored(t, r, st)[0]; e.Status != http.StatusBadGateway {
-		t.Fatalf("a resposta escrita depois do upgrade deveria prevalecer: %d", e.Status)
+		t.Fatalf("the response written after the upgrade should win: %d", e.Status)
 	}
 }
 
-// Um corpo sem Content-Length maior que o limite, numa resposta do próprio
-// gateway, é lido até o fim para que o tamanho real conste.
+// A body with no Content-Length larger than the limit, in a response from the
+// gateway itself, is read to the end so that the real size shows up.
 func TestDrainRequestCountsRealSizeOfChunkedBody(t *testing.T) {
 	r, st := newRecorder(t)
 	body := strings.Repeat("x", 5000)
@@ -400,6 +401,6 @@ func TestDrainRequestCountsRealSizeOfChunkedBody(t *testing.T) {
 	rec.Finish()
 	e := stored(t, r, st)[0]
 	if e.Request.Size != int64(len(body)) || !e.Request.Truncated || string(e.Request.Body) != body[:10] {
-		t.Fatalf("tamanho %d (esperado %d), truncado %v, corpo %q", e.Request.Size, len(body), e.Request.Truncated, e.Request.Body)
+		t.Fatalf("size %d (want %d), truncated %v, body %q", e.Request.Size, len(body), e.Request.Truncated, e.Request.Body)
 	}
 }

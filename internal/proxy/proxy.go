@@ -1,5 +1,5 @@
-// Package proxy atende a porta de tráfego: resolve a rota e encaminha ao
-// upstream sobre httputil.ReverseProxy.
+// Package proxy serves the traffic port: it resolves the route and forwards
+// to the upstream over httputil.ReverseProxy.
 package proxy
 
 import (
@@ -14,24 +14,24 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/capture"
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/exchange"
-	"github.com/gamerjp64/gateway/internal/override"
-	"github.com/gamerjp64/gateway/internal/upstream"
+	"github.com/gamerjp64/devgateway/internal/capture"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/override"
+	"github.com/gamerjp64/devgateway/internal/upstream"
 )
 
-// DefaultTimeout vale para rotas que não declaram timeout.
+// DefaultTimeout applies to routes that declare no timeout.
 const DefaultTimeout = 30 * time.Second
 
-// Handler é o handler da porta de tráfego.
+// Handler is the handler for the traffic port.
 type Handler struct {
 	live      *config.Live
 	rec       *capture.Recorder
 	transport http.RoundTripper
-	// delayFor decide o atraso a injetar entre a resposta pronta e a escrita
-	// ao cliente, com o override responsável. Sem ele, ou sem override que
-	// atrase, o atraso é zero.
+	// delayFor decides the delay to inject between the response being ready
+	// and the write to the client, along with the override responsible.
+	// Without it, or without an override that delays, the delay is zero.
 	delayFor func(*http.Request) (override string, d time.Duration)
 
 	tracker   *override.Tracker
@@ -39,33 +39,33 @@ type Handler struct {
 	upstreams *upstream.Health
 }
 
-// Learner aprende endpoints a partir das trocas respondidas pelo upstream.
-// Observe é chamado no fim de cada requisição com o modo aprendizado ligado
-// e não pode bloquear: a gravação acontece fora do caminho da requisição.
+// Learner learns endpoints from the exchanges answered by the upstream.
+// Observe is called at the end of every request while learning mode is on
+// and must not block: the write happens off the request path.
 type Learner interface {
 	Observe(route *config.CompiledRoute, e exchange.Exchange)
 }
 
-// Options completa o handler.
+// Options rounds out the handler.
 type Options struct {
-	// Tracker guarda o estado vivo dos overrides (expiração por tempo e por
-	// contagem). Sem ele, o handler cria o seu.
+	// Tracker holds the live state of the overrides (expiry by time and by
+	// count). Without one, the handler creates its own.
 	Tracker *override.Tracker
-	// Learner recebe as trocas do modo aprendizado. Sem ele, nada é
-	// aprendido.
+	// Learner receives the exchanges from learning mode. Without one,
+	// nothing is learned.
 	Learner Learner
-	// Upstreams recebe o resultado de cada tentativa de encaminhamento,
-	// para a disponibilidade recente dos upstreams. Sem ele, nada é contado.
+	// Upstreams receives the result of every forwarding attempt, feeding the
+	// recent availability of the upstreams. Without it, nothing is counted.
 	Upstreams *upstream.Health
 }
 
-// NewHandler atende o tráfego com a configuração em vigor em live e registra
-// as trocas em rec.
+// NewHandler serves traffic with the configuration currently in effect in
+// live and records the exchanges in rec.
 func NewHandler(live *config.Live, rec *capture.Recorder) *Handler {
 	return NewHandlerWith(live, rec, Options{})
 }
 
-// NewHandlerWith é NewHandler com as opções dadas.
+// NewHandlerWith is NewHandler with the given options.
 func NewHandlerWith(live *config.Live, rec *capture.Recorder, o Options) *Handler {
 	if o.Tracker == nil {
 		o.Tracker = override.NewTracker(live)
@@ -73,12 +73,12 @@ func NewHandlerWith(live *config.Live, rec *capture.Recorder, o Options) *Handle
 	return &Handler{live: live, rec: rec, transport: newTransport(), tracker: o.Tracker, learner: o.Learner, upstreams: o.Upstreams}
 }
 
-// Tracker devolve o estado vivo dos overrides usado pelo handler.
+// Tracker returns the live override state used by the handler.
 func (h *Handler) Tracker() *override.Tracker { return h.tracker }
 
 func newTransport() *http.Transport {
 	return &http.Transport{
-		Proxy: nil, // o gateway fala direto com o upstream, sem proxy do ambiente
+		Proxy: nil, // the gateway talks straight to the upstream, with no proxy from the environment
 		DialContext: (&net.Dialer{
 			Timeout:   5 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -88,25 +88,25 @@ func newTransport() *http.Transport {
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		// Sem isto o Transport pediria gzip ao upstream por conta própria e
-		// descompactaria a resposta, acrescentando um Accept-Encoding que o
-		// cliente não enviou e alterando o corpo que ele recebe.
+		// Without this the Transport would ask the upstream for gzip on its
+		// own and decompress the response, adding an Accept-Encoding the
+		// client never sent and changing the body it receives.
 		DisableCompression: true,
 	}
 }
 
-// ServeHTTP percorre o caminho da requisição na ordem fixa do design: resolve
-// a rota (1), abre o registro de captura (2), resolve o override ligado mais
-// específico que casa (3), sorteia aplicação, queda e atraso (4), segue como
-// se o override não existisse quando a aplicação não é sorteada (5),
-// sintetiza a resposta declarada ou encaminha ao upstream (7), aplica o
-// atraso entre a resposta pronta e a escrita ao cliente (8) e fecha o
-// registro com os tempos decompostos (9), entregando a troca ao aprendizado
-// quando ele está ligado. A queda de conexão (6) encerra a requisição antes
-// de qualquer resposta.
+// ServeHTTP walks the request path in the fixed order laid out by the design:
+// resolve the route (1), open the capture record (2), resolve the most
+// specific enabled override that matches (3), draw for application, drop and
+// delay (4), carry on as if the override did not exist when the application
+// is not drawn (5), synthesize the declared response or forward to the
+// upstream (7), apply the delay between the response being ready and the
+// write to the client (8) and close the record with the timings broken down
+// (9), handing the exchange over to learning while it is on. A connection
+// drop (6) ends the request before any response.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// O snapshot é capturado uma única vez: uma recarga no meio da requisição
-	// não a afeta.
+	// The snapshot is taken once and only once: a reload in the middle of the
+	// request does not affect it.
 	snap := h.live.Load()
 	route := Resolve(snap, r)
 
@@ -117,21 +117,21 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		MaxBodyBytes: snap.Settings.CaptureMaxBodyBytes,
 	})
 	defer func() {
-		// Uma cópia de corpo interrompida faz o ReverseProxy abortar o
-		// handler com pânico, assim como a queda em HTTP/2; a troca é
-		// registrada antes de o pânico seguir.
+		// An interrupted body copy makes the ReverseProxy abort the handler
+		// with a panic, and so does a drop over HTTP/2; the exchange is
+		// recorded before the panic carries on.
 		if p := recover(); p != nil {
-			rec.Abort("a transferência da resposta foi interrompida")
+			rec.Abort("the response transfer was interrupted")
 			rec.Finish()
 			panic(p)
 		}
 		rec.Finish()
-		// Passo 9: o aprendizado recebe a troca já respondida e grava fora
-		// do caminho da requisição.
+		// Step 9: learning receives the exchange already answered and writes
+		// off the request path.
 		if learning {
 			if e, ok := rec.Exchange(); ok {
-				// Com o registro desligado a troca não vai para o histórico:
-				// o override aprendido não pode apontar para ela.
+				// With recording off the exchange never reaches the history,
+				// so the learned override cannot point at it.
 				if !rec.Enabled() {
 					e.ID = ""
 				}
@@ -151,13 +151,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	dec := h.decide(snap, route, &r, rec)
 
-	// Passo 6: a queda tem precedência sobre a resposta declarada.
+	// Step 6: the drop takes precedence over the declared response.
 	if o := dec.Applied(); o != nil && dec.Drop {
 		h.drop(w, r, o, rec)
 		return
 	}
 
-	// Passo 7.
+	// Step 7.
 	if o := dec.Applied(); o != nil && o.Doc.Respond != nil {
 		h.synthesize(w, r, route, dec, rec)
 		return
@@ -166,7 +166,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rec.DrainRequest()
 		d := diag{
 			Error:   "no_upstream",
-			Message: "a rota não declara upstream e nenhum override interceptou a requisição",
+			Message: "the route declares no upstream and no override intercepted the request",
 			Route:   route.Name(),
 		}
 		rec.Fail(d.Error + ": " + d.Message)
@@ -180,19 +180,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.forward(w, r, route, dec, rec)
 }
 
-// decide executa os passos 3 a 5. Passo 3: entre os overrides ligados e não
-// expirados que selecionam a requisição, o mais específico. Um critério de
-// corpo lê a requisição; *r passa a ser uma requisição que entrega o corpo de
-// novo, íntegro, a quem encaminhar. Passos 4 e 5: o sorteio acontece antes de
-// qualquer contato com o upstream, para que o mesmo seed produza as mesmas
-// decisões qualquer que seja a disponibilidade dele. Sem aplicação sorteada,
-// dec.Applied é nil e a requisição segue como se o override não existisse.
+// decide runs steps 3 through 5. Step 3: among the enabled, unexpired
+// overrides that select the request, the most specific one wins. A body
+// criterion reads the request; *r then becomes a request that hands the body
+// over again, intact, to whoever forwards it. Steps 4 and 5: the draw happens
+// before any contact with the upstream, so that the same seed produces the
+// same decisions whatever the upstream's availability. With no application
+// drawn, dec.Applied is nil and the request carries on as if the override did
+// not exist.
 //
-// A aplicação sorteada é contada no estado vivo do override. Se, entre a
-// seleção e a contagem, o override se esgotou por outra requisição
-// concorrente, ele sai da seleção e a escolha é refeita, com a mesma fonte
-// derivada de (seed, sequência), como se ele já estivesse expirado na
-// entrada.
+// The drawn application is counted against the override's live state. If,
+// between selection and counting, the override ran out because of another
+// concurrent request, it drops out of the selection and the choice is made
+// again, from the same source derived from (seed, sequence), as if it had
+// already been expired on the way in.
 func (h *Handler) decide(snap *config.Snapshot, route *config.CompiledRoute, r **http.Request, rec *capture.Record) override.Decision {
 	q := override.NewRequest(*r)
 	defer func() { *r = q.Request() }()
@@ -212,11 +213,12 @@ func (h *Handler) decide(snap *config.Snapshot, route *config.CompiledRoute, r *
 	}
 }
 
-// drop encerra a conexão sem enviar resposta. Em HTTP/1.x o socket é
-// sequestrado e fechado com reset; em HTTP/2, onde não há socket próprio da
-// requisição, o handler é abortado com http.ErrAbortHandler e o servidor
-// cancela o stream. A captura registra qual dos dois aconteceu. O corpo da
-// requisição é lido antes, para constar da captura.
+// drop ends the connection without sending a response. Over HTTP/1.x the
+// socket is hijacked and closed with a reset; over HTTP/2, where the request
+// has no socket of its own, the handler is aborted with http.ErrAbortHandler
+// and the server cancels the stream. The capture records which of the two
+// happened. The request body is read first, so that it shows up in the
+// capture.
 func (h *Handler) drop(w http.ResponseWriter, r *http.Request, o *config.CompiledOverride, rec *capture.Record) {
 	rec.DrainRequest()
 	mode := exchange.DropStreamReset
@@ -225,7 +227,7 @@ func (h *Handler) drop(w http.ResponseWriter, r *http.Request, o *config.Compile
 		if err == nil {
 			rec.Dropped(o.ID(), exchange.DropHijack)
 			if tc, ok := conn.(*net.TCPConn); ok {
-				// Sem espera pelo envio pendente: o cliente observa o reset.
+				// No waiting on pending sends: the client sees the reset.
 				tc.SetLinger(0)
 			}
 			conn.Close()
@@ -237,8 +239,9 @@ func (h *Handler) drop(w http.ResponseWriter, r *http.Request, o *config.Compile
 	panic(http.ErrAbortHandler)
 }
 
-// synthesize responde com a resposta declarada pelo override, sem contato com
-// o upstream. O corpo da requisição é lido até o fim para constar da captura.
+// synthesize answers with the response declared by the override, with no
+// contact with the upstream. The request body is read to the end so that it
+// shows up in the capture.
 func (h *Handler) synthesize(w http.ResponseWriter, r *http.Request, route *config.CompiledRoute, dec override.Decision, rec *capture.Record) {
 	o := dec.Override
 	rec.DrainRequest()
@@ -246,22 +249,22 @@ func (h *Handler) synthesize(w http.ResponseWriter, r *http.Request, route *conf
 	hdr := w.Header()
 	override.SetHeaders(hdr, o)
 	hdr.Set(HeaderGateway, h.ident(route, dec, "synthesized").String())
-	// Passo 8: a resposta está pronta; o atraso vem antes de escrevê-la.
+	// Step 8: the response is ready; the delay comes before writing it.
 	if h.delay(r, dec, rec) != nil {
-		// Nada chegou ao cliente: a troca fica sem status, com a desistência
-		// anotada, como no encaminhamento.
-		rec.Abort("client_canceled: o cliente desistiu durante o atraso injetado")
+		// Nothing reached the client: the exchange is left without a status
+		// and with the give-up noted, just as on a forward.
+		rec.Abort("client_canceled: the client gave up during the injected delay")
 		return
 	}
 	w.WriteHeader(override.Status(o))
 	w.Write(override.Body(o))
 }
 
-// ident monta o X-Gateway da resposta com as intervenções aplicadas, na
-// ordem em que acontecem: synthesized quando o override sintetizou a
-// resposta, delayed quando a atrasou, e as duas, separadas por vírgula
-// ("synthesized,delayed"), quando fez ambas. Sem intervenção, o cabeçalho
-// identifica apenas a rota.
+// ident builds the response's X-Gateway from the interventions applied, in
+// the order they happen: synthesized when the override synthesized the
+// response, delayed when it delayed it, and both, separated by a comma
+// ("synthesized,delayed"), when it did both. With no intervention the header
+// identifies only the route.
 func (h *Handler) ident(route *config.CompiledRoute, dec override.Decision, kind string) Ident {
 	id := Ident{Route: route.Name()}
 	o := dec.Applied()
@@ -280,9 +283,9 @@ func (h *Handler) ident(route *config.CompiledRoute, dec override.Decision, kind
 	return id
 }
 
-// delay aplica o atraso sorteado para a requisição, no ponto entre a resposta
-// pronta e a escrita ao cliente. O gancho delayFor, quando presente, decide
-// no lugar do sorteio.
+// delay applies the delay drawn for the request, at the point between the
+// response being ready and the write to the client. The delayFor hook, when
+// present, decides in place of the draw.
 func (h *Handler) delay(r *http.Request, dec override.Decision, rec *capture.Record) error {
 	if h.delayFor != nil {
 		name, d := h.delayFor(r)
@@ -295,8 +298,9 @@ func (h *Handler) delay(r *http.Request, dec override.Decision, rec *capture.Rec
 	return rec.Delay(r.Context(), o.ID(), dec.Delay)
 }
 
-// forward encaminha ao upstream. O tempo limite da rota vale até a chegada
-// dos cabeçalhos da resposta: depois disso o corpo pode ser um stream longo.
+// forward forwards to the upstream. The route's timeout applies until the
+// response headers arrive: past that point the body may well be a long
+// stream.
 func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.CompiledRoute, dec override.Decision, rec *capture.Record) {
 	timeout := DefaultTimeout
 	if route.Doc.Timeout != nil {
@@ -321,16 +325,16 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.
 		},
 		ModifyResponse: func(res *http.Response) error {
 			timer.Stop()
-			// O upstream respondeu, qualquer que seja o status.
+			// The upstream answered, whatever the status.
 			h.upstreams.Success(route.Doc.Upstream)
 			res.Header.Set(HeaderGateway, h.ident(route, dec, "").String())
-			// A resposta está pronta; o atraso vem antes de escrevê-la.
+			// The response is ready; the delay comes before writing it.
 			if err := h.delay(r, dec, rec); err != nil {
 				return err
 			}
 			if res.StatusCode == http.StatusSwitchingProtocols {
-				// Num upgrade o ReverseProxy escreve a resposta direto na
-				// conexão sequestrada, sem passar pelo writer da captura.
+				// On an upgrade the ReverseProxy writes the response straight
+				// to the hijacked connection, bypassing the capture's writer.
 				rec.Upgrade(res.StatusCode, res.Header)
 			}
 			return nil
@@ -343,20 +347,20 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.
 			case timedOut.Load():
 				d = diag{
 					Error:    "upstream_timeout",
-					Message:  "o upstream excedeu o tempo limite de " + timeout.String(),
+					Message:  "the upstream exceeded the timeout of " + timeout.String(),
 					Route:    route.Name(),
 					Upstream: route.Doc.Upstream,
 				}
 				status = http.StatusGatewayTimeout
 				h.upstreams.Failure(route.Doc.Upstream, d.Message)
 			case errors.Is(err, context.Canceled):
-				// O cliente desistiu (inclusive durante o atraso injetado em
-				// ModifyResponse); não há a quem responder.
-				d = diag{Error: "client_canceled", Message: "o cliente desistiu antes da resposta"}
+				// The client gave up (including during the delay injected in
+				// ModifyResponse); there is nobody left to answer.
+				d = diag{Error: "client_canceled", Message: "the client gave up before the response"}
 			default:
 				d = diag{
 					Error:    "upstream_unavailable",
-					Message:  "não foi possível obter resposta do upstream: " + err.Error(),
+					Message:  "could not get a response from the upstream: " + err.Error(),
 					Route:    route.Name(),
 					Upstream: route.Doc.Upstream,
 				}
@@ -367,12 +371,12 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.
 			if status == 0 {
 				return
 			}
-			// Passo 8 também para a resposta de erro do gateway: pronta a
-			// resposta, o atraso do override vem antes de escrevê-la. Nesses
-			// casos ModifyResponse não chegou a ser chamado e o atraso ainda
-			// não foi aplicado.
+			// Step 8 applies to the gateway's own error response too: once the
+			// response is ready, the override's delay comes before writing it.
+			// In these cases ModifyResponse was never called and the delay has
+			// not been applied yet.
 			if h.delay(r, dec, rec) != nil {
-				rec.Fail("client_canceled: o cliente desistiu durante o atraso injetado")
+				rec.Fail("client_canceled: the client gave up during the injected delay")
 				return
 			}
 			writeDiag(w, status, h.ident(route, dec, ""), d)
@@ -382,13 +386,13 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, route *config.
 	rec.UpstreamDone()
 }
 
-// forwardingHeaders são os cabeçalhos que o Rewrite do ReverseProxy remove
-// da requisição de saída antes de chamar a função de reescrita.
+// forwardingHeaders are the headers that the ReverseProxy's Rewrite strips
+// from the outgoing request before calling the rewrite function.
 var forwardingHeaders = []string{"Forwarded", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto"}
 
-// incomingForwarding copia da requisição de entrada os cabeçalhos de
-// encaminhamento que chegaram preenchidos. Os que o cliente declarou em
-// Connection são hop-by-hop nessa conexão e ficam de fora.
+// incomingForwarding copies from the incoming request the forwarding headers
+// that arrived filled in. The ones the client declared in Connection are
+// hop-by-hop on that connection and are left out.
 func incomingForwarding(in http.Header) http.Header {
 	hop := map[string]bool{}
 	for _, v := range in.Values("Connection") {
@@ -407,7 +411,7 @@ func incomingForwarding(in http.Header) http.Header {
 	return out
 }
 
-// filled informa se algum dos valores do cabeçalho tem conteúdo.
+// filled reports whether any of the header's values has content.
 func filled(v []string) bool {
 	return slices.ContainsFunc(v, func(s string) bool { return strings.TrimSpace(s) != "" })
 }
@@ -422,13 +426,14 @@ func rewriteFor(route *config.CompiledRoute, id Ident) func(*httputil.ProxyReque
 			}
 		}
 		pr.SetURL(route.Upstream)
-		// Rewrite descarta os cabeçalhos de encaminhamento de entrada.
-		// Recolocar o X-Forwarded-For antes de SetXForwarded faz o endereço do
-		// cliente ser acrescentado à cadeia; os demais que já chegaram
-		// preenchidos voltam depois, prevalecendo sobre os que SetXForwarded
-		// preencheu, que assim só valem para os ausentes. Um X-Forwarded-*
-		// que chegou vazio não está preenchido e fica com o valor calculado;
-		// o Forwarded, que SetXForwarded não preenche, volta como chegou.
+		// Rewrite discards the incoming forwarding headers. Putting
+		// X-Forwarded-For back before SetXForwarded makes the client address
+		// be appended to the chain; the others that arrived filled in are
+		// restored afterwards, taking precedence over whatever SetXForwarded
+		// filled in, which then only applies to the ones that are missing. An
+		// X-Forwarded-* that arrived empty does not count as filled in and
+		// keeps the computed value; Forwarded, which SetXForwarded does not
+		// fill in, is restored exactly as it arrived.
 		in := incomingForwarding(pr.In.Header)
 		if v := in["X-Forwarded-For"]; filled(v) {
 			pr.Out.Header["X-Forwarded-For"] = v
@@ -442,8 +447,8 @@ func rewriteFor(route *config.CompiledRoute, id Ident) func(*httputil.ProxyReque
 				pr.Out.Header[k] = v
 			}
 		}
-		// SetURL troca o Host pelo do upstream; sem rewriteHost, o Host
-		// original é devolvido para que o upstream o receba como chegou.
+		// SetURL swaps the Host for the upstream's; without rewriteHost the
+		// original Host is put back so the upstream receives it as it arrived.
 		if !route.Doc.RewriteHost {
 			pr.Out.Host = pr.In.Host
 		}
@@ -451,7 +456,7 @@ func rewriteFor(route *config.CompiledRoute, id Ident) func(*httputil.ProxyReque
 	}
 }
 
-// diag é o corpo das respostas produzidas pelo próprio gateway.
+// diag is the body of the responses the gateway produces itself.
 type diag struct {
 	Error    string   `json:"error"`
 	Message  string   `json:"message"`
@@ -477,7 +482,7 @@ func writeNoRoute(w http.ResponseWriter, snap *config.Snapshot) diag {
 	}
 	d := diag{
 		Error:    "no_route",
-		Message:  "nenhuma rota casou com a requisição",
+		Message:  "no route matched the request",
 		Patterns: patterns,
 	}
 	writeDiag(w, http.StatusNotFound, Ident{}, d)

@@ -2,22 +2,24 @@ package proxy
 
 import "strings"
 
-// HeaderGateway é o único cabeçalho próprio que o gateway acrescenta ao
-// tráfego, na requisição ao upstream e na resposta ao cliente.
+// HeaderGateway is the only header of its own that the gateway adds to
+// traffic, both on the request to the upstream and on the response to the
+// client.
 const HeaderGateway = "X-Gateway"
 
-// Ident é o conteúdo do cabeçalho X-Gateway: a rota casada e, quando um
-// override intervém, o override responsável e o tipo de intervenção.
+// Ident is the content of the X-Gateway header: the matched route and, when
+// an override steps in, the override responsible and the kind of
+// intervention.
 type Ident struct {
-	Route        string // nome da rota casada
-	Override     string // "rota/override", quando um override intervém
-	Intervention string // tipo de intervenção, como "synthesized"
+	Route        string // name of the matched route
+	Override     string // "route/override", when an override steps in
+	Intervention string // kind of intervention, such as "synthesized"
 }
 
-// String monta o valor no formato "route=x; override=x/y;
-// intervention=synthesized", omitindo as partes vazias. Sem nenhuma parte
-// (resposta sem rota casada), o valor é vazio e o cabeçalho segue presente,
-// marcando a resposta como produzida pelo gateway.
+// String builds the value in the form "route=x; override=x/y;
+// intervention=synthesized", omitting the empty parts. With no part at all
+// (a response with no matched route) the value is empty and the header is
+// still present, marking the response as produced by the gateway.
 func (id Ident) String() string {
 	parts := make([]string, 0, 3)
 	for _, p := range [...]struct{ key, val string }{

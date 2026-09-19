@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config"
 )
 
-// Resolve devolve a rota que atende a requisição, ou nil. As rotas do
-// snapshot já estão em ordem de precedência (host antes de path, path mais
-// específico antes do menos específico), então vale a primeira que casa.
+// Resolve returns the route that serves the request, or nil. The snapshot's
+// routes are already in precedence order (host before path, more specific
+// path before less specific), so the first one that matches wins.
 func Resolve(snap *config.Snapshot, r *http.Request) *config.CompiledRoute {
 	host := requestHost(r)
 	for _, rt := range snap.Routes {
@@ -29,8 +29,9 @@ func requestHost(r *http.Request) string {
 	return strings.ToLower(r.Host)
 }
 
-// hostMatches aceita o host declarado com ou sem porta: "payments.local"
-// casa com "payments.local:8080"; "payments.local:8080" exige a porta.
+// hostMatches accepts the declared host with or without a port:
+// "payments.local" matches "payments.local:8080"; "payments.local:8080"
+// requires the port.
 func hostMatches(declared, host string) bool {
 	declared = strings.ToLower(declared)
 	if declared == host {

@@ -13,15 +13,16 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// Error é um problema de configuração localizado: arquivo, campo e posição.
+// Error is a configuration problem pinned down to a file, a field and a
+// position.
 type Error struct {
 	File   string
 	Field  string
 	Line   int
 	Column int
 	Msg    string
-	// Conflict marca uma colisão com outro documento (nome ou casamento
-	// repetido, arquivo já existente), distinta de um valor inválido.
+	// Conflict marks a collision with another document (duplicate name or
+	// match, file already there), as opposed to an invalid value.
 	Conflict bool
 }
 
@@ -29,20 +30,21 @@ func (e *Error) Error() string {
 	var b strings.Builder
 	b.WriteString(e.File)
 	if e.Field != "" {
-		fmt.Fprintf(&b, ": campo %s", e.Field)
+		fmt.Fprintf(&b, ": field %s", e.Field)
 	}
 	if e.Line > 0 {
-		fmt.Fprintf(&b, " (linha %d, coluna %d)", e.Line, e.Column)
+		fmt.Fprintf(&b, " (line %d, column %d)", e.Line, e.Column)
 	}
 	b.WriteString(": ")
 	b.WriteString(e.Msg)
 	return b.String()
 }
 
-// Errors agrupa vários problemas encontrados numa mesma carga.
+// Errors groups the problems found in a single load.
 type Errors []*Error
 
-// HasConflict informa se algum dos problemas é uma colisão entre documentos.
+// HasConflict reports whether any of the problems is a collision between
+// documents.
 func (es Errors) HasConflict() bool {
 	for _, e := range es {
 		if e.Conflict {
@@ -60,7 +62,7 @@ func (es Errors) Error() string {
 	return strings.Join(msgs, "\n")
 }
 
-// issue é um problema ainda sem arquivo, identificado pelo caminho do campo.
+// issue is a problem that has no file yet, identified by its field path.
 type issue struct {
 	field string
 	msg   string
@@ -70,7 +72,7 @@ func issuef(field, format string, args ...any) issue {
 	return issue{field: field, msg: fmt.Sprintf(format, args...)}
 }
 
-// nodeIndex associa cada caminho de campo ao nó YAML onde ele aparece.
+// nodeIndex maps each field path to the YAML node where it appears.
 type nodeIndex struct {
 	file    string
 	entries []indexEntry
@@ -86,8 +88,9 @@ func (x *nodeIndex) add(field string, key, value *yaml.Node) {
 	x.entries = append(x.entries, indexEntry{field, key, value})
 }
 
-// locate converte um issue num Error, com a posição do campo quando o campo
-// existe no documento, ou a do ancestral mais próximo quando ele está ausente.
+// locate turns an issue into an Error, carrying the position of the field
+// when the field is in the document, or that of the closest ancestor when it
+// is missing.
 func (x *nodeIndex) locate(is issue) *Error {
 	e := &Error{File: x.file, Field: is.field, Msg: is.msg}
 	for field := is.field; ; {
@@ -108,7 +111,7 @@ func (x *nodeIndex) locate(is issue) *Error {
 	}
 }
 
-// fieldAtLine devolve o campo mais profundo cujo valor começa na linha dada.
+// fieldAtLine returns the deepest field whose value starts on the given line.
 func (x *nodeIndex) fieldAtLine(line int) (indexEntry, bool) {
 	var best indexEntry
 	found := false
@@ -134,8 +137,9 @@ var (
 	typeDuration = reflect.TypeFor[Duration]()
 )
 
-// checkShape percorre o documento junto com o tipo de destino, indexando cada
-// campo e apontando chaves desconhecidas, que o decodificador ignoraria.
+// checkShape walks the document alongside the destination type, indexing
+// every field and flagging unknown keys, which the decoder would otherwise
+// ignore.
 func checkShape(n *yaml.Node, t reflect.Type, field string, x *nodeIndex, issues *[]issue) {
 	for n.Kind == yaml.AliasNode {
 		n = n.Alias
@@ -163,7 +167,7 @@ func checkShape(n *yaml.Node, t reflect.Type, field string, x *nodeIndex, issues
 			x.add(child, k, v)
 			ft, ok := fields[k.Value]
 			if !ok {
-				*issues = append(*issues, issuef(child, "campo desconhecido"))
+				*issues = append(*issues, issuef(child, "unknown field"))
 				continue
 			}
 			checkShape(v, ft, child, x, issues)
@@ -218,8 +222,8 @@ func yamlFields(t reflect.Type) map[string]reflect.Type {
 
 var yamlLineErr = regexp.MustCompile(`^(?:yaml: )?line (\d+): (.*)$`)
 
-// decodeDocument interpreta data como YAML (JSON incluído) no destino v,
-// devolvendo o índice de nós para localizar erros posteriores.
+// decodeDocument reads data as YAML (JSON included) into the destination v,
+// returning the node index used to locate later errors.
 func decodeDocument(file string, data []byte, v any) (*nodeIndex, error) {
 	x := &nodeIndex{file: file}
 	var root yaml.Node
@@ -231,8 +235,9 @@ func decodeDocument(file string, data []byte, v any) (*nodeIndex, error) {
 	}
 	doc := root.Content[0]
 	x.add("", nil, doc)
-	// A versão vem antes de tudo: um documento de schema futuro pode ter
-	// campos que este binário desconhece, e o erro útil é o de versão.
+	// The version comes before everything else: a document from a future
+	// schema may carry fields this binary does not know, and the useful error
+	// is the one about the version.
 	if k, v := mappingValue(doc, "schemaVersion"); v != nil {
 		if n, err := strconv.Atoi(v.Value); err == nil && n > SchemaVersion {
 			x.add("schemaVersion", k, v)
@@ -258,8 +263,8 @@ func (x *nodeIndex) errors(issues []issue) Errors {
 	return es
 }
 
-// translateYAMLErr converte as mensagens "line N: ..." do decodificador em
-// erros localizados, nomeando o campo quando a linha o identifica.
+// translateYAMLErr turns the decoder's "line N: ..." messages into located
+// errors, naming the field when the line identifies one.
 func translateYAMLErr(x *nodeIndex, err error) error {
 	var msgs []string
 	var te *yaml.TypeError
@@ -287,12 +292,12 @@ var cannotUnmarshal = regexp.MustCompile("^cannot unmarshal !!(\\w+) `(.*)` into
 
 func translateYAMLMsg(m string) string {
 	if g := cannotUnmarshal.FindStringSubmatch(m); g != nil {
-		return fmt.Sprintf("valor %q (%s) não é aceito como %s", g[2], g[1], g[3])
+		return fmt.Sprintf("value %q (%s) is not accepted as %s", g[2], g[1], g[3])
 	}
 	return m
 }
 
-// ParseGatewayFile interpreta o conteúdo de gateway.json.
+// ParseGatewayFile reads the content of gateway.json.
 func ParseGatewayFile(file string, data []byte) (GatewayFile, error) {
 	var g GatewayFile
 	if err := jsonSyntax(file, data); err != nil {
@@ -314,15 +319,16 @@ func mappingValue(n *yaml.Node, key string) (*yaml.Node, *yaml.Node) {
 	return nil, nil
 }
 
-// jsonSyntax recusa o que não é JSON, já que o decodificador YAML aceitaria
-// comentários e outras construções fora do formato de gateway.json.
+// jsonSyntax rejects anything that is not JSON, since the YAML decoder would
+// accept comments and other constructs that the gateway.json format does not
+// allow.
 func jsonSyntax(file string, data []byte) error {
 	var v any
 	err := json.Unmarshal(data, &v)
 	if err == nil {
 		return nil
 	}
-	e := &Error{File: file, Msg: "JSON inválido: " + err.Error()}
+	e := &Error{File: file, Msg: "invalid JSON: " + err.Error()}
 	var se *json.SyntaxError
 	if errors.As(err, &se) {
 		e.Line, e.Column = lineCol(data, se.Offset)
@@ -341,10 +347,10 @@ func lineCol(data []byte, offset int64) (int, int) {
 }
 
 func schemaIssue(v int) issue {
-	return issuef("schemaVersion", "versão de schema %d é maior que a suportada por este binário (%d); atualize o gateway", v, SchemaVersion)
+	return issuef("schemaVersion", "schema version %d is newer than this binary supports (%d); update the gateway", v, SchemaVersion)
 }
 
-// MarshalGatewayFile serializa gateway.json.
+// MarshalGatewayFile serializes gateway.json.
 func MarshalGatewayFile(g GatewayFile) ([]byte, error) {
 	b, err := json.MarshalIndent(g, "", "  ")
 	if err != nil {
@@ -353,8 +359,8 @@ func MarshalGatewayFile(g GatewayFile) ([]byte, error) {
 	return append(b, '\n'), nil
 }
 
-// ParseRoute interpreta um documento de rota. Erros de estrutura e de valor
-// saem localizados; a validação de regras fica em Validate.
+// ParseRoute reads a route document. Shape and value errors come out located;
+// rule validation lives in Validate.
 func ParseRoute(file string, data []byte) (Route, error) {
 	r, _, err := parseRoute(file, data)
 	return r, err
@@ -369,9 +375,9 @@ func parseRoute(file string, data []byte) (Route, *nodeIndex, error) {
 	return r, x, nil
 }
 
-// ParseRouteDoc interpreta um documento de rota guardando a posição de cada
-// campo, para que os erros da validação posterior (BuildRoutes) apontem linha
-// e coluna no texto dado.
+// ParseRouteDoc reads a route document keeping the position of every field,
+// so that the errors from the later validation (BuildRoutes) point at a line
+// and a column in the given text.
 func ParseRouteDoc(file string, data []byte) (RouteDoc, error) {
 	r, x, err := parseRoute(file, data)
 	if err != nil {
@@ -380,10 +386,10 @@ func ParseRouteDoc(file string, data []byte) (RouteDoc, error) {
 	return RouteDoc{File: file, Route: r, index: x}, nil
 }
 
-// DecodeJSON interpreta data, que precisa ser JSON, no destino v com as
-// mesmas regras de forma dos documentos: campos desconhecidos são recusados
-// e cada erro nomeia o campo e sua posição no texto. label identifica o
-// texto nas mensagens.
+// DecodeJSON reads data, which has to be JSON, into the destination v with
+// the same shape rules as the documents: unknown fields are rejected and each
+// error names the field and its position in the text. label identifies the
+// text in the messages.
 func DecodeJSON(label string, data []byte, v any) error {
 	if err := jsonSyntax(label, data); err != nil {
 		return err
@@ -392,9 +398,9 @@ func DecodeJSON(label string, data []byte, v any) error {
 	return err
 }
 
-// HasComments informa se o documento YAML contém comentários, que a
-// reescrita por MarshalRoute perderia. Um documento ilegível é tratado como
-// sem comentários.
+// HasComments reports whether the YAML document has comments, which rewriting
+// it through MarshalRoute would lose. An unreadable document counts as having
+// no comments.
 func HasComments(data []byte) bool {
 	var root yaml.Node
 	if yaml.Unmarshal(data, &root) != nil {
@@ -415,7 +421,7 @@ func HasComments(data []byte) bool {
 	return walk(&root)
 }
 
-// MarshalRoute serializa um documento de rota em YAML.
+// MarshalRoute serializes a route document as YAML.
 func MarshalRoute(r Route) ([]byte, error) {
 	var b bytes.Buffer
 	enc := yaml.NewEncoder(&b)

@@ -6,10 +6,10 @@ import (
 	"time"
 )
 
-// tempDir é um t.TempDir cuja remoção insiste por alguns segundos. No
-// Windows, um arquivo recém-substituído por rename pode ficar marcado para
-// exclusão enquanto outro processo (o antivírus) ainda o mantém aberto, e o
-// diretório só esvazia quando ele o solta.
+// tempDir is a t.TempDir whose removal keeps retrying for a few seconds. On
+// Windows, a file just replaced by a rename can stay marked for deletion
+// while another process (the antivirus) still holds it open, and the
+// directory only empties once that process lets go of it.
 func tempDir(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "gateway-learn-test-")
@@ -24,7 +24,7 @@ func tempDir(t *testing.T) string {
 				return
 			}
 			if time.Now().After(deadline) {
-				t.Errorf("removendo o diretório temporário: %v", err)
+				t.Errorf("removing the temporary directory: %v", err)
 				return
 			}
 			time.Sleep(50 * time.Millisecond)

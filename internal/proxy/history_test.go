@@ -11,15 +11,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/capture"
-	"github.com/gamerjp64/gateway/internal/exchange"
-	"github.com/gamerjp64/gateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/capture"
+	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/store"
 )
 
-// Os cenários de consulta, leitura e navegação correm sobre trocas reais,
-// capturadas pelo proxy, e não sobre trocas montadas à mão.
+// The query, read and navigation scenarios run over real exchanges, captured
+// by the proxy, not over exchanges assembled by hand.
 
-// statusUpstream responde com o status pedido em ?status=, 200 por padrão.
+// statusUpstream answers with the status asked for in ?status=, 200 by
+// default.
 func statusUpstream(t *testing.T) *httptest.Server {
 	t.Helper()
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -28,14 +29,14 @@ func statusUpstream(t *testing.T) *httptest.Server {
 			code, _ = strconv.Atoi(v)
 		}
 		w.WriteHeader(code)
-		io.WriteString(w, "resposta de "+r.URL.Path)
+		io.WriteString(w, "response from "+r.URL.Path)
 	}))
 	t.Cleanup(s.Close)
 	return s
 }
 
-// historyGateway monta duas rotas, payments e orders, e atrasa com um
-// override de teste as requisições cujo path contém "/lenta".
+// historyGateway sets up two routes, payments and orders, and uses a test
+// override to delay the requests whose path contains "/slow".
 func historyGateway(t *testing.T) *capGW {
 	t.Helper()
 	up := statusUpstream(t)
@@ -44,15 +45,15 @@ func historyGateway(t *testing.T) *capGW {
 		route("orders", up.URL, "/api/orders/*"),
 	)
 	g.h.delayFor = func(r *http.Request) (string, time.Duration) {
-		if strings.Contains(r.URL.Path, "/lenta") {
-			return "payments/lenta", time.Millisecond
+		if strings.Contains(r.URL.Path, "/slow") {
+			return "payments/slow", time.Millisecond
 		}
 		return "", 0
 	}
 	return g
 }
 
-// Requirement: Consulta e filtragem do histórico
+// Requirement: History querying and filtering
 
 func TestHistoryFilterByRoute(t *testing.T) {
 	g := historyGateway(t)
@@ -62,11 +63,11 @@ func TestHistoryFilterByRoute(t *testing.T) {
 	}
 	items := g.history(t, exchange.Filter{Route: "payments"})
 	if len(items) != 3 {
-		t.Fatalf("esperadas 3 trocas de payments, há %d", len(items))
+		t.Fatalf("want 3 payments exchanges, got %d", len(items))
 	}
 	for _, e := range items {
 		if e.Route != "payments" {
-			t.Fatalf("troca da rota %s no filtro por payments", e.Route)
+			t.Fatalf("exchange from route %s showed up in the payments filter", e.Route)
 		}
 	}
 }
@@ -76,20 +77,20 @@ func TestHistoryFilterByStatusRange(t *testing.T) {
 	for _, code := range []int{200, 404, 500, 503, 599, 201} {
 		g.get(t, fmt.Sprintf("/api/orders/x?status=%d", code))
 	}
-	g.get(t, "/sem-rota") // 404 do próprio gateway
+	g.get(t, "/no-route") // a 404 from the gateway itself
 	items := g.history(t, exchange.Filter{StatusMin: 500, StatusMax: 599})
 	var got []int
 	for _, e := range items {
 		got = append(got, e.Status)
 	}
 	if fmt.Sprint(got) != "[599 503 500]" {
-		t.Fatalf("esperados os status 5xx do mais novo ao mais antigo, recebidos %v", got)
+		t.Fatalf("want the 5xx statuses from newest to oldest, got %v", got)
 	}
 }
 
-// synthesize registra no mesmo histórico uma troca respondida por override,
-// pelo caminho da captura. A síntese em si é da fase de overrides (6.4); a
-// 6.10 repete este filtro com uma síntese real.
+// synthesize records in the same history an exchange answered by an
+// override, going through the capture path. Synthesis itself belongs to the
+// overrides phase (6.4); 6.10 repeats this filter with a real synthesis.
 func (g *capGW) synthesize(t *testing.T, path, override string, status int) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -103,32 +104,32 @@ func (g *capGW) synthesize(t *testing.T, path, override string, status int) {
 func TestHistoryFilterByIntervention(t *testing.T) {
 	g := historyGateway(t)
 	g.get(t, "/api/payments/normal")
-	g.get(t, "/api/payments/lenta")
-	g.synthesize(t, "/api/payments/sintetizada", "payments/flaky", http.StatusServiceUnavailable)
+	g.get(t, "/api/payments/slow")
+	g.synthesize(t, "/api/payments/synthesized", "payments/flaky", http.StatusServiceUnavailable)
 	g.get(t, "/api/orders/normal?status=500")
 	yes, no := true, false
 	with := g.history(t, exchange.Filter{Intervened: &yes})
 	if len(with) != 2 {
-		t.Fatalf("o filtro por intervenção deveria trazer a troca sintetizada e a atrasada: %v", with)
+		t.Fatalf("the intervention filter should return the synthesized and the delayed exchange: %v", with)
 	}
 	synth, delayed := with[0], with[1]
-	if synth.Path != "/api/payments/sintetizada" || synth.Outcome != exchange.OutcomeSynthesized || synth.Override != "payments/flaky" {
-		t.Fatalf("a troca sintetizada deveria constar do filtro: %+v", synth)
+	if synth.Path != "/api/payments/synthesized" || synth.Outcome != exchange.OutcomeSynthesized || synth.Override != "payments/flaky" {
+		t.Fatalf("the synthesized exchange should show up in the filter: %+v", synth)
 	}
-	if delayed.Path != "/api/payments/lenta" || delayed.Override != "payments/lenta" {
-		t.Fatalf("a troca atrasada deveria constar do filtro: %+v", delayed)
+	if delayed.Path != "/api/payments/slow" || delayed.Override != "payments/slow" {
+		t.Fatalf("the delayed exchange should show up in the filter: %+v", delayed)
 	}
 	if without := g.history(t, exchange.Filter{Intervened: &no}); len(without) != 2 {
-		t.Fatalf("esperadas 2 trocas sem intervenção, há %d", len(without))
+		t.Fatalf("want 2 exchanges without intervention, got %d", len(without))
 	}
 }
 
-// A ordem do histórico é a de chegada: uma troca lenta que chegou antes e
-// terminou depois não passa à frente das que chegaram depois dela.
+// The history order is arrival order: a slow exchange that arrived earlier
+// and finished later does not jump ahead of the ones that arrived after it.
 func TestHistoryOrderFollowsArrivalNotCompletion(t *testing.T) {
 	arrived, release := make(chan struct{}), make(chan struct{})
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/lenta" {
+		if r.URL.Path == "/slow" {
 			close(arrived)
 			<-release
 		}
@@ -140,7 +141,7 @@ func TestHistoryOrderFollowsArrivalNotCompletion(t *testing.T) {
 	slow := make(chan struct{})
 	go func() {
 		defer close(slow)
-		res, err := http.Get(g.URL + "/lenta")
+		res, err := http.Get(g.URL + "/slow")
 		if err != nil {
 			t.Error(err)
 			return
@@ -149,25 +150,25 @@ func TestHistoryOrderFollowsArrivalNotCompletion(t *testing.T) {
 		res.Body.Close()
 	}()
 	<-arrived
-	g.get(t, "/rapida")
+	g.get(t, "/fast")
 	g.rec.Sync(t.Context())
 	close(release)
 	<-slow
 
 	items := g.history(t, exchange.Filter{})
-	if len(items) != 2 || items[0].Path != "/rapida" || items[1].Path != "/lenta" {
+	if len(items) != 2 || items[0].Path != "/fast" || items[1].Path != "/slow" {
 		var got []string
 		for _, e := range items {
 			got = append(got, e.Path)
 		}
-		t.Fatalf("da mais nova para a mais antiga pela chegada, esperado [/rapida /lenta], recebido %v", got)
+		t.Fatalf("newest to oldest by arrival, want [/fast /slow], got %v", got)
 	}
 	if items[0].Start.Before(items[1].Start) || items[1].Seq > items[0].Seq {
-		t.Fatalf("a lenta chegou antes: início %v e %v, sequência %d e %d", items[1].Start, items[0].Start, items[1].Seq, items[0].Seq)
+		t.Fatalf("the slow one arrived first: start %v and %v, sequence %d and %d", items[1].Start, items[0].Start, items[1].Seq, items[0].Seq)
 	}
 	next, err := g.hist.Neighbor(t.Context(), items[1].ID, store.Newer, exchange.Filter{})
-	if err != nil || next.Path != "/rapida" {
-		t.Fatalf("a seguinte da lenta deveria ser a rápida: %s %v", next.Path, err)
+	if err != nil || next.Path != "/fast" {
+		t.Fatalf("the one after the slow should be the fast one: %s %v", next.Path, err)
 	}
 }
 
@@ -178,7 +179,7 @@ func TestHistoryCombinedFilters(t *testing.T) {
 	g.get(t, "/api/orders/c?status=500")
 	items := g.history(t, exchange.Filter{Route: "payments", StatusMin: 500, StatusMax: 599, Method: "get"})
 	if len(items) != 1 || items[0].Path != "/api/payments/a" {
-		t.Fatalf("filtros combinados deveriam valer em conjunto: %v", items)
+		t.Fatalf("combined filters should apply together: %v", items)
 	}
 }
 
@@ -193,33 +194,33 @@ func TestHistoryOrderAndPagination(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(page.Items) != 50 || page.Next == "" {
-		t.Fatalf("esperada uma página de 50 com continuação, recebidas %d (next %q)", len(page.Items), page.Next)
+		t.Fatalf("want a page of 50 with a continuation, got %d (next %q)", len(page.Items), page.Next)
 	}
 	for i, e := range page.Items {
 		if want := fmt.Sprintf("/api/orders/%d", 149-i); e.Path != want {
-			t.Fatalf("item %d = %s, esperado %s (da mais nova para a mais antiga)", i, e.Path, want)
+			t.Fatalf("item %d = %s, want %s (newest to oldest)", i, e.Path, want)
 		}
 	}
 }
 
-// Requirement: Leitura individual e navegação por cursor
+// Requirement: Individual reads and cursor navigation
 
 func TestHistoryGetByID(t *testing.T) {
 	g := historyGateway(t)
-	g.get(t, "/api/payments/lenta")
+	g.get(t, "/api/payments/slow")
 	items := g.history(t, exchange.Filter{})
 	e, err := g.hist.Get(t.Context(), items[0].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if e.ID != items[0].ID || e.Method != http.MethodGet || e.Status != 200 {
-		t.Fatalf("troca recuperada incompleta: %+v", e)
+		t.Fatalf("the exchange came back incomplete: %+v", e)
 	}
-	if string(e.Response.Body) != "resposta de /api/payments/lenta" || e.Response.Headers.Get(HeaderGateway) == "" {
-		t.Fatalf("a resposta deveria vir completa: %q %v", e.Response.Body, e.Response.Headers)
+	if string(e.Response.Body) != "response from /api/payments/slow" || e.Response.Headers.Get(HeaderGateway) == "" {
+		t.Fatalf("the response should come back complete: %q %v", e.Response.Body, e.Response.Headers)
 	}
 	if tm := e.Timing; tm.InjectedMs <= 0 || tm.UpstreamMs+tm.InjectedMs+tm.GatewayMs < tm.TotalMs-0.001 {
-		t.Fatalf("os tempos decompostos deveriam vir preenchidos: %+v", e.Timing)
+		t.Fatalf("the timings should come back broken down and filled in: %+v", e.Timing)
 	}
 }
 
@@ -228,7 +229,7 @@ func TestHistoryGetMissingID(t *testing.T) {
 	g.get(t, "/api/payments/x")
 	g.rec.Sync(t.Context())
 	if _, err := g.hist.Get(t.Context(), exchange.NewID(time.Now())); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("esperado ErrNotFound, recebido %v", err)
+		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 }
 
@@ -240,14 +241,14 @@ func TestHistoryNavigateItemByItem(t *testing.T) {
 	items := g.history(t, exchange.Filter{}) // 2, 1, 0
 	next, err := g.hist.Neighbor(t.Context(), items[2].ID, store.Newer, exchange.Filter{})
 	if err != nil || next.ID != items[1].ID {
-		t.Fatalf("a seguinte de /0 deveria ser /1: %s %v", next.Path, err)
+		t.Fatalf("the one after /0 should be /1: %s %v", next.Path, err)
 	}
 	if _, err := g.hist.Neighbor(t.Context(), items[0].ID, store.Newer, exchange.Filter{}); !errors.Is(err, store.ErrNoMore) {
-		t.Fatalf("depois da mais nova não há mais itens: %v", err)
+		t.Fatalf("there is nothing past the newest one: %v", err)
 	}
 	prev, err := g.hist.Neighbor(t.Context(), items[1].ID, store.Older, exchange.Filter{})
 	if err != nil || prev.ID != items[2].ID {
-		t.Fatalf("a anterior de /1 deveria ser /0: %s %v", prev.Path, err)
+		t.Fatalf("the one before /1 should be /0: %s %v", prev.Path, err)
 	}
 }
 
@@ -261,9 +262,9 @@ func TestHistoryNavigationRespectsFilter(t *testing.T) {
 	first := items[4]
 	next, err := g.hist.Neighbor(t.Context(), first.ID, store.Newer, f)
 	if err != nil || next.Status != 503 {
-		t.Fatalf("a seguinte com filtro 5xx deveria pular os 2xx e chegar ao 503: %d %v", next.Status, err)
+		t.Fatalf("with the 5xx filter the next one should skip the 2xx and land on the 503: %d %v", next.Status, err)
 	}
 	if _, err := g.hist.Neighbor(t.Context(), next.ID, store.Newer, f); !errors.Is(err, store.ErrNoMore) {
-		t.Fatalf("não há outra troca 5xx mais nova: %v", err)
+		t.Fatalf("there is no newer 5xx exchange: %v", err)
 	}
 }

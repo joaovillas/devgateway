@@ -8,9 +8,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/config/writer"
-	"github.com/gamerjp64/gateway/internal/override"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config/writer"
+	"github.com/gamerjp64/devgateway/internal/override"
 )
 
 func (h *Handler) routeRoutes() {
@@ -46,8 +46,8 @@ func (h *Handler) routeRoutes() {
 	})
 }
 
-// liveState é o estado vivo de um override dentro do recurso rota ou
-// override, onde a rota e o nome já estão implícitos.
+// liveState is the live state of an override inside the route or override
+// resource, where the route and the name are already implicit.
 type liveState struct {
 	Active          bool       `json:"active"`
 	Expired         *string    `json:"expired"`
@@ -70,29 +70,29 @@ func nested(s override.LiveState) *liveState {
 	}
 }
 
-// routeResource embrulha o documento da rota com o que não pertence a ele.
+// routeResource wraps the route document with what does not belong in it.
 type routeResource struct {
 	File string `json:"file"`
-	// HasComments avisa que o documento tem comentários, que uma escrita
-	// pelos campos perderia.
+	// HasComments warns that the document has comments, which a write by
+	// fields would lose.
 	HasComments bool `json:"hasComments"`
-	// Order é a posição na precedência; 0 é a mais específica.
+	// Order is the position in the precedence; 0 is the most specific.
 	Order int                   `json:"order"`
 	Route config.Route          `json:"route"`
 	State map[string]*liveState `json:"state"`
 }
 
-// overrideResource é um override com sua posição e estado vivo.
+// overrideResource is an override with its position and live state.
 type overrideResource struct {
 	Route string `json:"route"`
-	// Order é a posição na precedência dentro da rota.
+	// Order is the position in the precedence within the route.
 	Order    int             `json:"order"`
 	Override config.Override `json:"override"`
 	State    *liveState      `json:"state"`
 }
 
-// resource monta o recurso da rota r do snapshot, lendo o documento em disco
-// para os metadados. Devolve também a versão do documento.
+// resource builds the resource of route r of the snapshot, reading the
+// document on disk for the metadata. It also returns the document version.
 func (h *Handler) resource(snap *config.Snapshot, r *config.CompiledRoute) (routeResource, string) {
 	res := routeResource{
 		File:  r.File,
@@ -125,13 +125,14 @@ func (h *Handler) overrideResource(r *config.CompiledRoute, name string) (overri
 	return res, true
 }
 
-// lookup devolve a rota do path na configuração em vigor.
+// lookup returns the route named in the path from the configuration in
+// force.
 func (h *Handler) lookup(r *http.Request) (*config.Snapshot, *config.CompiledRoute, error) {
 	snap := h.live.Load()
 	name := r.PathValue("route")
 	route := snap.Route(name)
 	if route == nil {
-		return nil, nil, notFound(fmt.Sprintf("rota %q não encontrada", name))
+		return nil, nil, notFound(fmt.Sprintf("route %q not found", name))
 	}
 	return snap, route, nil
 }
@@ -163,11 +164,11 @@ func setETag(w http.ResponseWriter, v string) {
 	}
 }
 
-// written responde a uma escrita de rota com o recurso resultante.
+// written answers a route write with the resulting resource.
 func (h *Handler) written(w http.ResponseWriter, res writer.Result, status int) {
 	route := res.Snapshot.Route(res.Route)
 	if route == nil {
-		writeError(w, http.StatusInternalServerError, "internal", "a rota gravada não está na configuração em vigor")
+		writeError(w, http.StatusInternalServerError, "internal", "the route that was written is not in the configuration in force")
 		return
 	}
 	out, _ := h.resource(res.Snapshot, route)
@@ -178,8 +179,8 @@ func (h *Handler) written(w http.ResponseWriter, res writer.Result, status int) 
 	writeJSON(w, status, out)
 }
 
-// decodeRoute lê uma rota completa do corpo. schemaVersion ausente assume a
-// versão do binário.
+// decodeRoute reads a complete route from the body. A missing
+// schemaVersion assumes the version of the binary.
 func decodeRoute(r *http.Request) (config.Route, error) {
 	var route config.Route
 	if err := decodeJSON(r, &route); err != nil {
@@ -240,7 +241,7 @@ func (h *Handler) patchRoute(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnprocessableEntity, apiError{
 			Error:   "invalid",
 			Field:   "overrides",
-			Message: "overrides não é alterado por aqui; use /api/routes/{rota}/overrides",
+			Message: "overrides is not changed here; use /api/routes/{route}/overrides",
 		})
 		return
 	}
@@ -275,7 +276,7 @@ func (h *Handler) deleteRoute(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// getDocument devolve o documento exatamente como está em disco.
+// getDocument returns the document exactly as it is on disk.
 func (h *Handler) getDocument(w http.ResponseWriter, r *http.Request) {
 	_, route, err := h.lookup(r)
 	if err != nil {
@@ -284,7 +285,7 @@ func (h *Handler) getDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := h.writer.ReadDocument(route.File)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", "lendo "+route.File+": "+err.Error())
+		writeError(w, http.StatusInternalServerError, "internal", "reading "+route.File+": "+err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
@@ -292,7 +293,7 @@ func (h *Handler) getDocument(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-// putDocument grava o documento bruto como enviado, comentários incluídos.
+// putDocument writes the raw document as sent, comments included.
 func (h *Handler) putDocument(w http.ResponseWriter, r *http.Request) {
 	data, err := readBody(r, yamlTypes)
 	if err != nil {
@@ -349,17 +350,16 @@ func (h *Handler) getOverride(w http.ResponseWriter, r *http.Request) {
 }
 
 func overrideNotFound(route, name string) error {
-	return notFound(fmt.Sprintf("override %q não encontrado na rota %q", name, route))
+	return notFound(fmt.Sprintf("override %q not found on route %q", name, route))
 }
 
-// overrideConflict recusa um nome de override já usado na rota.
+// overrideConflict rejects an override name already used on the route.
 func overrideConflict(file, route, name string) error {
 	return config.Errors{{File: file, Field: "name", Conflict: true,
-		Msg: fmt.Sprintf("override %q já existe na rota %q", name, route)}}
+		Msg: fmt.Sprintf("override %q already exists on route %q", name, route)}}
 }
 
-// writtenOverride responde a uma escrita de override com o recurso
-// resultante.
+// writtenOverride answers an override write with the resulting resource.
 func (h *Handler) writtenOverride(w http.ResponseWriter, res writer.Result, name string, status int) {
 	route := res.Snapshot.Route(res.Route)
 	var out overrideResource
@@ -368,7 +368,7 @@ func (h *Handler) writtenOverride(w http.ResponseWriter, res writer.Result, name
 		out, ok = h.overrideResource(route, name)
 	}
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "internal", "o override gravado não está na configuração em vigor")
+		writeError(w, http.StatusInternalServerError, "internal", "the override that was written is not in the configuration in force")
 		return
 	}
 	setETag(w, res.Version)
@@ -378,9 +378,9 @@ func (h *Handler) writtenOverride(w http.ResponseWriter, res writer.Result, name
 	writeJSON(w, status, out)
 }
 
-// updateOverrides altera a lista de overrides da rota do path sob o mutex de
-// escrita. edit recebe a lista lida do disco e devolve a nova, ou nil para
-// não gravar.
+// updateOverrides changes the override list of the route named in the path
+// under the write mutex. edit receives the list read from disk and returns
+// the new one, or nil to write nothing.
 func (h *Handler) updateOverrides(r *http.Request, edit func(file string, list []config.Override) ([]config.Override, error)) (writer.Result, error) {
 	_, route, err := h.lookup(r)
 	if err != nil {
@@ -430,8 +430,9 @@ func (h *Handler) createOverride(w http.ResponseWriter, r *http.Request) {
 	h.writtenOverride(w, res, o.Name, http.StatusCreated)
 }
 
-// replaceAt substitui o override de nome dado por next, na mesma posição,
-// recusando um nome novo já usado por outro override da rota.
+// replaceAt replaces the override with the given name by next, in the same
+// position, rejecting a new name already used by another override of the
+// route.
 func replaceAt(file, route, name string, list []config.Override, next func(config.Override) (config.Override, error)) ([]config.Override, error) {
 	i := indexOf(list, name)
 	if i < 0 {
@@ -465,9 +466,9 @@ func (h *Handler) replaceOverride(w http.ResponseWriter, r *http.Request) {
 	h.writtenOverride(w, res, o.Name, http.StatusOK)
 }
 
-// patchOverride aplica um JSON Merge Patch ao override. É o caminho dos
-// controles contínuos e do liga/desliga ({"enabled": false}); a API não liga
-// o override por conta própria.
+// patchOverride applies a JSON Merge Patch to the override. It is the path
+// for the continuous controls and for the on/off switch ({"enabled":
+// false}); the API never turns an override on by itself.
 func (h *Handler) patchOverride(w http.ResponseWriter, r *http.Request) {
 	patch, err := readPatch(r)
 	if err != nil {
@@ -507,8 +508,8 @@ func (h *Handler) deleteOverride(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// resetOverride recomeça o tempo de vida e a contagem de aplicações sem
-// alterar o documento.
+// resetOverride restarts the lifetime and the application count without
+// changing the document.
 func (h *Handler) resetOverride(w http.ResponseWriter, r *http.Request) {
 	_, route, err := h.lookup(r)
 	if err != nil {

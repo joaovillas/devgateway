@@ -13,9 +13,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/config/writer"
-	"github.com/gamerjp64/gateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config/writer"
+	"github.com/gamerjp64/devgateway/internal/store"
 )
 
 func (h *Handler) settingsRoutes() {
@@ -36,11 +36,11 @@ func (h *Handler) settingsRoutes() {
 	})
 }
 
-// settingValue é um valor efetivo com a indicação de que o ambiente o trava.
+// settingValue is an effective value plus whether the environment locks it.
 type settingValue struct {
 	config.EffectiveValue
-	// Locked é verdadeiro quando o valor vem de variável de ambiente: a API
-	// recusa alterá-lo.
+	// Locked is true when the value comes from an environment variable: the
+	// API refuses to change it.
 	Locked bool `json:"locked"`
 }
 
@@ -70,25 +70,25 @@ func (h *Handler) settingsView() settingsView {
 	return v
 }
 
-// getSettings devolve a configuração efetiva do processo com a origem de
-// cada valor: ambiente, arquivo ou padrão.
+// getSettings returns the effective process configuration with the origin
+// of each value: environment, file or default.
 func (h *Handler) getSettings(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.settingsView())
 }
 
-// settingsResult é a resposta de uma alteração da configuração do processo.
+// settingsResult is the response to a change of the process configuration.
 type settingsResult struct {
 	Settings settingsView `json:"settings"`
-	// Applied são as chaves cujo valor efetivo mudou.
+	// Applied are the keys whose effective value changed.
 	Applied []string `json:"applied"`
-	// Notes explicam efeitos que o usuário precisa saber: a porta antiga
-	// que deixou de aceitar conexões, o histórico que não foi migrado.
+	// Notes explain effects the user needs to know about: the old port that
+	// stopped accepting connections, the history that was not migrated.
 	Notes []string `json:"notes"`
 }
 
-// patchSettings altera gateway.json com um JSON Merge Patch sobre o formato
-// do arquivo e aplica o resultado a quente. Uma chave tocada cujo valor vem
-// do ambiente recusa a alteração inteira, sem tocar o arquivo.
+// patchSettings changes gateway.json with a JSON Merge Patch over the file
+// format and hot-applies the result. A touched key whose value comes from
+// the environment rejects the whole change, leaving the file untouched.
 func (h *Handler) patchSettings(w http.ResponseWriter, r *http.Request) {
 	patch, err := readPatch(r)
 	if err != nil {
@@ -110,16 +110,17 @@ func (h *Handler) patchSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res.body)
 }
 
-// patchedFile aplica o merge patch sobre o conteúdo atual de gateway.json
-// (vazio quando o arquivo não existe) e devolve o arquivo novo, serializado.
+// patchedFile applies the merge patch over the current contents of
+// gateway.json (empty when the file does not exist) and returns the new
+// file, serialized.
 func (h *Handler) patchedFile(cur []byte, patch map[string]any) ([]byte, error) {
 	var base any = map[string]any{}
 	if len(bytes.TrimSpace(cur)) > 0 {
 		dec := json.NewDecoder(bytes.NewReader(cur))
 		dec.UseNumber()
 		if err := dec.Decode(&base); err != nil {
-			// O arquivo em disco ficou ilegível desde a carga; a validação
-			// dele aponta o problema.
+			// The file on disk became unreadable since it was loaded;
+			// validating it points at the problem.
 			_, perr := config.ParseGatewayFile(h.loader.ConfigPath, cur)
 			if perr == nil {
 				perr = err
@@ -127,7 +128,7 @@ func (h *Handler) patchedFile(cur []byte, patch map[string]any) ([]byte, error) 
 			return nil, perr
 		}
 	} else {
-		// Um gateway.json criado pela API declara a versão de schema.
+		// A gateway.json created by the API declares the schema version.
 		base = map[string]any{"schemaVersion": json.Number(fmt.Sprint(config.SchemaVersion))}
 	}
 	merged, err := json.Marshal(mergePatch(base, patch))
@@ -141,9 +142,9 @@ func (h *Handler) patchedFile(cur []byte, patch map[string]any) ([]byte, error) 
 	return config.MarshalGatewayFile(g)
 }
 
-// touchedKeys lista as chaves da configuração do processo alcançadas pelo
-// merge patch: uma folha nomeia a própria chave, e um objeto trocado por
-// null ou por um valor que não é objeto alcança todas as chaves abaixo dele.
+// touchedKeys lists the process configuration keys the merge patch
+// reaches: a leaf names its own key, and an object replaced by null, or by
+// a value that is not an object, reaches every key below it.
 func touchedKeys(patch map[string]any, prefix string) []string {
 	var out []string
 	for k, v := range patch {
@@ -162,10 +163,10 @@ func touchedKeys(patch map[string]any, prefix string) []string {
 	return out
 }
 
-// checkLocked recusa alterar valores que vêm do ambiente, nomeando a
-// variável responsável. keys são as chaves alcançadas pela alteração; allow,
-// quando presente, dispensa a recusa de uma chave cujo valor não muda de
-// fato.
+// checkLocked refuses to change values that come from the environment,
+// naming the variable responsible. keys are the keys the change reaches;
+// allow, when present, waives the refusal for a key whose value does not
+// actually change.
 func (h *Handler) checkLocked(keys []string, allow func(config.EffectiveValue) bool) error {
 	for _, e := range h.live.Load().Settings.Effective() {
 		if e.Source.Origin != config.OriginEnv || !slices.Contains(keys, e.Key) {
@@ -178,26 +179,26 @@ func (h *Handler) checkLocked(keys []string, allow func(config.EffectiveValue) b
 			Error: "locked",
 			Field: e.Key,
 			Env:   e.Source.Name,
-			Message: fmt.Sprintf("%s vem da variável de ambiente %s e não pode ser alterado pela API; %s não foi modificado",
+			Message: fmt.Sprintf("%s comes from environment variable %s and cannot be changed through the API; %s was left untouched",
 				e.Key, e.Source.Name, filepath.Base(h.loader.ConfigPath)),
 		}}
 	}
 	return nil
 }
 
-// settingsChange é uma alteração de gateway.json aplicada.
+// settingsChange is an applied change to gateway.json.
 type settingsChange struct {
 	body    settingsResult
 	version string
 }
 
-// changeSettings grava em gateway.json o conteúdo produzido por edit a partir
-// do atual e aplica a configuração resultante a quente, na ordem: valida o
-// arquivo novo; prepara as portas e o backend do histórico alterados; grava
-// o arquivo de forma atômica; troca portas, backend e snapshot. Qualquer
-// falha preserva a configuração em vigor e o arquivo intacto. Tudo acontece
-// sob o mutex de escrita, de modo que duas alterações concorrentes não se
-// perdem.
+// changeSettings writes into gateway.json the contents edit produces from
+// the current ones and hot-applies the resulting configuration, in this
+// order: validate the new file; prepare the changed ports and history
+// backend; write the file atomically; swap ports, backend and snapshot.
+// Any failure keeps the configuration in force and the file intact. It all
+// happens under the write mutex, so that two concurrent changes do not
+// lose each other.
 func (h *Handler) changeSettings(ifMatch string, edit func(cur []byte) ([]byte, error)) (settingsChange, error) {
 	path := h.loader.ConfigPath
 	var data []byte
@@ -207,7 +208,7 @@ func (h *Handler) changeSettings(ifMatch string, edit func(cur []byte) ([]byte, 
 		cur, err := os.ReadFile(path)
 		exists := err == nil
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return nil, fmt.Errorf("lendo %s: %w", path, err)
+			return nil, fmt.Errorf("reading %s: %w", path, err)
 		}
 		if ifMatch != "" && (!exists || writer.Version(cur) != ifMatch) {
 			return nil, writer.ErrStale
@@ -222,10 +223,10 @@ func (h *Handler) changeSettings(ifMatch string, edit func(cur []byte) ([]byte, 
 			return nil
 		}
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return fmt.Errorf("criando o diretório de %s: %w", path, err)
+			return fmt.Errorf("creating the directory of %s: %w", path, err)
 		}
 		if err := writer.WriteFileAtomic(path, data); err != nil {
-			return fmt.Errorf("gravando %s: %w", path, err)
+			return fmt.Errorf("writing %s: %w", path, err)
 		}
 		return nil
 	}, func() {
@@ -240,10 +241,10 @@ func (h *Handler) changeSettings(ifMatch string, edit func(cur []byte) ([]byte, 
 	}
 	traffic, adminPort := h.currentPorts()
 	if traffic != beforeTraffic {
-		res.Notes = append(res.Notes, fmt.Sprintf("porta de tráfego agora é %d; a %d deixou de aceitar conexões e conclui as requisições em curso", traffic, beforeTraffic))
+		res.Notes = append(res.Notes, fmt.Sprintf("the traffic port is now %d; %d stopped accepting connections and is finishing the requests in flight", traffic, beforeTraffic))
 	}
 	if adminPort != beforeAdmin {
-		res.Notes = append(res.Notes, fmt.Sprintf("porta de administração agora é %d; a %d deixa de aceitar conexões depois desta resposta", adminPort, beforeAdmin))
+		res.Notes = append(res.Notes, fmt.Sprintf("the admin port is now %d; %d stops accepting connections after this response", adminPort, beforeAdmin))
 	}
 	if switched != "" {
 		s := snap.Settings
@@ -251,14 +252,14 @@ func (h *Handler) changeSettings(ifMatch string, edit func(cur []byte) ([]byte, 
 		if where != config.BackendMemory {
 			where += " (" + s.HistoryPath + ")"
 		}
-		res.Notes = append(res.Notes, fmt.Sprintf("histórico agora em %s; as trocas anteriores continuam no backend %s e não foram migradas", where, switched))
+		res.Notes = append(res.Notes, fmt.Sprintf("the history is now in %s; the earlier exchanges stay in the %s backend and were not migrated", where, switched))
 	}
 	return settingsChange{body: res, version: writer.Version(data)}, nil
 }
 
-// settingsSnapshot monta o snapshot com gateway.json no conteúdo data. As
-// rotas em vigor são mantidas; só um diretório de rotas diferente é lido do
-// disco.
+// settingsSnapshot builds the snapshot with gateway.json holding data. The
+// routes in force are kept; only a different routes directory is read from
+// disk.
 func (h *Handler) settingsSnapshot(data []byte) (*config.Snapshot, error) {
 	cur := h.live.Load()
 	s, _, err := config.SettingsFrom(h.loader.ConfigPath, data, h.loader.Getenv)
@@ -287,13 +288,13 @@ func (h *Handler) currentPorts() (int, int) {
 	return s.TrafficPort, s.AdminPort
 }
 
-// replace troca a configuração inteira pelo snapshot que load constrói,
-// aplicando a quente o que vive fora dele (portas, backend do histórico)
-// antes de publicá-lo. persist, quando presente, grava o que precisa ser
-// gravado depois de tudo preparado e antes da troca. before roda sob o mutex
-// de escrita, antes de qualquer troca. Devolve, além da alteração, o nome do
-// backend do histórico anterior quando ele foi trocado, e publica o evento
-// history correspondente.
+// replace swaps the whole configuration for the snapshot load builds,
+// hot-applying what lives outside it (ports, history backend) before
+// publishing it. persist, when present, writes what has to be written once
+// everything is prepared and before the swap. before runs under the write
+// mutex, ahead of any swap. Besides the change, it returns the name of the
+// previous history backend when that backend was switched, and publishes
+// the matching history event.
 func (h *Handler) replace(cause string, load func() (*config.Snapshot, error), persist func() error, before func()) (writer.Change, *config.Snapshot, string, error) {
 	var switched string
 	change, snap, err := h.writer.Replace(cause, func() (*config.Snapshot, error) {
@@ -323,8 +324,8 @@ func (h *Handler) replace(cause string, load func() (*config.Snapshot, error), p
 	return change, snap, switched, nil
 }
 
-// getSettingsDocument devolve gateway.json como está em disco. Sem o
-// arquivo, devolve {} e o cabeçalho X-Gateway-File-Exists: false.
+// getSettingsDocument returns gateway.json as it is on disk. Without the
+// file, it returns {} and the X-Gateway-File-Exists: false header.
 func (h *Handler) getSettingsDocument(w http.ResponseWriter, _ *http.Request) {
 	data, err := os.ReadFile(h.loader.ConfigPath)
 	switch {
@@ -334,7 +335,7 @@ func (h *Handler) getSettingsDocument(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte("{}\n"))
 		return
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "internal", "lendo "+h.loader.ConfigPath+": "+err.Error())
+		writeError(w, http.StatusInternalServerError, "internal", "reading "+h.loader.ConfigPath+": "+err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -343,10 +344,10 @@ func (h *Handler) getSettingsDocument(w http.ResponseWriter, _ *http.Request) {
 	w.Write(data)
 }
 
-// putSettingsDocument grava gateway.json como enviado e o aplica a quente,
-// com as mesmas regras de PATCH /api/settings. Um documento que altera um
-// valor vindo do ambiente é recusado; um que apenas mantém o que o arquivo
-// já declarava, ou repete o valor em vigor, é aceito.
+// putSettingsDocument writes gateway.json as sent and hot-applies it, with
+// the same rules as PATCH /api/settings. A document that changes a value
+// coming from the environment is rejected; one that only keeps what the
+// file already declared, or repeats the value in force, is accepted.
 func (h *Handler) putSettingsDocument(w http.ResponseWriter, r *http.Request) {
 	data, err := readBody(r, []string{"application/json"})
 	if err != nil {
@@ -382,8 +383,8 @@ func (h *Handler) putSettingsDocument(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res.body)
 }
 
-// jsonTree interpreta um JSON como árvore genérica; o que não for JSON vira
-// nil.
+// jsonTree reads a JSON document as a generic tree; anything that is not
+// JSON becomes nil.
 func jsonTree(data []byte) any {
 	var v any
 	if json.Unmarshal(data, &v) != nil {
@@ -392,7 +393,7 @@ func jsonTree(data []byte) any {
 	return v
 }
 
-// valueAt devolve o valor na chave pontuada ("history.backend"), ou nil.
+// valueAt returns the value at the dotted key ("history.backend"), or nil.
 func valueAt(tree any, key string) any {
 	for part := range strings.SplitSeq(key, ".") {
 		m, ok := tree.(map[string]any)
@@ -404,8 +405,8 @@ func valueAt(tree any, key string) any {
 	return tree
 }
 
-// jsonEqual compara dois valores pela forma JSON, de modo que 9090 (int) e
-// 9090 (float64) sejam iguais.
+// jsonEqual compares two values by their JSON form, so that 9090 (int) and
+// 9090 (float64) come out equal.
 func jsonEqual(a, b any) bool {
 	ja, err1 := json.Marshal(a)
 	jb, err2 := json.Marshal(b)
@@ -418,12 +419,12 @@ func jsonEqual(a, b any) bool {
 	return reflect.DeepEqual(va, vb)
 }
 
-// learningView é o estado do modo aprendizado.
+// learningView is the state of learning mode.
 type learningView struct {
 	Enabled bool          `json:"enabled"`
 	Source  config.Source `json:"source"`
 	Locked  bool          `json:"locked"`
-	// Learned conta, por rota, os overrides gravados pelo aprendizado.
+	// Learned counts, per route, the overrides learning has written.
 	Learned map[string]int `json:"learned"`
 }
 
@@ -452,8 +453,8 @@ func (h *Handler) getLearning(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.learningView())
 }
 
-// putLearning liga ou desliga o modo aprendizado, gravando learning.enabled
-// em gateway.json.
+// putLearning turns learning mode on or off, writing learning.enabled to
+// gateway.json.
 func (h *Handler) putLearning(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Enabled *bool `json:"enabled"`
@@ -464,7 +465,7 @@ func (h *Handler) putLearning(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Enabled == nil {
 		writeJSON(w, http.StatusUnprocessableEntity, apiError{
-			Error: "invalid", Field: "enabled", Message: "enabled é obrigatório: true liga e false desliga o aprendizado",
+			Error: "invalid", Field: "enabled", Message: "enabled is required: true turns learning on, false turns it off",
 		})
 		return
 	}
@@ -493,10 +494,11 @@ type reloadResult struct {
 	Warnings []string      `json:"warnings"`
 }
 
-// reload relê gateway.json e o diretório de rotas e aplica o resultado a
-// quente, portas e backend do histórico incluídos. Uma configuração
-// inválida, ou que não pode ser aplicada, é recusada e a anterior continua
-// em vigor; requisições em curso terminam sob o snapshot com que começaram.
+// reload re-reads gateway.json and the routes directory and hot-applies
+// the result, ports and history backend included. A configuration that is
+// invalid, or that cannot be applied, is rejected and the previous one
+// stays in force; requests in flight finish under the snapshot they
+// started with.
 func (h *Handler) reload(w http.ResponseWriter, _ *http.Request) {
 	change, snap, _, err := h.replace(writer.CauseReload, h.loader.Load, nil, nil)
 	if err != nil {

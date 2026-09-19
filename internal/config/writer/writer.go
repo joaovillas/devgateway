@@ -1,9 +1,9 @@
-// Package writer grava documentos de rota em disco e aplica o resultado a
-// quente. Toda escrita — da API de administração ou do modo aprendizado —
-// passa por um único Writer: sob um mutex de escrita, relê o documento,
-// aplica a alteração, valida o conjunto de rotas, grava o documento de forma
-// atômica (arquivo temporário e rename) e troca o snapshot em vigor. Os
-// demais documentos não são tocados.
+// Package writer writes route documents to disk and applies the result
+// without a restart. Every write — from the admin API or from learning mode —
+// goes through a single Writer: under a write mutex, it re-reads the
+// document, applies the change, validates the whole set of routes, writes the
+// document atomically (temporary file plus rename) and swaps the snapshot in
+// force. The other documents are left untouched.
 package writer
 
 import (
@@ -19,70 +19,70 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config"
 )
 
 var (
-	// ErrNotFound informa que a rota não existe na configuração em vigor.
-	ErrNotFound = errors.New("rota não encontrada")
-	// ErrStale informa que o documento em disco não está na versão esperada.
-	ErrStale = errors.New("o documento mudou desde a versão informada")
+	// ErrNotFound reports that the route is not in the configuration in force.
+	ErrNotFound = errors.New("route not found")
+	// ErrStale reports that the document on disk is not at the expected version.
+	ErrStale = errors.New("the document changed since the version given")
 )
 
-// Causas de uma alteração aplicada, como o fluxo de eventos as nomeia.
+// Causes of an applied change, as the event stream names them.
 const (
 	CauseAPI      = "api"
 	CauseReload   = "reload"
 	CauseLearning = "learning"
 )
 
-// Change descreve uma alteração aplicada.
+// Change describes an applied change.
 type Change struct {
 	Cause string
-	// Routes são as rotas criadas, alteradas ou removidas, pelo nome.
+	// Routes are the routes created, changed or removed, by name.
 	Routes []string
-	// Settings são as chaves da configuração do processo que mudaram.
+	// Settings are the process configuration keys that changed.
 	Settings []string
 }
 
-// Result descreve o documento depois de uma escrita.
+// Result describes the document after a write.
 type Result struct {
-	// Changed informa se o documento foi gravado (ou removido).
+	// Changed reports whether the document was written (or removed).
 	Changed bool
-	// Created informa que o documento não existia e foi criado.
+	// Created reports that the document did not exist and was created.
 	Created bool
-	// Snapshot é o snapshot publicado pela escrita, ou o em vigor quando nada
-	// mudou.
+	// Snapshot is the snapshot published by the write, or the one in force
+	// when nothing changed.
 	Snapshot *config.Snapshot
-	// Route é o nome da rota depois da escrita, que difere do pedido numa
-	// renomeação.
+	// Route is the name of the route after the write, which differs from the
+	// requested one on a rename.
 	Route string
-	// File é o documento da rota.
+	// File is the route document.
 	File string
-	// Version é a versão do documento depois da escrita (ver Version); vazia
-	// numa remoção.
+	// Version is the version of the document after the write (see Version);
+	// empty on a removal.
 	Version string
 }
 
-// Writer serializa as escritas de configuração.
+// Writer serializes configuration writes.
 type Writer struct {
 	live *config.Live
 
 	mu sync.Mutex
-	// files exclui as leituras de documento feitas fora do mutex de escrita
-	// (pela API) durante a substituição do arquivo: no Windows um arquivo
-	// aberto para leitura não pode ser substituído nem removido.
+	// files keeps document reads made outside the write mutex (by the API)
+	// from overlapping with the replacement of the file: on Windows a file
+	// open for reading cannot be replaced or removed.
 	files sync.RWMutex
 
 	hooksMu sync.Mutex
 	hooks   []func(Change)
 }
 
-// New grava sobre a configuração em vigor em live.
+// New writes over the configuration in force in live.
 func New(live *config.Live) *Writer { return &Writer{live: live} }
 
-// OnChange registra fn para ser chamada depois de cada alteração aplicada,
-// fora do mutex de escrita.
+// OnChange registers fn to be called after each applied change, outside the
+// write mutex.
 func (w *Writer) OnChange(fn func(Change)) {
 	w.hooksMu.Lock()
 	w.hooks = append(w.hooks, fn)
@@ -98,49 +98,49 @@ func (w *Writer) notify(c Change) {
 	}
 }
 
-// Exclusive executa fn sob o mutex de escrita, para operações que precisam
-// excluir as escritas de documento, como a recarga do disco.
+// Exclusive runs fn under the write mutex, for operations that have to
+// exclude document writes, such as reloading from disk.
 func (w *Writer) Exclusive(fn func() error) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return fn()
 }
 
-// ReadDocument lê um documento de rota sem disputar o arquivo com a
-// substituição feita por uma escrita em curso.
+// ReadDocument reads a route document without racing the file replacement
+// done by a write in progress.
 func (w *Writer) ReadDocument(file string) ([]byte, error) {
 	w.files.RLock()
 	defer w.files.RUnlock()
 	return os.ReadFile(file)
 }
 
-// RouteUpdate é uma alteração num documento de rota.
+// RouteUpdate is a change to a route document.
 type RouteUpdate struct {
-	// Route é o nome da rota na configuração em vigor.
+	// Route is the name of the route in the configuration in force.
 	Route string
-	// IfMatch, quando informado, exige que o documento em disco esteja nessa
-	// versão (ver Version); senão a escrita falha com ErrStale.
+	// IfMatch, when given, requires the document on disk to be at that
+	// version (see Version); otherwise the write fails with ErrStale.
 	IfMatch string
-	// Cause é a causa informada aos observadores (CauseAPI, CauseLearning).
+	// Cause is the cause reported to observers (CauseAPI, CauseLearning).
 	Cause string
-	// Apply altera o documento lido do disco e informa se houve mudança. Sem
-	// mudança, nada é gravado. Apply pode mudar o nome da rota, o que a
-	// renomeia; o documento continua no mesmo arquivo.
+	// Apply changes the document read from disk and reports whether anything
+	// changed. With no change, nothing is written. Apply may change the route
+	// name, which renames it; the document stays in the same file.
 	Apply func(*config.Route) (bool, error)
 }
 
-// UpdateRoute aplica u ao documento da rota e informa se ele foi gravado.
-// Ver Update.
+// UpdateRoute applies u to the route document and reports whether it was
+// written. See Update.
 func (w *Writer) UpdateRoute(u RouteUpdate) (bool, error) {
 	res, err := w.Update(u)
 	return res.Changed, err
 }
 
-// Update aplica u ao documento da rota. O documento é relido do disco sob o
-// mutex, para que a alteração parta da versão gravada e não apague o que
-// outra escrita acabou de gravar. A configuração resultante é validada por
-// inteiro antes de qualquer gravação: se é inválida, nada é gravado e a
-// configuração em vigor continua.
+// Update applies u to the route document. The document is re-read from disk
+// under the mutex, so that the change starts from the version on disk and
+// does not wipe out what another write has just stored. The resulting
+// configuration is validated as a whole before anything is written: if it is
+// invalid, nothing is written and the configuration in force stays put.
 func (w *Writer) Update(u RouteUpdate) (Result, error) {
 	w.mu.Lock()
 	res, err := w.update(u)
@@ -180,8 +180,8 @@ func (w *Writer) update(u RouteUpdate) (Result, error) {
 	return Result{Changed: true, Snapshot: next, Route: doc.Name, File: cur.File, Version: Version(out)}, nil
 }
 
-// current devolve a rota em vigor e o texto do seu documento em disco,
-// conferindo a versão esperada.
+// current returns the route in force and the text of its document on disk,
+// checking the expected version.
 func current(snap *config.Snapshot, route, ifMatch string) (*config.CompiledRoute, []byte, error) {
 	cur := snap.Route(route)
 	if cur == nil {
@@ -189,7 +189,7 @@ func current(snap *config.Snapshot, route, ifMatch string) (*config.CompiledRout
 	}
 	data, err := os.ReadFile(cur.File)
 	if err != nil {
-		return nil, nil, fmt.Errorf("lendo o documento da rota %s: %w", route, err)
+		return nil, nil, fmt.Errorf("reading the document of route %s: %w", route, err)
 	}
 	if ifMatch != "" && Version(data) != ifMatch {
 		return nil, nil, ErrStale
@@ -197,10 +197,10 @@ func current(snap *config.Snapshot, route, ifMatch string) (*config.CompiledRout
 	return cur, data, nil
 }
 
-// commit valida o conjunto de rotas com doc no lugar de replace (acrescentado,
-// quando replace é nil; sem replace, quando doc é nil), grava out no arquivo
-// de doc (ou remove o de replace) e publica o snapshot novo. Nada é gravado
-// se a validação falha.
+// commit validates the set of routes with doc in place of replace (added,
+// when replace is nil; dropped, when doc is nil), writes out to doc's file
+// (or removes replace's) and publishes the new snapshot. Nothing is written
+// if validation fails.
 func (w *Writer) commit(snap *config.Snapshot, replace *config.CompiledRoute, doc *config.RouteDoc, out []byte) (*config.Snapshot, error) {
 	docs := make([]config.RouteDoc, 0, len(snap.Routes)+1)
 	for _, r := range snap.Routes {
@@ -223,14 +223,14 @@ func (w *Writer) commit(snap *config.Snapshot, replace *config.CompiledRoute, do
 	defer w.files.Unlock()
 	if doc == nil {
 		if err := remove(replace.File); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return nil, fmt.Errorf("removendo o documento da rota %s: %w", replace.Name(), err)
+			return nil, fmt.Errorf("removing the document of route %s: %w", replace.Name(), err)
 		}
 	} else {
 		if err := os.MkdirAll(filepath.Dir(doc.File), 0o755); err != nil {
-			return nil, fmt.Errorf("criando o diretório de rotas: %w", err)
+			return nil, fmt.Errorf("creating the routes directory: %w", err)
 		}
 		if err := WriteFileAtomic(doc.File, out); err != nil {
-			return nil, fmt.Errorf("gravando o documento da rota %s: %w", doc.Route.Name, err)
+			return nil, fmt.Errorf("writing the document of route %s: %w", doc.Route.Name, err)
 		}
 	}
 	next := config.NewSnapshot(snap.Settings, routes, snap.Warnings)
@@ -238,11 +238,11 @@ func (w *Writer) commit(snap *config.Snapshot, replace *config.CompiledRoute, do
 	return next, nil
 }
 
-// CreateRoute cria a rota r num documento novo, {nome}.yaml no diretório de
-// rotas em vigor. Um nome já usado por outra rota é recusado como conflito.
-// Se {nome}.yaml é o documento de outra rota (que o manteve ao ser
-// renomeada), a rota vai para o primeiro {nome}-N.yaml livre; se o arquivo
-// existe mas não é de rota nenhuma, a criação também é recusada.
+// CreateRoute creates route r in a new document, {name}.yaml in the routes
+// directory in force. A name already used by another route is rejected as a
+// conflict. If {name}.yaml is the document of another route (which kept it
+// through a rename), the route goes to the first free {name}-N.yaml; if the
+// file exists but belongs to no route at all, the creation is rejected too.
 func (w *Writer) CreateRoute(r config.Route, cause string) (Result, error) {
 	w.mu.Lock()
 	res, err := w.create(r.Name, func(file string) (config.RouteDoc, []byte, error) {
@@ -259,7 +259,7 @@ func (w *Writer) CreateRoute(r config.Route, cause string) (Result, error) {
 	return res, err
 }
 
-// fileOwner é a rota em vigor cujo documento é o arquivo dado, ou nil.
+// fileOwner is the route in force whose document is the given file, or nil.
 func fileOwner(snap *config.Snapshot, st os.FileInfo) *config.CompiledRoute {
 	for _, r := range snap.Routes {
 		if rs, err := os.Stat(r.File); err == nil && os.SameFile(rs, st) {
@@ -269,9 +269,9 @@ func fileOwner(snap *config.Snapshot, st os.FileInfo) *config.CompiledRoute {
 	return nil
 }
 
-// freeFile é o primeiro {nome}-N.yaml, a partir de N = 2, que ainda não
-// existe no diretório de rotas. Um arquivo existente nunca é sobrescrito,
-// seja ou não o documento de uma rota.
+// freeFile is the first {name}-N.yaml, starting at N = 2, that does not yet
+// exist in the routes directory. An existing file is never overwritten,
+// whether or not it is the document of a route.
 func freeFile(dir, name string) string {
 	for n := 2; ; n++ {
 		file := filepath.Join(dir, fmt.Sprintf("%s-%d.yaml", name, n))
@@ -286,7 +286,7 @@ func (w *Writer) create(name string, build func(file string) (config.RouteDoc, [
 	file := filepath.Join(snap.Settings.RoutesDir, name+".yaml")
 	if cur := snap.Route(name); cur != nil {
 		return Result{}, config.Errors{{File: cur.File, Field: "name", Conflict: true,
-			Msg: fmt.Sprintf("rota %q já declarada em %s", name, cur.File)}}
+			Msg: fmt.Sprintf("route %q is already declared in %s", name, cur.File)}}
 	}
 	doc, out, err := build(file)
 	if err != nil {
@@ -294,19 +294,19 @@ func (w *Writer) create(name string, build func(file string) (config.RouteDoc, [
 	}
 	if doc.Route.Name != name {
 		return Result{}, config.Errors{doc.Locate("name",
-			fmt.Sprintf("o nome declarado %q difere do nome da rota %q", doc.Route.Name, name))}
+			fmt.Sprintf("the declared name %q differs from the route name %q", doc.Route.Name, name))}
 	}
-	// A validação vem antes de usar o nome como caminho de arquivo.
+	// Validation comes before the name is used as a file path.
 	if _, err := config.BuildRoutes([]config.RouteDoc{doc}); err != nil {
 		return Result{}, err
 	}
 	if st, err := os.Stat(file); err == nil {
 		if fileOwner(snap, st) == nil {
 			return Result{}, config.Errors{{File: file, Field: "name", Conflict: true,
-				Msg: fmt.Sprintf("o arquivo %s já existe e não corresponde a nenhuma rota em vigor; recarregue a configuração ou escolha outro nome", file)}}
+				Msg: fmt.Sprintf("file %s already exists and matches no route in force; reload the configuration or pick another name", file)}}
 		}
-		// O arquivo é o documento de outra rota, que o manteve ao ser
-		// renomeada: a rota nova vai para o primeiro {nome}-N.yaml livre.
+		// The file is the document of another route, which kept it through a
+		// rename: the new route goes to the first free {name}-N.yaml.
 		file = freeFile(snap.Settings.RoutesDir, name)
 		if doc, out, err = build(file); err != nil {
 			return Result{}, err
@@ -319,21 +319,22 @@ func (w *Writer) create(name string, build func(file string) (config.RouteDoc, [
 	return Result{Changed: true, Created: true, Snapshot: next, Route: name, File: file, Version: Version(out)}, nil
 }
 
-// DocumentWrite grava o texto de um documento de rota como enviado,
-// comentários incluídos.
+// DocumentWrite writes the text of a route document exactly as sent,
+// comments included.
 type DocumentWrite struct {
-	// Route é o nome da rota. O documento precisa declarar esse mesmo nome.
-	// Se a rota não existe, é criada.
+	// Route is the name of the route. The document has to declare that same
+	// name. If the route does not exist, it is created.
 	Route string
 	Data  []byte
-	// IfMatch, quando informado, exige que o documento em disco esteja nessa
-	// versão; uma rota inexistente não confere com nenhuma versão.
+	// IfMatch, when given, requires the document on disk to be at that
+	// version; a route that does not exist matches no version at all.
 	IfMatch string
 	Cause   string
 }
 
-// WriteDocument valida o texto como na carga do disco, com erros apontando
-// linha e coluna, e o grava sem reserializar.
+// WriteDocument validates the text as it would on a load from disk, with
+// errors pointing at a line and a column, and writes it without
+// re-serializing.
 func (w *Writer) WriteDocument(d DocumentWrite) (Result, error) {
 	w.mu.Lock()
 	res, err := w.writeDocument(d)
@@ -365,7 +366,7 @@ func (w *Writer) writeDocument(d DocumentWrite) (Result, error) {
 	}
 	if doc.Route.Name != d.Route {
 		return Result{}, config.Errors{doc.Locate("name",
-			fmt.Sprintf("o nome declarado %q difere do nome da rota %q", doc.Route.Name, d.Route))}
+			fmt.Sprintf("the declared name %q differs from the route name %q", doc.Route.Name, d.Route))}
 	}
 	if bytes.Equal(data, d.Data) {
 		return Result{Snapshot: snap, Route: d.Route, File: cur.File, Version: Version(data)}, nil
@@ -377,7 +378,7 @@ func (w *Writer) writeDocument(d DocumentWrite) (Result, error) {
 	return Result{Changed: true, Snapshot: next, Route: d.Route, File: cur.File, Version: Version(d.Data)}, nil
 }
 
-// DeleteRoute remove a rota e apaga o seu documento.
+// DeleteRoute drops the route and deletes its document.
 func (w *Writer) DeleteRoute(route, ifMatch, cause string) (Result, error) {
 	w.mu.Lock()
 	res, err := w.deleteRoute(route, ifMatch)
@@ -401,21 +402,21 @@ func (w *Writer) deleteRoute(route, ifMatch string) (Result, error) {
 	return Result{Changed: true, Snapshot: next, Route: route, File: cur.File}, nil
 }
 
-// Reload constrói uma configuração nova com load e, se ela é válida, chama
-// apply com a anterior e a nova, para aplicar o que vive fora do snapshot
-// (portas, backend do histórico). Só se apply conclui o snapshot novo é
-// publicado; qualquer falha preserva a configuração em vigor. Requisições em
-// curso seguem com o snapshot que capturaram. Roda sob o mutex de escrita,
-// para não intercalar com a gravação de um documento.
+// Reload builds a new configuration with load and, if it is valid, calls
+// apply with the previous and the new one, to apply whatever lives outside
+// the snapshot (ports, history backend). Only if apply succeeds is the new
+// snapshot published; any failure preserves the configuration in force.
+// Requests already in flight carry on with the snapshot they captured. It
+// runs under the write mutex, so it does not interleave with a document write.
 func (w *Writer) Reload(load func() (*config.Snapshot, error), apply func(old, next *config.Snapshot) error) (Change, *config.Snapshot, error) {
 	return w.Replace(CauseReload, load, apply)
 }
 
-// Replace é Reload com a causa dada, para quem troca a configuração inteira
-// por outro motivo, como a alteração de gateway.json pela API. load roda sob
-// o mutex de escrita, de modo que pode ler e alterar arquivos sem intercalar
-// com outra escrita. Fora da recarga, uma troca que não mudou nada não é
-// informada aos observadores.
+// Replace is Reload with the given cause, for whoever swaps the whole
+// configuration for another reason, such as a change to gateway.json through
+// the API. load runs under the write mutex, so it can read and change files
+// without interleaving with another write. Outside a reload, a swap that
+// changed nothing is not reported to observers.
 func (w *Writer) Replace(cause string, load func() (*config.Snapshot, error), apply func(old, next *config.Snapshot) error) (Change, *config.Snapshot, error) {
 	w.mu.Lock()
 	old := w.live.Load()
@@ -436,8 +437,8 @@ func (w *Writer) Replace(cause string, load func() (*config.Snapshot, error), ap
 	return c, next, nil
 }
 
-// diffRoutes nomeia as rotas criadas, removidas ou alteradas entre os dois
-// snapshots, em ordem alfabética.
+// diffRoutes names the routes created, removed or changed between the two
+// snapshots, in alphabetical order.
 func diffRoutes(old, next *config.Snapshot) []string {
 	out := []string{}
 	for _, r := range next.Routes {
@@ -455,8 +456,8 @@ func diffRoutes(old, next *config.Snapshot) []string {
 	return out
 }
 
-// DiffSettings nomeia as chaves da configuração do processo cujo valor ou
-// origem mudou, na ordem de Settings.Effective.
+// DiffSettings names the process configuration keys whose value or source
+// changed, in Settings.Effective order.
 func DiffSettings(old, next config.Settings) []string {
 	out := []string{}
 	a, b := old.Effective(), next.Effective()
@@ -475,16 +476,16 @@ func names(before, after string) []string {
 	return []string{before, after}
 }
 
-// Version é a versão opaca de um documento, usada como ETag.
+// Version is the opaque version of a document, used as an ETag.
 func Version(data []byte) string {
 	sum := sha256.Sum256(data)
 	return `"` + hex.EncodeToString(sum[:16]) + `"`
 }
 
-// WriteFileAtomic grava data em path por meio de um arquivo temporário no
-// mesmo diretório, renomeado sobre o destino: quem lê o arquivo vê o
-// conteúdo anterior ou o novo, nunca uma gravação pela metade. As permissões
-// de um arquivo existente são preservadas.
+// WriteFileAtomic writes data to path through a temporary file in the same
+// directory, renamed over the destination: a reader sees either the previous
+// content or the new one, never a half-finished write. The permissions of an
+// existing file are preserved.
 func WriteFileAtomic(path string, data []byte) error {
 	mode := os.FileMode(0o644)
 	if st, err := os.Stat(path); err == nil {

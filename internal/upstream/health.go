@@ -1,45 +1,46 @@
-// Package upstream acompanha a disponibilidade recente de cada upstream a
-// partir das tentativas de encaminhamento da porta de tráfego. O gateway não
-// sonda os upstreams: o estado vem só do caminho das requisições, e é
-// contado independentemente do registro do histórico.
+// Package upstream tracks each upstream's recent availability from the
+// forwarding attempts made on the traffic port. The gateway does not probe
+// the upstreams: the state comes only from the request path, and is counted
+// independently of history recording.
 package upstream
 
 import (
 	"sync"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config"
 )
 
 const (
-	// Window é quantas tentativas recentes cada upstream guarda.
+	// Window is how many recent attempts each upstream keeps.
 	Window = 20
-	// DownAfter é quantas falhas seguidas, as mais recentes, dão o upstream
-	// como indisponível.
+	// DownAfter is how many consecutive failures, the most recent ones, mark
+	// an upstream as down.
 	DownAfter = 3
 )
 
-// Status é a disponibilidade de um upstream.
+// Status is an upstream's availability.
 type Status string
 
 const (
-	// StatusUp: houve tentativa e as DownAfter mais recentes não falharam
-	// todas (com menos de DownAfter tentativas, sempre este).
+	// StatusUp: there has been at least one attempt and the DownAfter most
+	// recent ones did not all fail (with fewer than DownAfter attempts, it is
+	// always this one).
 	StatusUp Status = "up"
-	// StatusDown: as DownAfter tentativas mais recentes ficaram sem resposta.
+	// StatusDown: the DownAfter most recent attempts got no response.
 	StatusDown Status = "down"
-	// StatusUnknown: nenhuma tentativa desde o início, ou desde que o
-	// upstream passou a ser declarado.
+	// StatusUnknown: no attempt since startup, or since the upstream was
+	// first declared.
 	StatusUnknown Status = "unknown"
 )
 
-// Recent resume as últimas tentativas.
+// Recent summarizes the latest attempts.
 type Recent struct {
 	Attempts int `json:"attempts"`
 	Failures int `json:"failures"`
 }
 
-// Item é a disponibilidade de um upstream, como GET /api/upstreams a devolve.
+// Item is an upstream's availability, as GET /api/upstreams returns it.
 type Item struct {
 	Upstream      string     `json:"upstream"`
 	Routes        []string   `json:"routes"`
@@ -50,7 +51,7 @@ type Item struct {
 	LastError     string     `json:"lastError"`
 }
 
-// record guarda as tentativas recentes de um upstream num anel.
+// record keeps an upstream's recent attempts in a ring.
 type record struct {
 	failed      [Window]bool
 	n, next     int
@@ -67,15 +68,14 @@ func (r *record) add(failed bool) {
 	}
 }
 
-// status aplica a regra: sem tentativa, desconhecido; as DownAfter mais
-// recentes sem resposta, indisponível; senão, respondendo.
+// status applies the rule: no attempt, unknown; the DownAfter most recent
+// ones with no response, down; otherwise, up.
 func (r *record) status() Status {
 	if r == nil || r.n == 0 {
 		return StatusUnknown
 	}
 	if r.n < DownAfter {
-		// Poucas tentativas para concluir indisponibilidade; as falhas
-		// aparecem em Recent.
+		// Too few attempts to call it down; the failures show up in Recent.
 		return StatusUp
 	}
 	for i := 1; i <= DownAfter; i++ {
@@ -96,16 +96,16 @@ func (r *record) failures() int {
 	return f
 }
 
-// Health é a disponibilidade recente dos upstreams. É seguro para uso
-// concorrente e barato no caminho da requisição: registrar uma tentativa
-// toma um mutex e escreve num anel de tamanho fixo.
+// Health is the recent availability of the upstreams. It is safe for
+// concurrent use and cheap on the request path: recording an attempt takes a
+// mutex and writes into a fixed-size ring.
 type Health struct {
 	mu  sync.Mutex
 	by  map[string]*record
 	now func() time.Time
 }
 
-// New cria o acompanhamento vazio: todo upstream começa desconhecido.
+// New creates empty tracking: every upstream starts out unknown.
 func New() *Health {
 	return &Health{by: map[string]*record{}, now: time.Now}
 }
@@ -119,8 +119,8 @@ func (h *Health) rec(upstream string) *record {
 	return r
 }
 
-// Success registra que o upstream respondeu, qualquer que seja o status: um
-// 5xx do próprio upstream é uma resposta.
+// Success records that the upstream responded, whatever the status: a 5xx
+// from the upstream itself is a response.
 func (h *Health) Success(upstream string) {
 	if h == nil || upstream == "" {
 		return
@@ -132,10 +132,10 @@ func (h *Health) Success(upstream string) {
 	r.lastSuccess = h.now().UTC()
 }
 
-// Failure registra uma tentativa sem resposta do upstream: conexão recusada,
-// tempo limite de conexão ou o tempo limite da rota esgotado antes da
-// resposta. A desistência do cliente não é falha do upstream e não passa por
-// aqui.
+// Failure records an attempt with no response from the upstream: connection
+// refused, connection timeout, or the route timeout running out before the
+// response. A client giving up is not an upstream failure and does not go
+// through here.
 func (h *Health) Failure(upstream, reason string) {
 	if h == nil || upstream == "" {
 		return
@@ -148,10 +148,11 @@ func (h *Health) Failure(upstream, reason string) {
 	r.lastError = reason
 }
 
-// Report devolve a disponibilidade de cada upstream declarado pelas rotas,
-// na ordem em que aparece na precedência, com as rotas que apontam para ele.
-// Rotas sem upstream não aparecem. O que foi registrado para um upstream que
-// deixou de ser declarado é descartado: se ele voltar, volta desconhecido.
+// Report returns the availability of every upstream declared by the routes,
+// in precedence order, along with the routes that point to it. Routes
+// without an upstream do not show up. Whatever was recorded for an upstream
+// that is no longer declared is dropped: if it comes back, it comes back
+// unknown.
 func (h *Health) Report(routes []*config.CompiledRoute) []Item {
 	items := []Item{}
 	index := map[string]int{}

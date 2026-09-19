@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/config/writer"
-	"github.com/gamerjp64/gateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config/writer"
+	"github.com/gamerjp64/devgateway/internal/exchange"
 )
 
 func setup(t *testing.T) (string, *config.Live, *Learner) {
@@ -57,26 +57,26 @@ func overridesOf(t *testing.T, doc string) []config.Override {
 	return r.Overrides
 }
 
-// Uma requisição que ainda segue com o snapshot anterior ao aprendizado não
-// grava de novo o mesmo endpoint: a verificação final é feita sob o mutex de
-// escrita, contra o documento em disco.
+// A request still running with the snapshot from before the learning does not
+// write the same endpoint again: the final check is done under the write
+// mutex, against the document on disk.
 func TestStaleSnapshotDoesNotDuplicate(t *testing.T) {
 	doc, live, l := setup(t)
 	stale := live.Load().Route("api")
-	l.Observe(stale, upstreamExchange("A", http.MethodGet, "/api/teste"))
+	l.Observe(stale, upstreamExchange("A", http.MethodGet, "/api/test"))
 	if err := l.Sync(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	l.Observe(stale, upstreamExchange("B", http.MethodGet, "/api/teste"))
+	l.Observe(stale, upstreamExchange("B", http.MethodGet, "/api/test"))
 	if err := l.Sync(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	ovs := overridesOf(t, doc)
 	if len(ovs) != 1 || ovs[0].Source.Exchange != "A" {
-		t.Fatalf("o endpoint deveria ser gravado uma única vez, pela primeira troca: %+v", ovs)
+		t.Fatalf("the endpoint should be written exactly once, by the first exchange: %+v", ovs)
 	}
 	if len(live.Load().Route("api").Overrides) != 1 {
-		t.Fatal("o snapshot deveria ter o override aprendido")
+		t.Fatal("the snapshot should have the learned override")
 	}
 }
 
@@ -85,17 +85,17 @@ func TestIneligibleExchangesAreIgnored(t *testing.T) {
 	route := live.Load().Route("api")
 	base := upstreamExchange("A", http.MethodGet, "/api/x")
 	for name, mod := range map[string]func(*exchange.Exchange){
-		"sintetizada":  func(e *exchange.Exchange) { e.Outcome = exchange.OutcomeSynthesized },
-		"derrubada":    func(e *exchange.Exchange) { e.Outcome, e.Status = exchange.OutcomeDropped, 0 },
-		"erro":         func(e *exchange.Exchange) { e.Outcome, e.Status = exchange.OutcomeGateway, http.StatusBadGateway },
-		"interrompida": func(e *exchange.Exchange) { e.Error = "a transferência da resposta foi interrompida" },
-		"upgrade":      func(e *exchange.Exchange) { e.Status = http.StatusSwitchingProtocols },
-		"sem rota":     func(e *exchange.Exchange) { e.Route = "" },
+		"synthesized": func(e *exchange.Exchange) { e.Outcome = exchange.OutcomeSynthesized },
+		"dropped":     func(e *exchange.Exchange) { e.Outcome, e.Status = exchange.OutcomeDropped, 0 },
+		"error":       func(e *exchange.Exchange) { e.Outcome, e.Status = exchange.OutcomeGateway, http.StatusBadGateway },
+		"interrupted": func(e *exchange.Exchange) { e.Error = "the response transfer was interrupted" },
+		"upgrade":     func(e *exchange.Exchange) { e.Status = http.StatusSwitchingProtocols },
+		"no route":    func(e *exchange.Exchange) { e.Route = "" },
 	} {
 		e := base
 		mod(&e)
 		if Eligible(e) {
-			t.Errorf("troca %s não deveria ser elegível", name)
+			t.Errorf("the %s exchange should not be eligible", name)
 		}
 		l.Observe(route, e)
 	}
@@ -104,15 +104,15 @@ func TestIneligibleExchangesAreIgnored(t *testing.T) {
 		t.Fatal(err)
 	}
 	if ovs := overridesOf(t, doc); len(ovs) != 0 {
-		t.Fatalf("nenhum override deveria ser aprendido: %+v", ovs)
+		t.Fatalf("no override should be learned: %+v", ovs)
 	}
 	if !Eligible(base) {
-		t.Fatal("a troca respondida pelo upstream deveria ser elegível")
+		t.Fatal("the exchange answered by the upstream should be eligible")
 	}
 }
 
-// Um * literal no path é aprendido como expressão regular exata, sem virar
-// curinga, e o endpoint passa a ser conhecido.
+// A literal * in the path is learned as an exact regular expression, without
+// becoming a wildcard, and the endpoint becomes known.
 func TestLiteralStarPathLearnedExactly(t *testing.T) {
 	doc, live, l := setup(t)
 	for _, p := range []string{"/api/a*b", "/api/files/*"} {
@@ -123,19 +123,19 @@ func TestLiteralStarPathLearnedExactly(t *testing.T) {
 	}
 	ovs := overridesOf(t, doc)
 	if len(ovs) != 2 {
-		t.Fatalf("os dois endpoints deveriam ser aprendidos: %+v", ovs)
+		t.Fatalf("both endpoints should be learned: %+v", ovs)
 	}
 	for i, p := range []string{"/api/a*b", "/api/files/*"} {
 		if m := ovs[i].Match; m.Path != "" || m.PathRegex != "^"+regexp.QuoteMeta(p)+"$" {
-			t.Errorf("%s: critério deveria ser a expressão regular exata: %+v", p, m)
+			t.Errorf("%s: the criterion should be the exact regular expression: %+v", p, m)
 		}
 	}
 	for _, o := range live.Load().Route("api").Overrides {
 		if o.Path != nil && o.Path.Wildcard {
-			t.Fatalf("nenhum override aprendido deveria ser curinga: %+v", o.Doc.Match)
+			t.Fatalf("no learned override should be a wildcard: %+v", o.Doc.Match)
 		}
 	}
-	// De novo, com o snapshot novo: já são conhecidos.
+	// Again, with the new snapshot: they are known by now.
 	for _, p := range []string{"/api/a*b", "/api/files/*"} {
 		l.Observe(live.Load().Route("api"), upstreamExchange("B", http.MethodGet, p))
 	}
@@ -143,11 +143,11 @@ func TestLiteralStarPathLearnedExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n := len(overridesOf(t, doc)); n != 2 {
-		t.Fatalf("os endpoints não deveriam ser gravados de novo: %d overrides", n)
+		t.Fatalf("the endpoints should not be written again: %d overrides", n)
 	}
 }
 
-// countWarnings conta os avisos registrados no log.
+// countWarnings counts the warnings written to the log.
 type countWarnings struct {
 	slog.Handler
 	n *atomic.Int64
@@ -160,16 +160,16 @@ func (c countWarnings) Handle(ctx context.Context, r slog.Record) error {
 	return nil
 }
 
-// Um override montado que não seria válido não é gravado, e o endpoint não é
-// tentado de novo a cada requisição.
+// An override that is built but would not be valid is not written, and the
+// endpoint is not tried again on every request.
 func TestInvalidLearnedOverrideNotRetried(t *testing.T) {
 	doc, live, _ := setup(t)
 	var warns atomic.Int64
 	l := New(writer.New(live), slog.New(countWarnings{slog.NewTextHandler(io.Discard, nil), &warns}))
 	t.Cleanup(l.Close)
-	e := upstreamExchange("A", http.MethodGet, "/api/ruim")
-	// Um nome de cabeçalho que o documento de rota não aceita.
-	e.Response.Headers = http.Header{"X Ruim": {"v"}}
+	e := upstreamExchange("A", http.MethodGet, "/api/bad")
+	// A header name that the route document does not accept.
+	e.Response.Headers = http.Header{"X Bad": {"v"}}
 	for range 3 {
 		l.Observe(live.Load().Route("api"), e)
 		if err := l.Sync(t.Context()); err != nil {
@@ -177,17 +177,17 @@ func TestInvalidLearnedOverrideNotRetried(t *testing.T) {
 		}
 	}
 	if ovs := overridesOf(t, doc); len(ovs) != 0 {
-		t.Fatalf("nada deveria ser gravado: %+v", ovs)
+		t.Fatalf("nothing should be written: %+v", ovs)
 	}
 	if n := warns.Load(); n != 1 {
-		t.Fatalf("o endpoint inválido deveria ser avisado uma única vez, foi %d", n)
+		t.Fatalf("the invalid endpoint should be warned about exactly once, got %d", n)
 	}
-	// Outros endpoints continuam sendo aprendidos.
-	l.Observe(live.Load().Route("api"), upstreamExchange("B", http.MethodGet, "/api/bom"))
+	// Other endpoints keep being learned.
+	l.Observe(live.Load().Route("api"), upstreamExchange("B", http.MethodGet, "/api/good"))
 	if err := l.Sync(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if ovs := overridesOf(t, doc); len(ovs) != 1 || ovs[0].Match.Path != "/api/bom" {
-		t.Fatalf("o endpoint válido deveria ser aprendido: %+v", ovs)
+	if ovs := overridesOf(t, doc); len(ovs) != 1 || ovs[0].Match.Path != "/api/good" {
+		t.Fatalf("the valid endpoint should be learned: %+v", ovs)
 	}
 }

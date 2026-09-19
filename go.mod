@@ -1,4 +1,4 @@
-module github.com/gamerjp64/gateway
+module github.com/gamerjp64/devgateway
 
 go 1.26
 

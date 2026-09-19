@@ -9,7 +9,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// Duration é um time.Duration serializado como texto ("150ms", "2s").
+// Duration is a time.Duration serialized as text ("150ms", "2s").
 type Duration time.Duration
 
 func (d Duration) String() string { return time.Duration(d).String() }
@@ -17,7 +17,7 @@ func (d Duration) String() string { return time.Duration(d).String() }
 func parseDuration(s string) (Duration, error) {
 	v, err := time.ParseDuration(s)
 	if err != nil {
-		return 0, fmt.Errorf("duração inválida %q (use, por exemplo, 150ms ou 2s)", s)
+		return 0, fmt.Errorf("invalid duration %q (use, for example, 150ms or 2s)", s)
 	}
 	return Duration(v), nil
 }
@@ -27,7 +27,7 @@ func (d Duration) MarshalJSON() ([]byte, error) { return json.Marshal(d.String()
 func (d *Duration) UnmarshalJSON(b []byte) error {
 	var s string
 	if err := json.Unmarshal(b, &s); err != nil {
-		return fmt.Errorf("duração deve ser texto, como \"2s\"")
+		return fmt.Errorf("duration must be text, such as \"2s\"")
 	}
 	v, err := parseDuration(s)
 	if err != nil {
@@ -41,7 +41,7 @@ func (d Duration) MarshalYAML() (any, error) { return d.String(), nil }
 
 func (d *Duration) UnmarshalYAML(n *yaml.Node) error {
 	if n.Kind != yaml.ScalarNode {
-		return nodeErr(n, "duração deve ser texto, como 2s")
+		return nodeErr(n, "duration must be text, such as 2s")
 	}
 	v, err := parseDuration(n.Value)
 	if err != nil {
@@ -51,7 +51,7 @@ func (d *Duration) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-// Latency é um atraso fixo ("2s") ou um intervalo sorteado ({min, max}).
+// Latency is a fixed delay ("2s") or a randomized range ({min, max}).
 type Latency struct {
 	Fixed *Duration `json:"-" yaml:"-"`
 	Min   *Duration `json:"min,omitempty" yaml:"min,omitempty"`
@@ -80,7 +80,7 @@ func (l *Latency) UnmarshalJSON(b []byte) error {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&r); err != nil {
-		return fmt.Errorf("latência deve ser uma duração, como \"2s\", ou {\"min\", \"max\"}: %v", err)
+		return fmt.Errorf("latency must be a duration, such as \"2s\", or {\"min\", \"max\"}: %v", err)
 	}
 	*l = Latency{Min: r.Min, Max: r.Max}
 	return nil
@@ -103,7 +103,7 @@ func (l *Latency) UnmarshalYAML(n *yaml.Node) error {
 		return nil
 	}
 	if n.Kind != yaml.MappingNode {
-		return nodeErr(n, "latência deve ser uma duração, como 2s, ou um mapa com min e max")
+		return nodeErr(n, "latency must be a duration, such as 2s, or a map with min and max")
 	}
 	var r latencyRange
 	if err := n.Decode(&r); err != nil {
@@ -113,8 +113,8 @@ func (l *Latency) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-// Matcher compara um valor da requisição com exatamente um operador.
-// Na forma curta, um texto simples equivale a {equals: texto}.
+// Matcher compares a value from the request using exactly one operator. In
+// the short form, plain text means {equals: text}.
 type Matcher struct {
 	Equals   *string `json:"equals,omitempty" yaml:"equals,omitempty"`
 	Regex    *string `json:"regex,omitempty" yaml:"regex,omitempty"`
@@ -145,7 +145,7 @@ func (m *Matcher) UnmarshalJSON(b []byte) error {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&f); err != nil {
-		return fmt.Errorf("critério deve ser texto ou um mapa com equals, regex, json ou contains: %v", err)
+		return fmt.Errorf("a criterion must be text or a map with equals, regex, json or contains: %v", err)
 	}
 	*m = Matcher(f)
 	return nil
@@ -165,7 +165,7 @@ func (m *Matcher) UnmarshalYAML(n *yaml.Node) error {
 		return nil
 	}
 	if n.Kind != yaml.MappingNode {
-		return nodeErr(n, "critério deve ser texto ou um mapa com equals, regex, json ou contains")
+		return nodeErr(n, "a criterion must be text or a map with equals, regex, json or contains")
 	}
 	var f matcherFields
 	if err := n.Decode(&f); err != nil {
@@ -175,15 +175,15 @@ func (m *Matcher) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-// nodeErr produz um erro no mesmo formato "line N:" usado pelo decodificador
-// YAML, para que a tradução em erro de validação localize o campo.
+// nodeErr builds an error in the same "line N:" format the YAML decoder uses,
+// so that the translation into a validation error still locates the field.
 func nodeErr(n *yaml.Node, format string, args ...any) error {
 	return fmt.Errorf("line %d: %s", n.Line, fmt.Sprintf(format, args...))
 }
 
-// HeaderValues são os valores de um cabeçalho da resposta declarada. Na forma
-// curta, um texto simples é um único valor; uma lista declara o cabeçalho
-// repetido, uma vez por valor, como vários Set-Cookie.
+// HeaderValues are the values of a header in the declared response. In the
+// short form, plain text is a single value; a list declares the header
+// repeated, once per value, as several Set-Cookie would be.
 type HeaderValues []string
 
 func (v HeaderValues) MarshalJSON() ([]byte, error) {
@@ -201,7 +201,7 @@ func (v *HeaderValues) UnmarshalJSON(b []byte) error {
 	}
 	var l []string
 	if err := json.Unmarshal(b, &l); err != nil {
-		return fmt.Errorf("valor de cabeçalho deve ser texto ou lista de textos")
+		return fmt.Errorf("a header value must be text or a list of texts")
 	}
 	*v = l
 	return nil
@@ -223,12 +223,12 @@ func (v *HeaderValues) UnmarshalYAML(n *yaml.Node) error {
 		l := make([]string, 0, len(n.Content))
 		for _, item := range n.Content {
 			if item.Kind != yaml.ScalarNode {
-				return nodeErr(item, "valor de cabeçalho deve ser texto")
+				return nodeErr(item, "a header value must be text")
 			}
 			l = append(l, item.Value)
 		}
 		*v = l
 		return nil
 	}
-	return nodeErr(n, "valor de cabeçalho deve ser texto ou lista de textos")
+	return nodeErr(n, "a header value must be text or a list of texts")
 }

@@ -6,39 +6,41 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/exchange"
 )
 
-// Switchable é o histórico em uso pelo processo: um Store que delega ao
-// backend atual e permite trocá-lo a quente. A troca segue o protocolo das
-// portas: o novo backend é inicializado antes, o ponteiro é trocado e só
-// então o antigo é fechado. O histórico não é migrado; as trocas antigas
-// ficam intactas no backend anterior.
+// Switchable is the history in use by the process: a Store that delegates to
+// the current backend and allows swapping it while running. The swap follows
+// the same protocol as the ports: the new backend is initialized first, the
+// pointer is swapped, and only then is the old one closed. The history is
+// not migrated; the old exchanges stay untouched in the previous backend.
 type Switchable struct {
 	cur atomic.Pointer[backend]
-	// swap serializa as trocas entre si; as operações não o tomam.
+	// swap serializes swaps against each other; operations do not take it.
 	swap sync.Mutex
 }
 
-// backend é um Store em uso, com o nome que o selecionou. inUse conta as
-// operações em curso: o fechamento espera todas terminarem, para que uma
-// gravação iniciada antes da troca nunca encontre o backend já fechado.
+// backend is a Store in use, along with the name that selected it. inUse
+// counts the operations in flight: closing waits for all of them to finish,
+// so a write that started before the swap never finds the backend already
+// closed.
 type backend struct {
 	name  string
 	s     Store
 	inUse sync.RWMutex
 }
 
-// NewSwitchable começa com o backend s, identificado por name.
+// NewSwitchable starts out with backend s, identified by name.
 func NewSwitchable(name string, s Store) *Switchable {
 	w := &Switchable{}
 	w.cur.Store(&backend{name: name, s: s})
 	return w
 }
 
-// acquire devolve o backend atual reservado para uma operação. Se uma troca
-// acontece entre a leitura do ponteiro e a reserva, tenta de novo com o novo.
+// acquire returns the current backend reserved for one operation. If a swap
+// happens between reading the pointer and reserving it, it retries with the
+// new one.
 func (w *Switchable) acquire() *backend {
 	for {
 		b := w.cur.Load()
@@ -50,13 +52,13 @@ func (w *Switchable) acquire() *backend {
 	}
 }
 
-// Backend informa o nome do backend em uso.
+// Backend reports the name of the backend in use.
 func (w *Switchable) Backend() string { return w.cur.Load().name }
 
-// Swap passa a usar next, identificado por name, e fecha o anterior depois
-// que as operações em curso nele terminam. next já precisa estar
-// inicializado. O erro, quando há, é do fechamento do anterior; a troca vale
-// mesmo assim.
+// Swap starts using next, identified by name, and closes the previous one
+// after the operations in flight on it finish. next must already be
+// initialized. The error, when there is one, comes from closing the previous
+// backend; the swap took effect regardless.
 func (w *Switchable) Swap(_ context.Context, name string, next Store) error {
 	w.swap.Lock()
 	defer w.swap.Unlock()
@@ -64,14 +66,14 @@ func (w *Switchable) Swap(_ context.Context, name string, next Store) error {
 	old.inUse.Lock()
 	defer old.inUse.Unlock()
 	if err := old.s.Close(); err != nil {
-		return fmt.Errorf("fechando o backend do histórico anterior %s: %w", old.name, err)
+		return fmt.Errorf("closing the previous history backend %s: %w", old.name, err)
 	}
 	return nil
 }
 
-// Switch inicializa o backend descrito por s e troca para ele. Se a
-// inicialização falhar, a troca é recusada com o backend e a causa, e o
-// backend atual segue em uso.
+// Switch initializes the backend described by s and swaps to it. If
+// initialization fails, the swap is rejected naming the backend and the
+// cause, and the current backend stays in use.
 func (w *Switchable) Switch(ctx context.Context, s config.Settings) error {
 	next, err := Open(s)
 	if err != nil {
@@ -110,7 +112,7 @@ func (w *Switchable) Clear(ctx context.Context) error {
 	return b.s.Clear(ctx)
 }
 
-// Close fecha o backend atual, esperando as operações em curso.
+// Close closes the current backend, waiting for the operations in flight.
 func (w *Switchable) Close() error {
 	w.swap.Lock()
 	defer w.swap.Unlock()

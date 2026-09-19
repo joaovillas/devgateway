@@ -12,33 +12,33 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/exchange"
 )
 
-// hopByHop são os cabeçalhos que valem só para uma conexão e que o HTTP
-// proíbe repassar.
+// hopByHop are the headers that apply to a single connection and that HTTP
+// forbids forwarding.
 var hopByHop = []string{
 	"Connection", "Proxy-Connection", "Keep-Alive", "Proxy-Authenticate",
 	"Proxy-Authorization", "Te", "Trailer", "Transfer-Encoding", "Upgrade",
 }
 
-// excludedHeaders ficam de fora da resposta pré-preenchida: Date e
-// Content-Length são recalculados a cada resposta, e X-Gateway é o próprio
-// cabeçalho do gateway, que não veio do upstream e é refeito a cada
-// intervenção.
+// excludedHeaders are left out of the pre-filled response: Date and
+// Content-Length are recomputed for every response, and X-Gateway is the
+// gateway's own header, which did not come from the upstream and is rebuilt
+// on every intervention.
 var excludedHeaders = []string{"Date", "Content-Length", "X-Gateway"}
 
-// FromExchange monta um override a partir de uma troca respondida pelo
-// upstream: path exato e método da requisição como critério, e a resposta
-// observada — status, cabeçalhos e corpo — como resposta declarada. Ficam de
-// fora dos cabeçalhos apenas Date, Content-Length, o X-Gateway do próprio
-// gateway e os hop-by-hop, inclusive os nomeados em Connection. Um cabeçalho
-// repetido, como vários Set-Cookie, mantém todos os valores, na ordem
-// observada. O corpo JSON vira estrutura; qualquer outro, texto. source
-// registra kind, a troca (quando e.ID não é vazio) e o instante at, e se o
-// corpo foi truncado na captura. O nome fica a cargo de quem grava o override
-// (ver Name).
+// FromExchange builds an override from an exchange answered by the upstream:
+// the request's exact path and method as the criteria, and the observed
+// response — status, headers and body — as the declared response. The only
+// headers left out are Date, Content-Length, the gateway's own X-Gateway and
+// the hop-by-hop ones, including those named in Connection. A repeated
+// header, such as several Set-Cookie, keeps all of its values, in the
+// observed order. A JSON body becomes a structure; anything else becomes
+// text. source records kind, the exchange (when e.ID is not empty) and the
+// instant at, and whether the body was truncated during capture. The name is
+// up to whoever writes the override (see Name).
 func FromExchange(e exchange.Exchange, kind string, at time.Time) config.Override {
 	resp := &config.Respond{Status: e.Status, Headers: responseHeaders(e.Response.Headers)}
 	if b := e.Response.Body; len(b) > 0 {
@@ -56,11 +56,11 @@ func FromExchange(e exchange.Exchange, kind string, at time.Time) config.Overrid
 	}
 }
 
-// ExactMatch é o critério que seleciona exatamente o método e o path dados.
-// No padrão de path o * é curinga e um segmento começado por : é parâmetro;
-// um path que contém * literal, um segmento começado por : ou que não começa
-// com / não pode ser escrito como path exato e vira uma expressão regular
-// ancorada que casa só com ele.
+// ExactMatch is the criterion that selects exactly the given method and path.
+// In a path pattern, * is a wildcard and a segment starting with : is a
+// parameter; a path that contains a literal *, has a segment starting with :
+// or does not start with / cannot be written as an exact path and becomes an
+// anchored regular expression that matches only itself.
 func ExactMatch(method, path string) config.OverrideMatch {
 	if writable(path) {
 		return config.OverrideMatch{Path: path, Method: method}
@@ -93,9 +93,9 @@ func responseHeaders(h http.Header) map[string]config.HeaderValues {
 	return out
 }
 
-// responseBody devolve o corpo como estrutura quando o tipo de conteúdo é
-// JSON e o corpo, completo, é JSON válido cujos números cabem sem perda na
-// estrutura; senão, como texto, byte a byte como observado.
+// responseBody returns the body as a structure when the content type is JSON
+// and the body, complete, is valid JSON whose numbers fit into the structure
+// without loss; otherwise as text, byte for byte as observed.
 func responseBody(contentType string, b []byte, truncated bool) any {
 	if !truncated && isJSONType(contentType) {
 		if v, ok := decodeJSON(b); ok {
@@ -113,11 +113,12 @@ func isJSONType(ct string) bool {
 	return mt == "application/json" || strings.HasSuffix(mt, "+json")
 }
 
-// decodeJSON interpreta o corpo preservando os números: um inteiro que cabe
-// em int64 ou uint64 fica inteiro, e os demais viram float64. Se algum número
-// não é representável sem perda (um inteiro maior que uint64, um decimal com
-// mais dígitos do que o float64 guarda), o corpo não é aceito como estrutura,
-// para que a resposta pré-preenchida não difira da observada.
+// decodeJSON parses the body preserving its numbers: an integer that fits in
+// int64 or uint64 stays an integer, and the rest become float64. If some
+// number is not representable without loss (an integer larger than uint64, a
+// decimal with more digits than a float64 holds), the body is not accepted as
+// a structure, so that the pre-filled response does not differ from the
+// observed one.
 func decodeJSON(b []byte) (any, bool) {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.UseNumber()
@@ -152,7 +153,7 @@ func numbers(v any) (any, bool) {
 	return v, true
 }
 
-// number converte o literal JSON s sem perda, ou informa que não é possível.
+// number converts the JSON literal s without loss, or reports that it cannot.
 func number(s string) (any, bool) {
 	if i, err := strconv.ParseInt(s, 10, 64); err == nil {
 		return i, true
@@ -164,8 +165,8 @@ func number(s string) (any, bool) {
 	if err != nil {
 		return nil, false
 	}
-	// O float64 reproduz o literal quando a sua representação mais curta
-	// tem o mesmo valor exato que o texto observado.
+	// The float64 reproduces the literal when its shortest representation has
+	// the same exact value as the observed text.
 	want, ok1 := new(big.Rat).SetString(s)
 	got, ok2 := new(big.Rat).SetString(strconv.FormatFloat(f, 'g', -1, 64))
 	if !ok1 || !ok2 || want.Cmp(got) != 0 {
@@ -174,10 +175,10 @@ func number(s string) (any, bool) {
 	return f, true
 }
 
-// Name deriva do método e do path um nome de override único na rota:
-// "get-api-teste" para GET /api/teste e "get-viacep-id-json" para o path
-// generalizado /viacep/:id/json, com sufixo numérico ("-2", "-3"...) quando o
-// nome já está em uso.
+// Name derives from the method and the path an override name that is unique
+// within the route: "get-api-test" for GET /api/test and "get-zip-id-json"
+// for the generalized path /zip/:id/json, with a numeric suffix ("-2",
+// "-3"...) when the name is already taken.
 func Name(r config.Route, method, path string) string {
 	var b strings.Builder
 	b.WriteString(strings.ToLower(method))

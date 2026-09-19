@@ -8,9 +8,9 @@ stripPrefix: true
 rewriteHost: true
 timeout: 5s
 overrides:
-  - name: bilulu
+  - name: full
     match:
-      path: /api/payments/bilulu
+      path: /api/payments/full
       method: POST
       headers:
         X-Tenant: acme

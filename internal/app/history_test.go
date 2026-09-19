@@ -10,15 +10,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config"
 )
 
-// Requirement: Armazenamento plugável do histórico
+// Requirement: Pluggable history storage
 
 func TestHistoryMemoryIsDefault(t *testing.T) {
 	a := startWith(t, freePorts, nil)
 	if got := a.History.Backend(); got != config.BackendMemory {
-		t.Fatalf("sem seleção, o histórico deveria ficar em memória, está em %q", got)
+		t.Fatalf("with nothing selected the history should live in memory, it is in %q", got)
 	}
 }
 
@@ -27,12 +27,12 @@ func TestHistoryBackendSelectedByEnvironment(t *testing.T) {
 	t.Setenv("GATEWAY_HISTORY_PATH", filepath.Join(t.TempDir(), "history.db"))
 	a := startWith(t, freePorts, nil)
 	if got := a.History.Backend(); got != config.BackendSQLite {
-		t.Fatalf("o backend da variável de ambiente deveria valer, em uso %q", got)
+		t.Fatalf("the backend from the environment variable should win, in use %q", got)
 	}
 }
 
-// freePort reserva e libera uma porta, para verificar depois que ela não
-// ficou ocupada.
+// freePort reserves and releases a port, so that we can check afterwards that
+// it was not left taken.
 func freePort(t *testing.T) int {
 	t.Helper()
 	ln, err := net.Listen("tcp", ":0")
@@ -45,7 +45,7 @@ func freePort(t *testing.T) int {
 
 func TestHistoryUnavailableBackendRefusesToStart(t *testing.T) {
 	dir := t.TempDir()
-	blocker := filepath.Join(dir, "arquivo-comum")
+	blocker := filepath.Join(dir, "plain-file")
 	writeFile(t, blocker, "x")
 	dbPath := filepath.Join(blocker, "history.db")
 	traffic, admin := freePort(t), freePort(t)
@@ -53,28 +53,28 @@ func TestHistoryUnavailableBackendRefusesToStart(t *testing.T) {
 		admin = freePort(t)
 	}
 	writeFile(t, filepath.Join(dir, "gateway.json"), `{"ports":{"traffic":`+strconv.Itoa(traffic)+
-		`,"admin":`+strconv.Itoa(admin)+`},"history":{"backend":"sqlite","path":"arquivo-comum/history.db"}}`)
+		`,"admin":`+strconv.Itoa(admin)+`},"history":{"backend":"sqlite","path":"plain-file/history.db"}}`)
 
 	a, err := Start(Options{Loader: loaderFor(filepath.Join(dir, "gateway.json")), Web: testWeb, Log: quietLog()})
 	if err == nil {
 		a.Shutdown(t.Context())
-		t.Fatalf("deveria recusar iniciar com o backend indisponível")
+		t.Fatalf("it should refuse to start with an unavailable backend")
 	}
 	msg := err.Error()
 	if !strings.Contains(msg, "sqlite") || !strings.Contains(msg, dbPath) {
-		t.Fatalf("a recusa deveria informar o backend e a causa: %s", msg)
+		t.Fatalf("the refusal should report the backend and the cause: %s", msg)
 	}
 	if cause := new(*fs.PathError); !errors.As(err, cause) {
-		t.Fatalf("a recusa deveria encadear a causa do sistema de arquivos: %s", msg)
+		t.Fatalf("the refusal should chain the filesystem cause: %s", msg)
 	}
 	if _, statErr := os.Stat(blocker); statErr != nil {
-		t.Fatalf("o arquivo no caminho não deveria ser alterado: %v", statErr)
+		t.Fatalf("the file sitting at that path should not be changed: %v", statErr)
 	}
-	// Nenhuma porta fica aberta.
+	// No port is left open.
 	for _, p := range []int{traffic, admin} {
 		ln, err := net.Listen("tcp", ":"+strconv.Itoa(p))
 		if err != nil {
-			t.Fatalf("a porta %d ficou ocupada após a recusa: %v", p, err)
+			t.Fatalf("port %d was left taken after the refusal: %v", p, err)
 		}
 		ln.Close()
 	}

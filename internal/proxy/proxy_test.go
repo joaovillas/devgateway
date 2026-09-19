@@ -14,12 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/capture"
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/capture"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/store"
 )
 
-// echo é o que o upstream de teste devolve sobre a requisição recebida.
+// echo is what the test upstream reports back about the request it received.
 type echo struct {
 	Upstream string      `json:"upstream"`
 	Method   string      `json:"method"`
@@ -51,9 +51,9 @@ func route(name, upstream, path string, mods ...func(*config.Route)) config.Rout
 
 func withHost(h string) func(*config.Route) { return func(r *config.Route) { r.Match.Host = h } }
 
-// recording é a configuração dos testes: registro ligado com o limite de
-// captura padrão, para que todo teste de encaminhamento também exercite a
-// captura.
+// recording is the settings these tests run with: recording on with the
+// default capture limit, so that every forwarding test also exercises the
+// capture.
 func recording() config.Settings {
 	return config.Settings{HistoryRecord: true, HistoryExpose: true, CaptureMaxBodyBytes: 64 << 10}
 }
@@ -126,16 +126,16 @@ func echoOf(t *testing.T) func(*http.Response, []byte) echo {
 	}
 }
 
-// Requirement: Roteamento por curinga de path
+// Requirement: Path wildcard routing
 
 func TestMostSpecificWildcardWins(t *testing.T) {
 	api, pay := echoUpstream(t, "api"), echoUpstream(t, "payments")
 	gw := gateway(t, route("api", api.URL, "/api/*"), route("payments", pay.URL, "/api/payments/*"))
 	if e := echoOf(t)(get(t, gw, "/api/payments/123")); e.Upstream != "payments" {
-		t.Fatalf("esperado payments, recebido %s", e.Upstream)
+		t.Fatalf("want payments, got %s", e.Upstream)
 	}
 	if e := echoOf(t)(get(t, gw, "/api/users")); e.Upstream != "api" {
-		t.Fatalf("esperado api, recebido %s", e.Upstream)
+		t.Fatalf("want api, got %s", e.Upstream)
 	}
 }
 
@@ -143,7 +143,7 @@ func TestExactPathBeatsWildcard(t *testing.T) {
 	api, health := echoUpstream(t, "api"), echoUpstream(t, "health")
 	gw := gateway(t, route("api", api.URL, "/api/*"), route("health", health.URL, "/api/health"))
 	if e := echoOf(t)(get(t, gw, "/api/health")); e.Upstream != "health" {
-		t.Fatalf("esperado health, recebido %s", e.Upstream)
+		t.Fatalf("want health, got %s", e.Upstream)
 	}
 }
 
@@ -152,10 +152,10 @@ func TestStripPrefix(t *testing.T) {
 	gw := gateway(t, route("payments", up.URL, "/api/payments/*", func(r *config.Route) { r.StripPrefix = true }))
 	e := echoOf(t)(get(t, gw, "/api/payments/123?x=1"))
 	if e.Path != "/123" || e.RawQuery != "x=1" {
-		t.Fatalf("upstream deveria receber /123?x=1, recebeu %s?%s", e.Path, e.RawQuery)
+		t.Fatalf("the upstream should have received /123?x=1, it got %s?%s", e.Path, e.RawQuery)
 	}
 	if e := echoOf(t)(get(t, gw, "/api/payments")); e.Path != "/" {
-		t.Fatalf("o próprio prefixo deveria virar /, virou %s", e.Path)
+		t.Fatalf("the prefix itself should become /, it became %s", e.Path)
 	}
 }
 
@@ -163,7 +163,7 @@ func TestPrefixPreservedByDefault(t *testing.T) {
 	up := echoUpstream(t, "payments")
 	gw := gateway(t, route("payments", up.URL, "/api/payments/*"))
 	if e := echoOf(t)(get(t, gw, "/api/payments/123")); e.Path != "/api/payments/123" {
-		t.Fatalf("path deveria ser preservado, recebido %s", e.Path)
+		t.Fatalf("the path should be preserved, got %s", e.Path)
 	}
 }
 
@@ -171,7 +171,7 @@ func TestUpstreamBasePathIsJoined(t *testing.T) {
 	up := echoUpstream(t, "payments")
 	gw := gateway(t, route("payments", up.URL+"/v2", "/pay/*", func(r *config.Route) { r.StripPrefix = true }))
 	if e := echoOf(t)(get(t, gw, "/pay/charge")); e.Path != "/v2/charge" {
-		t.Fatalf("esperado /v2/charge, recebido %s", e.Path)
+		t.Fatalf("want /v2/charge, got %s", e.Path)
 	}
 }
 
@@ -180,28 +180,28 @@ func TestNoRouteMatches(t *testing.T) {
 	gw := gateway(t, route("a", up.URL, "/a/*"), route("b", up.URL, "/b", withHost("b.local")))
 	res, body := get(t, gw, "/zzz")
 	if res.StatusCode != http.StatusNotFound {
-		t.Fatalf("esperado 404, recebido %d", res.StatusCode)
+		t.Fatalf("want 404, got %d", res.StatusCode)
 	}
 	var d diag
 	json.Unmarshal(body, &d)
 	if d.Error != "no_route" || strings.Join(d.Patterns, ",") != "b.local/b,/a/*" {
-		t.Fatalf("corpo deveria informar a falta de rota e listar os padrões: %s", body)
+		t.Fatalf("the body should report the missing route and list the patterns: %s", body)
 	}
 }
 
-// Requirement: Roteamento por host
+// Requirement: Host routing
 
 func TestRouteByHostOnly(t *testing.T) {
 	pay, other := echoUpstream(t, "payments"), echoUpstream(t, "other")
 	gw := gateway(t, route("payments", pay.URL, "", withHost("payments.local")), route("other", other.URL, "/*"))
-	if e := echoOf(t)(get(t, gw, "/qualquer", "Host", "payments.local")); e.Upstream != "payments" {
-		t.Fatalf("esperado payments, recebido %s", e.Upstream)
+	if e := echoOf(t)(get(t, gw, "/anything", "Host", "payments.local")); e.Upstream != "payments" {
+		t.Fatalf("want payments, got %s", e.Upstream)
 	}
-	if e := echoOf(t)(get(t, gw, "/qualquer", "Host", "payments.local:8080")); e.Upstream != "payments" {
-		t.Fatalf("host com porta deveria casar, recebido %s", e.Upstream)
+	if e := echoOf(t)(get(t, gw, "/anything", "Host", "payments.local:8080")); e.Upstream != "payments" {
+		t.Fatalf("a host with a port should match, got %s", e.Upstream)
 	}
-	if e := echoOf(t)(get(t, gw, "/qualquer")); e.Upstream != "other" {
-		t.Fatalf("outro host deveria cair na rota sem host, recebido %s", e.Upstream)
+	if e := echoOf(t)(get(t, gw, "/anything")); e.Upstream != "other" {
+		t.Fatalf("another host should fall through to the route without a host, got %s", e.Upstream)
 	}
 }
 
@@ -209,30 +209,31 @@ func TestHostAndPathCombined(t *testing.T) {
 	v2, fallback := echoUpstream(t, "v2"), echoUpstream(t, "fallback")
 	gw := gateway(t, route("v2", v2.URL, "/v2/*", withHost("payments.local")), route("fallback", fallback.URL, "/*"))
 	if e := echoOf(t)(get(t, gw, "/v1/charge", "Host", "payments.local")); e.Upstream != "fallback" {
-		t.Fatalf("host casa mas path não; esperado fallback, recebido %s", e.Upstream)
+		t.Fatalf("the host matches but the path does not; want fallback, got %s", e.Upstream)
 	}
 	if e := echoOf(t)(get(t, gw, "/v2/charge", "Host", "payments.local")); e.Upstream != "v2" {
-		t.Fatalf("esperado v2, recebido %s", e.Upstream)
+		t.Fatalf("want v2, got %s", e.Upstream)
 	}
 }
 
 func TestHostRouteBeatsPathRoute(t *testing.T) {
 	byHost, byPath := echoUpstream(t, "host"), echoUpstream(t, "path")
-	// A rota sem host tem até um path mais específico; o host vence mesmo assim.
+	// The route without a host even has a more specific path; the host wins
+	// anyway.
 	gw := gateway(t, route("host", byHost.URL, "/*", withHost("payments.local")), route("path", byPath.URL, "/api/charge"))
 	if e := echoOf(t)(get(t, gw, "/api/charge", "Host", "payments.local")); e.Upstream != "host" {
-		t.Fatalf("esperado host, recebido %s", e.Upstream)
+		t.Fatalf("want host, got %s", e.Upstream)
 	}
 }
 
-// Requirement: Encaminhamento de cabeçalhos
+// Requirement: Header forwarding
 
 func TestForwardedHeadersAdded(t *testing.T) {
 	up := echoUpstream(t, "a")
 	gw := gateway(t, route("a", up.URL, "/*"))
 	e := echoOf(t)(get(t, gw, "/x", "Host", "front.local"))
 	if got := e.Header.Get("X-Forwarded-For"); got != "127.0.0.1" {
-		t.Errorf("X-Forwarded-For = %q, esperado o endereço do cliente", got)
+		t.Errorf("X-Forwarded-For = %q, want the client address", got)
 	}
 	if got := e.Header.Get("X-Forwarded-Proto"); got != "http" {
 		t.Errorf("X-Forwarded-Proto = %q", got)
@@ -246,7 +247,7 @@ func TestOriginalHostByDefault(t *testing.T) {
 	up := echoUpstream(t, "a")
 	gw := gateway(t, route("a", up.URL, "/*"))
 	if e := echoOf(t)(get(t, gw, "/x", "Host", "payments.local")); e.Host != "payments.local" {
-		t.Fatalf("Host original deveria ser repassado por padrão, recebido %q", e.Host)
+		t.Fatalf("the original Host should be passed through by default, got %q", e.Host)
 	}
 }
 
@@ -255,7 +256,7 @@ func TestHostRewrittenOnDemand(t *testing.T) {
 	gw := gateway(t, route("a", up.URL, "/*", func(r *config.Route) { r.RewriteHost = true }))
 	e := echoOf(t)(get(t, gw, "/x", "Host", "payments.local"))
 	if e.Host != strings.TrimPrefix(up.URL, "http://") {
-		t.Fatalf("Host deveria ser o do upstream com rewriteHost, recebido %q", e.Host)
+		t.Fatalf("with rewriteHost the Host should be the upstream's, got %q", e.Host)
 	}
 }
 
@@ -264,27 +265,27 @@ func TestXForwardedForAccumulates(t *testing.T) {
 	gw := gateway(t, route("a", up.URL, "/*"))
 	e := echoOf(t)(get(t, gw, "/x", "X-Forwarded-For", "203.0.113.9, 10.0.0.1"))
 	if got := strings.Join(e.Header.Values("X-Forwarded-For"), ", "); got != "203.0.113.9, 10.0.0.1, 127.0.0.1" {
-		t.Fatalf("cadeia deveria acumular, recebido %q", got)
+		t.Fatalf("the chain should accumulate, got %q", got)
 	}
 }
 
 func TestForwardedHostAndProtoPreserved(t *testing.T) {
 	up := echoUpstream(t, "a")
 	gw := gateway(t, route("a", up.URL, "/*"))
-	e := echoOf(t)(get(t, gw, "/x", "Host", "interno.local",
-		"X-Forwarded-Host", "publico.example.com", "X-Forwarded-Proto", "https",
+	e := echoOf(t)(get(t, gw, "/x", "Host", "internal.local",
+		"X-Forwarded-Host", "public.example.com", "X-Forwarded-Proto", "https",
 		"Forwarded", "for=203.0.113.9;proto=https"))
-	if got := e.Header.Values("X-Forwarded-Host"); len(got) != 1 || got[0] != "publico.example.com" {
-		t.Errorf("X-Forwarded-Host deveria chegar como veio, recebido %q", got)
+	if got := e.Header.Values("X-Forwarded-Host"); len(got) != 1 || got[0] != "public.example.com" {
+		t.Errorf("X-Forwarded-Host should arrive as it was sent, got %q", got)
 	}
 	if got := e.Header.Values("X-Forwarded-Proto"); len(got) != 1 || got[0] != "https" {
-		t.Errorf("X-Forwarded-Proto deveria chegar como veio, recebido %q", got)
+		t.Errorf("X-Forwarded-Proto should arrive as it was sent, got %q", got)
 	}
 	if got := e.Header.Values("Forwarded"); len(got) != 1 || got[0] != "for=203.0.113.9;proto=https" {
-		t.Errorf("Forwarded deveria chegar como veio, recebido %q", got)
+		t.Errorf("Forwarded should arrive as it was sent, got %q", got)
 	}
 	if got := e.Header.Get("X-Forwarded-For"); got != "127.0.0.1" {
-		t.Errorf("X-Forwarded-For ausente deveria ser preenchido, recebido %q", got)
+		t.Errorf("a missing X-Forwarded-For should be filled in, got %q", got)
 	}
 }
 
@@ -292,9 +293,9 @@ func TestForwardedHeaderDeclaredHopByHopNotRestored(t *testing.T) {
 	up := echoUpstream(t, "a")
 	gw := gateway(t, route("a", up.URL, "/*"))
 	e := echoOf(t)(get(t, gw, "/x", "Host", "front.local",
-		"Connection", "X-Forwarded-Host", "X-Forwarded-Host", "so-nesta-conexao.local"))
+		"Connection", "X-Forwarded-Host", "X-Forwarded-Host", "this-connection-only.local"))
 	if got := e.Header.Get("X-Forwarded-Host"); got != "front.local" {
-		t.Fatalf("cabeçalho listado em Connection não deveria ser repassado, recebido %q", got)
+		t.Fatalf("a header listed in Connection should not be passed through, got %q", got)
 	}
 }
 
@@ -303,30 +304,30 @@ func TestArbitraryHeadersRelayed(t *testing.T) {
 	gw := gateway(t, route("a", up.URL, "/*"))
 	e := echoOf(t)(get(t, gw, "/x",
 		"Authorization", "Bearer abc.def.ghi",
-		"X-Custom", "valor com  espaços",
-		"X-Repetido", "um",
-		"X-Repetido", "dois",
-		"X-Repetido", "um",
+		"X-Custom", "value with  spaces",
+		"X-Repeated", "one",
+		"X-Repeated", "two",
+		"X-Repeated", "one",
 		"Accept", "application/json",
 		"Accept", "text/plain;q=0.5",
 		"Cookie", "a=1; b=2",
 	))
 	want := http.Header{
 		"Authorization": {"Bearer abc.def.ghi"},
-		"X-Custom":      {"valor com  espaços"},
-		"X-Repetido":    {"um", "dois", "um"},
+		"X-Custom":      {"value with  spaces"},
+		"X-Repeated":    {"one", "two", "one"},
 		"Accept":        {"application/json", "text/plain;q=0.5"},
 		"Cookie":        {"a=1; b=2"},
 	}
 	for k, v := range want {
 		if got := e.Header.Values(k); strings.Join(got, "\x00") != strings.Join(v, "\x00") {
-			t.Errorf("%s = %q, esperado %q", k, got, v)
+			t.Errorf("%s = %q, want %q", k, got, v)
 		}
 	}
 }
 
-// rawGet envia uma requisição HTTP/1.1 escrita à mão, sem os cabeçalhos que
-// o cliente do Go acrescentaria por conta própria.
+// rawGet sends a hand-written HTTP/1.1 request, without the headers the Go
+// client would add on its own.
 func rawGet(t *testing.T, gw *httptest.Server, path string, hdr ...string) (*http.Response, []byte) {
 	t.Helper()
 	conn, err := net.Dial("tcp", strings.TrimPrefix(gw.URL, "http://"))
@@ -366,55 +367,55 @@ func TestNoOtherHeadersAdded(t *testing.T) {
 	slices.Sort(got)
 	want := []string{"X-Custom", "X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "X-Gateway"}
 	if !slices.Equal(got, want) {
-		t.Fatalf("o upstream deveria receber só os cabeçalhos enviados mais os do gateway:\nrecebido %q\nesperado %q", got, want)
+		t.Fatalf("the upstream should receive only the headers sent plus the gateway's:\ngot  %q\nwant %q", got, want)
 	}
 }
 
-// Um cabeçalho de encaminhamento que chega vazio não está preenchido: o
-// gateway o completa como se estivesse ausente. O Forwarded, que o gateway
-// não acrescenta, segue repassado como chegou.
+// A forwarding header that arrives empty does not count as filled in: the
+// gateway completes it as if it were missing. Forwarded, which the gateway
+// does not add, is still passed through exactly as it arrived.
 func TestEmptyForwardedHeadersAreFilled(t *testing.T) {
 	up := echoUpstream(t, "a")
 	gw := gateway(t, route("a", up.URL, "/*"))
 	e := echoOf(t)(rawGet(t, gw, "/x",
 		"X-Forwarded-Host", "", "X-Forwarded-Proto", " ", "X-Forwarded-For", "", "Forwarded", ""))
 	if got := e.Header.Values("X-Forwarded-Host"); len(got) != 1 || got[0] != "front.local" {
-		t.Errorf("X-Forwarded-Host vazio deveria receber o host original, recebido %q", got)
+		t.Errorf("an empty X-Forwarded-Host should get the original host, got %q", got)
 	}
 	if got := e.Header.Values("X-Forwarded-Proto"); len(got) != 1 || got[0] != "http" {
-		t.Errorf("X-Forwarded-Proto vazio deveria receber o esquema original, recebido %q", got)
+		t.Errorf("an empty X-Forwarded-Proto should get the original scheme, got %q", got)
 	}
 	if got := e.Header.Values("X-Forwarded-For"); len(got) != 1 || got[0] != "127.0.0.1" {
-		t.Errorf("X-Forwarded-For vazio deveria receber só o cliente, recebido %q", got)
+		t.Errorf("an empty X-Forwarded-For should get just the client, got %q", got)
 	}
 	if got, ok := e.Header["Forwarded"]; !ok || len(got) != 1 || got[0] != "" {
-		t.Errorf("Forwarded deveria ser repassado como chegou, recebido %q", got)
+		t.Errorf("Forwarded should be passed through as it arrived, got %q", got)
 	}
 }
 
-// Requirement: Cabeçalho de identificação do gateway
+// Requirement: Gateway identification header
 
 func TestIdentWithoutIntervention(t *testing.T) {
 	up := echoUpstream(t, "payments")
 	gw := gateway(t, route("payments", up.URL, "/*"))
-	res, body := get(t, gw, "/x", "X-Gateway", "forjado-pelo-cliente")
+	res, body := get(t, gw, "/x", "X-Gateway", "forged-by-the-client")
 	e := echoOf(t)(res, body)
 	if got := e.Header.Values(HeaderGateway); len(got) != 1 || got[0] != "route=payments" {
-		t.Errorf("upstream deveria receber um único X-Gateway com a rota, recebido %q", got)
+		t.Errorf("the upstream should receive a single X-Gateway with the route, got %q", got)
 	}
 	if got := res.Header.Values(HeaderGateway); len(got) != 1 || got[0] != "route=payments" {
-		t.Errorf("cliente deveria receber um único X-Gateway com a rota, recebido %q", got)
+		t.Errorf("the client should receive a single X-Gateway with the route, got %q", got)
 	}
 }
 
 func TestIdentReplacesUpstreamHeader(t *testing.T) {
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set(HeaderGateway, "route=outro-gateway")
+		w.Header().Set(HeaderGateway, "route=another-gateway")
 	}))
 	t.Cleanup(up.Close)
 	gw := gateway(t, route("payments", up.URL, "/*"))
 	if res, _ := get(t, gw, "/x"); strings.Join(res.Header.Values(HeaderGateway), ",") != "route=payments" {
-		t.Fatalf("X-Gateway da resposta deveria ser o deste gateway, recebido %q", res.Header.Values(HeaderGateway))
+		t.Fatalf("the response's X-Gateway should be this gateway's, got %q", res.Header.Values(HeaderGateway))
 	}
 }
 
@@ -429,36 +430,36 @@ func TestIdentFormat(t *testing.T) {
 			"route=payments; override=payments/flaky; intervention=synthesized"},
 	} {
 		if got := c.id.String(); got != c.want {
-			t.Errorf("%+v = %q, esperado %q", c.id, got, c.want)
+			t.Errorf("%+v = %q, want %q", c.id, got, c.want)
 		}
 	}
 }
 
 func TestIdentOnGatewayErrors(t *testing.T) {
 	gw := gateway(t,
-		route("vazia", "", "/vazia/*"),
-		route("morta", closedAddr(t), "/morta/*"),
+		route("empty", "", "/empty/*"),
+		route("dead", closedAddr(t), "/dead/*"),
 	)
 	for _, c := range []struct {
 		path   string
 		status int
 		want   string
 	}{
-		{"/nada", http.StatusNotFound, ""},
-		{"/vazia/x", http.StatusNotImplemented, "route=vazia"},
-		{"/morta/x", http.StatusBadGateway, "route=morta"},
+		{"/nothing", http.StatusNotFound, ""},
+		{"/empty/x", http.StatusNotImplemented, "route=empty"},
+		{"/dead/x", http.StatusBadGateway, "route=dead"},
 	} {
 		res, body := get(t, gw, c.path)
 		if res.StatusCode != c.status {
-			t.Fatalf("%s: esperado %d, recebido %d: %s", c.path, c.status, res.StatusCode, body)
+			t.Fatalf("%s: want %d, got %d: %s", c.path, c.status, res.StatusCode, body)
 		}
 		if got, ok := res.Header[HeaderGateway]; !ok || len(got) != 1 || got[0] != c.want {
-			t.Errorf("%s: X-Gateway = %q (presente: %v), esperado %q", c.path, got, ok, c.want)
+			t.Errorf("%s: X-Gateway = %q (present: %v), want %q", c.path, got, ok, c.want)
 		}
 	}
 }
 
-// Requirement: Tratamento de falha do upstream
+// Requirement: Upstream failure handling
 
 func closedAddr(t *testing.T) string {
 	t.Helper()
@@ -476,12 +477,12 @@ func TestUpstreamRefusesConnection(t *testing.T) {
 	gw := gateway(t, route("payments", dead, "/*"))
 	res, body := get(t, gw, "/x")
 	if res.StatusCode != http.StatusBadGateway {
-		t.Fatalf("esperado 502, recebido %d", res.StatusCode)
+		t.Fatalf("want 502, got %d", res.StatusCode)
 	}
 	var d diag
 	json.Unmarshal(body, &d)
 	if d.Route != "payments" || d.Upstream != dead {
-		t.Fatalf("corpo deveria nomear a rota e o upstream: %s", body)
+		t.Fatalf("the body should name the route and the upstream: %s", body)
 	}
 }
 
@@ -490,7 +491,7 @@ func TestUpstreamTimeout(t *testing.T) {
 	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
-			close(released) // o gateway encerrou a requisição ao upstream
+			close(released) // the gateway ended the request to the upstream
 		case <-time.After(5 * time.Second):
 		}
 	}))
@@ -500,23 +501,23 @@ func TestUpstreamTimeout(t *testing.T) {
 	start := time.Now()
 	res, body := get(t, gw, "/x")
 	if res.StatusCode != http.StatusGatewayTimeout {
-		t.Fatalf("esperado 504, recebido %d: %s", res.StatusCode, body)
+		t.Fatalf("want 504, got %d: %s", res.StatusCode, body)
 	}
 	if time.Since(start) > 2*time.Second {
-		t.Fatal("o gateway deveria desistir no tempo limite")
+		t.Fatal("the gateway should give up at the timeout")
 	}
 	var d diag
 	json.Unmarshal(body, &d)
 	if d.Route != "slow" || d.Upstream != slow.URL {
-		t.Fatalf("corpo deveria nomear a rota e o upstream: %s", body)
+		t.Fatalf("the body should name the route and the upstream: %s", body)
 	}
 	if got := res.Header.Get(HeaderGateway); got != "route=slow" {
-		t.Errorf("X-Gateway do 504 = %q, esperado route=slow", got)
+		t.Errorf("X-Gateway of the 504 = %q, want route=slow", got)
 	}
 	select {
 	case <-released:
 	case <-time.After(2 * time.Second):
-		t.Fatal("a requisição ao upstream não foi encerrada")
+		t.Fatal("the request to the upstream was not ended")
 	}
 }
 
@@ -525,14 +526,14 @@ func TestTimeoutDoesNotCutStreamingBody(t *testing.T) {
 		w.WriteHeader(200)
 		w.(http.Flusher).Flush()
 		time.Sleep(300 * time.Millisecond)
-		io.WriteString(w, "fim")
+		io.WriteString(w, "end")
 	}))
 	t.Cleanup(up.Close)
 	timeout := config.Duration(100 * time.Millisecond)
 	gw := gateway(t, route("s", up.URL, "/*", func(r *config.Route) { r.Timeout = &timeout }))
 	res, body := get(t, gw, "/x")
-	if res.StatusCode != 200 || string(body) != "fim" {
-		t.Fatalf("o tempo limite vale até os cabeçalhos; corpo cortado: %d %q", res.StatusCode, body)
+	if res.StatusCode != 200 || string(body) != "end" {
+		t.Fatalf("the timeout only applies up to the headers; body was cut: %d %q", res.StatusCode, body)
 	}
 }
 
@@ -541,15 +542,15 @@ func TestFailingUpstreamDoesNotAffectOthers(t *testing.T) {
 	gw := gateway(t, route("dead", closedAddr(t), "/dead/*"), route("ok", ok.URL, "/ok/*"))
 	for range 20 {
 		if res, _ := get(t, gw, "/dead/x"); res.StatusCode != http.StatusBadGateway {
-			t.Fatalf("esperado 502, recebido %d", res.StatusCode)
+			t.Fatalf("want 502, got %d", res.StatusCode)
 		}
 	}
 	if e := echoOf(t)(get(t, gw, "/ok/x")); e.Upstream != "ok" {
-		t.Fatalf("rota saudável deveria seguir atendendo")
+		t.Fatalf("the healthy route should keep serving")
 	}
 }
 
-// Requirement: Transparência do tráfego encaminhado
+// Requirement: Transparency of forwarded traffic
 
 func TestMethodAndBodyPreserved(t *testing.T) {
 	up := echoUpstream(t, "a")
@@ -559,30 +560,30 @@ func TestMethodAndBodyPreserved(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-custom-binary")
 	e := echoOf(t)(do(t, req))
 	if e.Method != "POST" || !bytes.Equal(e.Body, payload) || e.Header.Get("Content-Type") != "application/x-custom-binary" {
-		t.Fatalf("método, corpo ou Content-Type alterados: %s %v %q", e.Method, e.Body, e.Header.Get("Content-Type"))
+		t.Fatalf("method, body or Content-Type changed: %s %v %q", e.Method, e.Body, e.Header.Get("Content-Type"))
 	}
 	for _, m := range []string{"PUT", "PATCH", "DELETE", "OPTIONS", "PROPFIND"} {
 		req, _ := http.NewRequest(m, gw.URL+"/x", nil)
 		if e := echoOf(t)(do(t, req)); e.Method != m {
-			t.Fatalf("método %s virou %s", m, e.Method)
+			t.Fatalf("method %s turned into %s", m, e.Method)
 		}
 	}
 }
 
 func TestUpstreamStatusRelayed(t *testing.T) {
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Teapot", "sim")
+		w.Header().Set("X-Teapot", "yes")
 		w.Header().Add("Set-Cookie", "a=1")
 		w.Header().Add("Set-Cookie", "b=2")
 		w.WriteHeader(http.StatusTeapot)
-		io.WriteString(w, "sou um bule")
+		io.WriteString(w, "i am a teapot")
 	}))
 	t.Cleanup(up.Close)
 	gw := gateway(t, route("a", up.URL, "/*"))
 	res, body := get(t, gw, "/x")
-	if res.StatusCode != 418 || string(body) != "sou um bule" || res.Header.Get("X-Teapot") != "sim" ||
+	if res.StatusCode != 418 || string(body) != "i am a teapot" || res.Header.Get("X-Teapot") != "yes" ||
 		len(res.Header.Values("Set-Cookie")) != 2 {
-		t.Fatalf("resposta alterada: %d %q %v", res.StatusCode, body, res.Header)
+		t.Fatalf("the response was changed: %d %q %v", res.StatusCode, body, res.Header)
 	}
 }
 
@@ -594,7 +595,7 @@ func TestStreamingRelayedIncrementally(t *testing.T) {
 			fmt.Fprintf(w, "data: %d\n\n", i)
 			w.(http.Flusher).Flush()
 			select {
-			case <-next: // só emite o próximo evento depois que o cliente leu este
+			case <-next: // only emit the next event once the client has read this one
 			case <-time.After(5 * time.Second):
 				return
 			}
@@ -611,10 +612,10 @@ func TestStreamingRelayedIncrementally(t *testing.T) {
 	for i := range 3 {
 		line, err := rd.ReadString('\n')
 		if err != nil {
-			t.Fatalf("evento %d não chegou antes do fim da resposta: %v", i, err)
+			t.Fatalf("event %d did not arrive before the response ended: %v", i, err)
 		}
 		if want := fmt.Sprintf("data: %d\n", i); line != want {
-			t.Fatalf("evento %d = %q", i, line)
+			t.Fatalf("event %d = %q", i, line)
 		}
 		rd.ReadString('\n')
 		next <- struct{}{}

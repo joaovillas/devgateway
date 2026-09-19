@@ -5,20 +5,20 @@ import (
 	"encoding/base64"
 	"encoding/json"
 
-	"github.com/gamerjp64/gateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/exchange"
 )
 
-// orderKey posiciona uma troca no histórico. A ordem é cronológica pela
-// chegada: instante de início, depois o número de sequência de chegada e,
-// por último, a ordem de registro no backend, que só desempata trocas com
-// início e sequência iguais (como as de processos diferentes no mesmo
-// instante). A captura grava a troca quando ela termina; sem esta chave,
-// uma troca lenta que chegou antes apareceria como mais nova que as rápidas
-// que chegaram depois dela.
+// orderKey places an exchange in the history. The order is chronological by
+// arrival: start instant, then the arrival sequence number and, last, the
+// order in which the backend recorded it, which only breaks ties between
+// exchanges with the same start and sequence (such as ones from different
+// processes at the same instant). Capture writes an exchange once it
+// finishes; without this key, a slow exchange that arrived earlier would
+// show up as newer than the fast ones that arrived after it.
 //
-// O início fica em segundos e nanossegundos separados, e não em
-// nanossegundos desde a época, porque UnixNano não representa instantes fora
-// de 1678–2262 (entre eles o instante zero).
+// The start is kept as separate seconds and nanoseconds, not as nanoseconds
+// since the epoch, because UnixNano cannot represent instants outside
+// 1678-2262 (the zero instant among them).
 type orderKey struct {
 	Sec  int64  `json:"s"`
 	Nsec int32  `json:"n"`
@@ -26,12 +26,13 @@ type orderKey struct {
 	Ins  uint64 `json:"i"`
 }
 
-// keyOf monta a chave de e, registrada na posição de registro ins.
+// keyOf builds the key for e, recorded at record position ins.
 func keyOf(e *exchange.Exchange, ins uint64) orderKey {
 	return orderKey{Sec: e.Start.Unix(), Nsec: int32(e.Start.Nanosecond()), Seq: e.Seq, Ins: ins}
 }
 
-// compare devolve -1, 0 ou +1 conforme a esteja antes, junto ou depois de b.
+// compare returns -1, 0 or +1 depending on whether a comes before, at the
+// same place as, or after b.
 func (a orderKey) compare(b orderKey) int {
 	if c := cmp.Compare(a.Sec, b.Sec); c != 0 {
 		return c
@@ -45,21 +46,21 @@ func (a orderKey) compare(b orderKey) int {
 	return cmp.Compare(a.Ins, b.Ins)
 }
 
-// cursor é a continuação de uma listagem: a chave da última troca entregue
-// e a época do histórico em que ela foi emitida. Cada limpeza avança a
-// época, e um cursor de época anterior não alcança as trocas novas.
+// cursor continues a listing: the key of the last exchange delivered and the
+// history epoch it was issued in. Every clear bumps the epoch, and a cursor
+// from an earlier epoch cannot reach the new exchanges.
 type cursor struct {
 	Epoch uint64   `json:"e"`
 	Key   orderKey `json:"k"`
 }
 
-// encodeCursor serializa o cursor num texto opaco, seguro em URL.
+// encodeCursor serializes the cursor into an opaque, URL-safe string.
 func encodeCursor(epoch uint64, k orderKey) string {
 	b, _ := json.Marshal(cursor{Epoch: epoch, Key: k})
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-// decodeCursor lê um cursor emitido por encodeCursor, ou devolve
+// decodeCursor reads a cursor issued by encodeCursor, or returns
 // ErrBadCursor.
 func decodeCursor(s string) (cursor, error) {
 	b, err := base64.RawURLEncoding.DecodeString(s)

@@ -16,13 +16,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/capture"
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/exchange"
-	"github.com/gamerjp64/gateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/capture"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/store"
 )
 
-// capGW é um gateway de teste com acesso ao histórico em que ele grava.
+// capGW is a test gateway with access to the history it writes into.
 type capGW struct {
 	*httptest.Server
 	h    *Handler
@@ -45,8 +45,8 @@ func capturingInto(t *testing.T, hist store.Store, s config.Settings, routes ...
 	return &capGW{Server: srv, h: h, rec: rec, hist: hist}
 }
 
-// history devolve as trocas gravadas, da mais nova para a mais antiga,
-// depois de esperar a gravação das já respondidas.
+// history returns the recorded exchanges, newest to oldest, after waiting for
+// the ones already answered to be written.
 func (g *capGW) history(t *testing.T, f exchange.Filter) []exchange.Exchange {
 	t.Helper()
 	if err := g.rec.Sync(t.Context()); err != nil {
@@ -67,12 +67,12 @@ func (g *capGW) history(t *testing.T, f exchange.Filter) []exchange.Exchange {
 	}
 }
 
-// only devolve a única troca gravada, completa.
+// only returns the single recorded exchange, in full.
 func (g *capGW) only(t *testing.T) exchange.Exchange {
 	t.Helper()
 	items := g.history(t, exchange.Filter{})
 	if len(items) != 1 {
-		t.Fatalf("esperada uma troca no histórico, há %d", len(items))
+		t.Fatalf("want one exchange in the history, got %d", len(items))
 	}
 	e, err := g.hist.Get(t.Context(), items[0].ID)
 	if err != nil {
@@ -90,11 +90,11 @@ func (g *capGW) get(t *testing.T, path string) (*http.Response, []byte) {
 func approx(t *testing.T, name string, got, min, max float64) {
 	t.Helper()
 	if got < min || got > max {
-		t.Errorf("%s = %.1fms, esperado entre %.0fms e %.0fms", name, got, min, max)
+		t.Errorf("%s = %.1fms, want between %.0fms and %.0fms", name, got, min, max)
 	}
 }
 
-// Requirement: Registro das trocas HTTP
+// Requirement: Recording of HTTP exchanges
 
 func TestExchangeRecordedCompletely(t *testing.T) {
 	up := echoUpstream(t, "payments")
@@ -110,35 +110,35 @@ func TestExchangeRecordedCompletely(t *testing.T) {
 
 	e := g.only(t)
 	if len(e.ID) != 26 || e.Seq == 0 || e.Start.IsZero() {
-		t.Errorf("identificação incompleta: id %q, seq %d, início %v", e.ID, e.Seq, e.Start)
+		t.Errorf("incomplete identity: id %q, seq %d, start %v", e.ID, e.Seq, e.Start)
 	}
 	if e.Route != "payments" || e.Upstream != up.URL {
-		t.Errorf("rota %q e upstream %q, esperados payments e %s", e.Route, e.Upstream, up.URL)
+		t.Errorf("route %q and upstream %q, want payments and %s", e.Route, e.Upstream, up.URL)
 	}
 	if e.Method != http.MethodPost || e.Path != "/api/charge" || e.Query != "amount=100&retry=1" {
-		t.Errorf("requisição registrada como %s %s ? %s", e.Method, e.Path, e.Query)
+		t.Errorf("request recorded as %s %s ? %s", e.Method, e.Path, e.Query)
 	}
 	if e.Host == "" || e.ClientAddr == "" {
-		t.Errorf("host %q e endereço do cliente %q deveriam constar", e.Host, e.ClientAddr)
+		t.Errorf("host %q and client address %q should be there", e.Host, e.ClientAddr)
 	}
 	if e.Status != http.StatusOK || e.Outcome != exchange.OutcomeUpstream || e.Intervened() {
-		t.Errorf("status %d, resultado %s, intervenções %v", e.Status, e.Outcome, e.Interventions)
+		t.Errorf("status %d, outcome %s, interventions %v", e.Status, e.Outcome, e.Interventions)
 	}
 	if got := e.Request.Headers.Get("X-Request-Id"); got != "abc-123" {
-		t.Errorf("cabeçalho da requisição registrado como %q", got)
+		t.Errorf("request header recorded as %q", got)
 	}
 	if string(e.Request.Body) != `{"card":"4242"}` || e.Request.Size != 15 || e.Request.Truncated {
-		t.Errorf("corpo da requisição %q, tamanho %d, truncado %v", e.Request.Body, e.Request.Size, e.Request.Truncated)
+		t.Errorf("request body %q, size %d, truncated %v", e.Request.Body, e.Request.Size, e.Request.Truncated)
 	}
 	if e.Response.Headers.Get("Content-Type") != "application/json" || e.Response.Headers.Get(HeaderGateway) != "route=payments" {
-		t.Errorf("cabeçalhos da resposta registrados: %v", e.Response.Headers)
+		t.Errorf("response headers recorded: %v", e.Response.Headers)
 	}
 	if !bytes.Equal(e.Response.Body, body) || e.Response.Size != int64(len(body)) || e.Response.Truncated {
-		t.Errorf("corpo da resposta registrado difere do entregue ao cliente (%d de %d bytes)", len(e.Response.Body), len(body))
+		t.Errorf("the recorded response body differs from the one delivered to the client (%d of %d bytes)", len(e.Response.Body), len(body))
 	}
 	tm := e.Timing
 	if tm.TotalMs < 0 || tm.InjectedMs != 0 || tm.UpstreamMs+tm.GatewayMs < tm.TotalMs-0.001 || tm.UpstreamMs+tm.GatewayMs > tm.TotalMs+0.001 {
-		t.Errorf("tempos decompostos inconsistentes: %+v", tm)
+		t.Errorf("inconsistent broken-down timings: %+v", tm)
 	}
 }
 
@@ -152,11 +152,11 @@ func TestResponseBodyAboveLimitIsTruncated(t *testing.T) {
 
 	_, body := g.get(t, "/x")
 	if !bytes.Equal(body, big) {
-		t.Fatalf("o cliente deveria receber o corpo inteiro, recebeu %d bytes", len(body))
+		t.Fatalf("the client should receive the whole body, it got %d bytes", len(body))
 	}
 	e := g.only(t)
 	if !e.Response.Truncated || e.Response.Size != int64(len(big)) || !bytes.Equal(e.Response.Body, big[:16]) {
-		t.Fatalf("esperado corpo truncado em 16 bytes com tamanho real %d: truncado %v, tamanho %d, corpo %q",
+		t.Fatalf("want a body truncated at 16 bytes with real size %d: truncated %v, size %d, body %q",
 			len(big), e.Response.Truncated, e.Response.Size, e.Response.Body)
 	}
 }
@@ -170,11 +170,11 @@ func TestRequestBodyAboveLimitIsForwardedWhole(t *testing.T) {
 	payload := bytes.Repeat([]byte("abcdefghij"), 500)
 	req, _ := http.NewRequest(http.MethodPut, g.URL+"/upload", bytes.NewReader(payload))
 	if e := echoOf(t)(do(t, req)); !bytes.Equal(e.Body, payload) {
-		t.Fatalf("o upstream deveria receber o corpo inteiro, recebeu %d de %d bytes", len(e.Body), len(payload))
+		t.Fatalf("the upstream should receive the whole body, it got %d of %d bytes", len(e.Body), len(payload))
 	}
 	e := g.only(t)
 	if !e.Request.Truncated || e.Request.Size != int64(len(payload)) || string(e.Request.Body) != "abcdefgh" {
-		t.Fatalf("corpo da requisição: truncado %v, tamanho %d, corpo %q", e.Request.Truncated, e.Request.Size, e.Request.Body)
+		t.Fatalf("request body: truncated %v, size %d, body %q", e.Request.Truncated, e.Request.Size, e.Request.Body)
 	}
 }
 
@@ -184,41 +184,41 @@ func TestChunkedRequestBodyCaptured(t *testing.T) {
 	pr, pw := io.Pipe()
 	go func() {
 		for i := range 3 {
-			fmt.Fprintf(pw, "parte %d;", i)
+			fmt.Fprintf(pw, "part %d;", i)
 		}
 		pw.Close()
 	}()
 	req, _ := http.NewRequest(http.MethodPost, g.URL+"/stream", pr)
-	if e := echoOf(t)(do(t, req)); string(e.Body) != "parte 0;parte 1;parte 2;" {
-		t.Fatalf("corpo sem tamanho declarado alterado: %q", e.Body)
+	if e := echoOf(t)(do(t, req)); string(e.Body) != "part 0;part 1;part 2;" {
+		t.Fatalf("a body with no declared length was changed: %q", e.Body)
 	}
-	if e := g.only(t); string(e.Request.Body) != "parte 0;parte 1;parte 2;" || e.Request.Size != 24 || e.Request.Truncated {
-		t.Fatalf("corpo sem tamanho declarado registrado como %q (%d bytes, truncado %v)", e.Request.Body, e.Request.Size, e.Request.Truncated)
+	if e := g.only(t); string(e.Request.Body) != "part 0;part 1;part 2;" || e.Request.Size != 21 || e.Request.Truncated {
+		t.Fatalf("a body with no declared length was recorded as %q (%d bytes, truncated %v)", e.Request.Body, e.Request.Size, e.Request.Truncated)
 	}
 }
 
 func TestNoRouteExchangeIsRecorded(t *testing.T) {
 	up := echoUpstream(t, "a")
 	g := capturing(t, recording(), route("a", up.URL, "/api/*"))
-	req, _ := http.NewRequest(http.MethodPost, g.URL+"/outro?x=1", strings.NewReader("corpo"))
+	req, _ := http.NewRequest(http.MethodPost, g.URL+"/other?x=1", strings.NewReader("body"))
 	if res, _ := do(t, req); res.StatusCode != http.StatusNotFound {
-		t.Fatalf("esperado 404, recebido %d", res.StatusCode)
+		t.Fatalf("want 404, got %d", res.StatusCode)
 	}
 	e := g.only(t)
 	if e.Route != "" || e.Upstream != "" {
-		t.Errorf("troca sem rota registrada com rota %q e upstream %q", e.Route, e.Upstream)
+		t.Errorf("an exchange without a route was recorded with route %q and upstream %q", e.Route, e.Upstream)
 	}
 	if e.Status != http.StatusNotFound || e.Outcome != exchange.OutcomeGateway || !strings.Contains(e.Error, "no_route") {
-		t.Errorf("status %d, resultado %s, erro %q", e.Status, e.Outcome, e.Error)
+		t.Errorf("status %d, outcome %s, error %q", e.Status, e.Outcome, e.Error)
 	}
-	if e.Path != "/outro" || e.Query != "x=1" || string(e.Request.Body) != "corpo" {
-		t.Errorf("requisição registrada como %s ? %s com corpo %q", e.Path, e.Query, e.Request.Body)
+	if e.Path != "/other" || e.Query != "x=1" || string(e.Request.Body) != "body" {
+		t.Errorf("request recorded as %s ? %s with body %q", e.Path, e.Query, e.Request.Body)
 	}
 	if !strings.Contains(string(e.Response.Body), "no_route") {
-		t.Errorf("o corpo diagnóstico deveria constar da troca: %q", e.Response.Body)
+		t.Errorf("the diagnostic body should be part of the exchange: %q", e.Response.Body)
 	}
 	if e.Timing.UpstreamMs != 0 || e.Timing.InjectedMs != 0 {
-		t.Errorf("sem upstream, os tempos de upstream e injetado deveriam ser zero: %+v", e.Timing)
+		t.Errorf("with no upstream, the upstream and injected timings should be zero: %+v", e.Timing)
 	}
 }
 
@@ -233,50 +233,50 @@ func TestGatewayErrorsRecordedAsGateway(t *testing.T) {
 	timeout := config.Duration(100 * time.Millisecond)
 	dead := closedAddr(t)
 	g := capturing(t, recording(),
-		route("vazia", "", "/vazia/*"),
-		route("morta", dead, "/morta/*"),
-		route("lenta", slow.URL, "/lenta/*", func(r *config.Route) { r.Timeout = &timeout }),
+		route("empty", "", "/empty/*"),
+		route("dead", dead, "/dead/*"),
+		route("slow", slow.URL, "/slow/*", func(r *config.Route) { r.Timeout = &timeout }),
 	)
 	for _, c := range []struct {
 		path, route, upstream, code string
 		status                      int
 	}{
-		{"/vazia/x", "vazia", "", "no_upstream", http.StatusNotImplemented},
-		{"/morta/x", "morta", dead, "upstream_unavailable", http.StatusBadGateway},
-		{"/lenta/x", "lenta", slow.URL, "upstream_timeout", http.StatusGatewayTimeout},
+		{"/empty/x", "empty", "", "no_upstream", http.StatusNotImplemented},
+		{"/dead/x", "dead", dead, "upstream_unavailable", http.StatusBadGateway},
+		{"/slow/x", "slow", slow.URL, "upstream_timeout", http.StatusGatewayTimeout},
 	} {
 		if res, _ := g.get(t, c.path); res.StatusCode != c.status {
-			t.Fatalf("%s: esperado %d, recebido %d", c.path, c.status, res.StatusCode)
+			t.Fatalf("%s: want %d, got %d", c.path, c.status, res.StatusCode)
 		}
 		items := g.history(t, exchange.Filter{Route: c.route})
 		if len(items) != 1 {
-			t.Fatalf("%s: esperada uma troca da rota %s, há %d", c.path, c.route, len(items))
+			t.Fatalf("%s: want one exchange for route %s, got %d", c.path, c.route, len(items))
 		}
 		e := items[0]
 		if e.Status != c.status || e.Outcome != exchange.OutcomeGateway || !strings.Contains(e.Error, c.code) {
-			t.Errorf("%s: status %d, resultado %s, erro %q", c.path, e.Status, e.Outcome, e.Error)
+			t.Errorf("%s: status %d, outcome %s, error %q", c.path, e.Status, e.Outcome, e.Error)
 		}
 		if e.Upstream != c.upstream || e.Intervened() {
-			t.Errorf("%s: upstream %q, intervenções %v", c.path, e.Upstream, e.Interventions)
+			t.Errorf("%s: upstream %q, interventions %v", c.path, e.Upstream, e.Interventions)
 		}
 	}
-	// O tempo gasto esperando o upstream lento é tempo de upstream.
-	e := g.history(t, exchange.Filter{Route: "lenta"})[0]
-	approx(t, "tempo de upstream do 504", e.Timing.UpstreamMs, 90, 2000)
+	// The time spent waiting on the slow upstream counts as upstream time.
+	e := g.history(t, exchange.Filter{Route: "slow"})[0]
+	approx(t, "upstream time of the 504", e.Timing.UpstreamMs, 90, 2000)
 }
 
-// Requirement: Distinção entre resposta do upstream e intervenção do gateway
+// Requirement: Telling an upstream response apart from a gateway intervention
 
 func TestUpstreamErrorIsNotIntervention(t *testing.T) {
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "falhou", http.StatusInternalServerError)
+		http.Error(w, "failed", http.StatusInternalServerError)
 	}))
 	t.Cleanup(up.Close)
 	g := capturing(t, recording(), route("a", up.URL, "/*"))
 	g.get(t, "/x")
 	e := g.only(t)
 	if e.Status != 500 || e.Outcome != exchange.OutcomeUpstream || e.Intervened() || e.Override != "" || e.Error != "" {
-		t.Fatalf("500 do upstream registrado como status %d, resultado %s, intervenções %v, override %q, erro %q",
+		t.Fatalf("a 500 from the upstream was recorded as status %d, outcome %s, interventions %v, override %q, error %q",
 			e.Status, e.Outcome, e.Interventions, e.Override, e.Error)
 	}
 }
@@ -305,7 +305,7 @@ func TestStreamingStaysIncrementalWhileCaptured(t *testing.T) {
 	for i := range 3 {
 		line, err := rd.ReadString('\n')
 		if err != nil || line != fmt.Sprintf("data: %d\n", i) {
-			t.Fatalf("evento %d não chegou incrementalmente: %q %v", i, line, err)
+			t.Fatalf("event %d did not arrive incrementally: %q %v", i, line, err)
 		}
 		rd.ReadString('\n')
 		next <- struct{}{}
@@ -314,17 +314,17 @@ func TestStreamingStaysIncrementalWhileCaptured(t *testing.T) {
 	res.Body.Close()
 	e := g.only(t)
 	if string(e.Response.Body) != "data: 0\n\ndata: 1\n\ndata: 2\n\n" {
-		t.Fatalf("o stream capturado difere do entregue: %q", e.Response.Body)
+		t.Fatalf("the captured stream differs from the one delivered: %q", e.Response.Body)
 	}
 }
 
-// Requirement: Decomposição da latência
+// Requirement: Latency breakdown
 
 func TestInjectedTimeSeparatedFromUpstream(t *testing.T) {
-	// Os valores do cenário: atraso de 2s e upstream que responde em 150ms.
-	// O atraso entra pelo mesmo ponto de injeção que os overrides usarão
-	// (passo 8), aqui acionado por um gancho de teste; a 6.7 repete o
-	// cenário com um override real.
+	// The values of the scenario: a 2s delay and an upstream that answers in
+	// 150ms. The delay goes in through the same injection point the
+	// overrides will use (step 8), triggered here by a test hook; 6.7
+	// repeats the scenario with a real override.
 	const upstreamDelay, injected = 150 * time.Millisecond, 2 * time.Second
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(upstreamDelay)
@@ -332,33 +332,33 @@ func TestInjectedTimeSeparatedFromUpstream(t *testing.T) {
 	}))
 	t.Cleanup(up.Close)
 	g := capturing(t, recording(), route("payments", up.URL, "/*"))
-	g.h.delayFor = func(*http.Request) (string, time.Duration) { return "payments/lenta", injected }
+	g.h.delayFor = func(*http.Request) (string, time.Duration) { return "payments/slow", injected }
 
 	start := time.Now()
 	if _, body := g.get(t, "/x"); string(body) != "ok" {
-		t.Fatalf("corpo %q", body)
+		t.Fatalf("body %q", body)
 	}
 	if el := time.Since(start); el < upstreamDelay+injected {
-		t.Fatalf("o atraso deveria somar ao tempo do upstream; a requisição levou %v", el)
+		t.Fatalf("the delay should add to the upstream time; the request took %v", el)
 	}
 	e := g.only(t)
 	tm := e.Timing
-	approx(t, "tempo injetado", tm.InjectedMs, 2000, 2200)
-	approx(t, "tempo de upstream", tm.UpstreamMs, 150, 300)
+	approx(t, "injected time", tm.InjectedMs, 2000, 2200)
+	approx(t, "upstream time", tm.UpstreamMs, 150, 300)
 	if tm.GatewayMs < 0 {
-		t.Errorf("overhead negativo: %+v", tm)
+		t.Errorf("negative overhead: %+v", tm)
 	}
 	if sum := tm.UpstreamMs + tm.InjectedMs + tm.GatewayMs; sum < tm.TotalMs-0.001 || sum > tm.TotalMs+0.001 {
-		t.Errorf("o total deveria ser a soma de upstream, injetado e overhead: %+v", tm)
+		t.Errorf("the total should be the sum of upstream, injected and overhead: %+v", tm)
 	}
-	if e.Override != "payments/lenta" || !e.Intervened() || e.Outcome != exchange.OutcomeUpstream {
-		t.Errorf("o atraso deveria constar como intervenção do override sem mudar o resultado: %q %v %s",
+	if e.Override != "payments/slow" || !e.Intervened() || e.Outcome != exchange.OutcomeUpstream {
+		t.Errorf("the delay should show up as an override intervention without changing the outcome: %q %v %s",
 			e.Override, e.Interventions, e.Outcome)
 	}
 }
 
 func TestNoOverrideMeansZeroInjected(t *testing.T) {
-	// O upstream demora o bastante para ser medido mesmo com relógio grosso.
+	// The upstream takes long enough to be measured even with a coarse clock.
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(30 * time.Millisecond)
 	}))
@@ -367,40 +367,40 @@ func TestNoOverrideMeansZeroInjected(t *testing.T) {
 	g.get(t, "/x")
 	e := g.only(t)
 	if e.Timing.InjectedMs != 0 || e.Intervened() {
-		t.Fatalf("sem override o tempo injetado deveria ser zero: %+v %v", e.Timing, e.Interventions)
+		t.Fatalf("with no override the injected time should be zero: %+v %v", e.Timing, e.Interventions)
 	}
 	if e.Timing.UpstreamMs <= 0 {
-		t.Fatalf("a troca encaminhada deveria ter tempo de upstream: %+v", e.Timing)
+		t.Fatalf("a forwarded exchange should have upstream time: %+v", e.Timing)
 	}
 }
 
 func TestResponseWithoutUpstreamHasZeroUpstreamTime(t *testing.T) {
-	g := capturing(t, recording(), route("vazia", "", "/*"))
+	g := capturing(t, recording(), route("empty", "", "/*"))
 	g.get(t, "/x")
 	if e := g.only(t); e.Timing.UpstreamMs != 0 {
-		t.Fatalf("sem contato com o upstream o tempo de upstream deveria ser zero: %+v", e.Timing)
+		t.Fatalf("with no contact with the upstream the upstream time should be zero: %+v", e.Timing)
 	}
 }
 
-// Requirement: Exposição do histórico configurável
+// Requirement: Configurable history exposure
 
 func TestRecordingDisabledStillForwards(t *testing.T) {
 	up := echoUpstream(t, "a")
 	s := recording()
 	s.HistoryRecord = false
 	g := capturing(t, s, route("a", up.URL, "/api/*"))
-	payload := []byte("corpo que precisa chegar")
+	payload := []byte("body that has to get through")
 	for range 5 {
 		req, _ := http.NewRequest(http.MethodPost, g.URL+"/api/x", bytes.NewReader(payload))
 		if e := echoOf(t)(do(t, req)); !bytes.Equal(e.Body, payload) {
-			t.Fatalf("com o registro desligado o encaminhamento deveria seguir igual: %q", e.Body)
+			t.Fatalf("with recording off, forwarding should work exactly the same: %q", e.Body)
 		}
 	}
-	if res, _ := g.get(t, "/fora"); res.StatusCode != http.StatusNotFound {
-		t.Fatalf("esperado 404, recebido %d", res.StatusCode)
+	if res, _ := g.get(t, "/outside"); res.StatusCode != http.StatusNotFound {
+		t.Fatalf("want 404, got %d", res.StatusCode)
 	}
 	if items := g.history(t, exchange.Filter{}); len(items) != 0 {
-		t.Fatalf("com o registro desligado nenhuma troca deveria ser registrada, há %d", len(items))
+		t.Fatalf("with recording off no exchange should be recorded, got %d", len(items))
 	}
 }
 
@@ -408,25 +408,25 @@ func TestClearOnDemand(t *testing.T) {
 	up := echoUpstream(t, "a")
 	g := capturing(t, recording(), route("a", up.URL, "/*"))
 	for range 3 {
-		g.get(t, "/antes")
+		g.get(t, "/before")
 	}
 	if err := g.rec.Clear(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if items := g.history(t, exchange.Filter{}); len(items) != 0 {
-		t.Fatalf("depois da limpeza o histórico deveria estar vazio, há %d", len(items))
+		t.Fatalf("after clearing, the history should be empty, got %d", len(items))
 	}
-	g.get(t, "/depois")
-	if e := g.only(t); e.Path != "/depois" {
-		t.Fatalf("a troca seguinte deveria voltar a ser registrada, registrada %s", e.Path)
+	g.get(t, "/after")
+	if e := g.only(t); e.Path != "/after" {
+		t.Fatalf("the next exchange should be recorded again, recorded %s", e.Path)
 	}
 }
 
-// failingStore recusa toda gravação; blockingStore trava nela.
+// failingStore refuses every write; blockingStore hangs on it.
 type failingStore struct{ store.Store }
 
 func (failingStore) Record(context.Context, *exchange.Exchange) error {
-	return errors.New("disco cheio")
+	return errors.New("disk full")
 }
 
 type blockingStore struct {
@@ -466,11 +466,11 @@ func TestRecordFailureOnlyLogs(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/x", nil)
 	if e := echoOf(t)(do(t, req)); e.Upstream != "a" {
-		t.Fatalf("a falha de gravação não deveria afetar o encaminhamento")
+		t.Fatalf("a write failure should not affect forwarding")
 	}
 	rec.Sync(t.Context())
-	if !strings.Contains(logs.String(), "disco cheio") {
-		t.Fatalf("a falha de gravação deveria ir para o log: %q", logs.String())
+	if !strings.Contains(logs.String(), "disk full") {
+		t.Fatalf("the write failure should reach the log: %q", logs.String())
 	}
 }
 
@@ -490,7 +490,7 @@ func TestRecordingNeverBlocksForwarding(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		// Mais requisições que a fila comporta: as excedentes são descartadas.
+		// More requests than the queue holds: the excess ones are dropped.
 		for range capture.QueueSize + 50 {
 			res, err := http.Get(srv.URL + "/x")
 			if err != nil {
@@ -504,12 +504,13 @@ func TestRecordingNeverBlocksForwarding(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(20 * time.Second):
-		t.Fatal("o encaminhamento ficou esperando o histórico")
+		t.Fatal("forwarding ended up waiting on the history")
 	}
-	// Com a gravação travada, cabem na fila QueueSize trocas, mais a que a
-	// goroutine de gravação segura; as demais são descartadas com aviso.
-	if !strings.Contains(logs.String(), "fila de gravação do histórico cheia") {
-		t.Fatalf("o descarte por fila cheia deveria ir para o log")
+	// With the write blocked, QueueSize exchanges fit in the queue, plus the
+	// one the writer goroutine is holding; the rest are dropped with a
+	// warning.
+	if !strings.Contains(logs.String(), "the history write queue is full") {
+		t.Fatalf("the drop caused by a full queue should reach the log")
 	}
 	unblock()
 	if err := rec.Sync(t.Context()); err != nil {
@@ -527,7 +528,7 @@ func TestRecordingNeverBlocksForwarding(t *testing.T) {
 		n += len(res.Items)
 	}
 	if n == 0 || n > capture.QueueSize+1 {
-		t.Fatalf("deveriam ter sido gravadas no máximo %d trocas, foram %d", capture.QueueSize+1, n)
+		t.Fatalf("at most %d exchanges should have been written, %d were", capture.QueueSize+1, n)
 	}
 }
 
@@ -536,18 +537,18 @@ func TestRecordsIntoCurrentBackend(t *testing.T) {
 	first := store.NewMemory(10)
 	hist := store.NewSwitchable("memory", first)
 	g := capturingInto(t, hist, recording(), route("a", up.URL, "/*"))
-	g.get(t, "/antes")
+	g.get(t, "/before")
 	g.rec.Sync(t.Context())
 
 	second := store.NewMemory(10)
 	if err := hist.Swap(t.Context(), "memory", second); err != nil {
 		t.Fatal(err)
 	}
-	g.get(t, "/depois")
+	g.get(t, "/after")
 	g.rec.Sync(t.Context())
 	res, _ := second.List(t.Context(), exchange.Filter{}, store.Page{})
-	if len(res.Items) != 1 || res.Items[0].Path != "/depois" {
-		t.Fatalf("a troca seguinte à troca de backend deveria ir para o novo: %v", res.Items)
+	if len(res.Items) != 1 || res.Items[0].Path != "/after" {
+		t.Fatalf("the exchange after the backend swap should go into the new one: %v", res.Items)
 	}
 }
 
@@ -560,13 +561,13 @@ func TestRecordedExchangesArePublished(t *testing.T) {
 	select {
 	case e := <-sub.C:
 		if e.Path != "/x" || e.Route != "a" {
-			t.Fatalf("troca publicada difere da registrada: %s %s", e.Route, e.Path)
+			t.Fatalf("the published exchange differs from the recorded one: %s %s", e.Route, e.Path)
 		}
 		if stored := g.only(t); stored.ID != e.ID {
-			t.Fatalf("publicada %s, registrada %s", e.ID, stored.ID)
+			t.Fatalf("published %s, recorded %s", e.ID, stored.ID)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("a troca registrada não foi publicada")
+		t.Fatal("the recorded exchange was not published")
 	}
 }
 
@@ -589,24 +590,24 @@ func TestConcurrentExchangesHaveDistinctIdentity(t *testing.T) {
 	wg.Wait()
 	items := g.history(t, exchange.Filter{})
 	if len(items) != n {
-		t.Fatalf("esperadas %d trocas, há %d", n, len(items))
+		t.Fatalf("want %d exchanges, got %d", n, len(items))
 	}
 	ids, seqs := map[string]bool{}, map[uint64]bool{}
 	for _, e := range items {
 		ids[e.ID], seqs[e.Seq] = true, true
 	}
 	if len(ids) != n || len(seqs) != n {
-		t.Fatalf("identificadores ou sequências repetidos: %d ids e %d sequências distintos", len(ids), len(seqs))
+		t.Fatalf("repeated ids or sequences: %d distinct ids and %d distinct sequences", len(ids), len(seqs))
 	}
 }
 
-// upgradeUpstream aceita um upgrade de protocolo e ecoa as linhas que recebe
-// pela conexão trocada.
+// upgradeUpstream accepts a protocol upgrade and echoes back the lines it
+// receives over the swapped connection.
 func upgradeUpstream(t *testing.T) *httptest.Server {
 	t.Helper()
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Upgrade") != "eco" {
-			http.Error(w, "upgrade esperado", http.StatusBadRequest)
+		if r.Header.Get("Upgrade") != "echo" {
+			http.Error(w, "upgrade expected", http.StatusBadRequest)
 			return
 		}
 		conn, brw, err := http.NewResponseController(w).Hijack()
@@ -614,14 +615,14 @@ func upgradeUpstream(t *testing.T) *httptest.Server {
 			return
 		}
 		defer conn.Close()
-		brw.WriteString("HTTP/1.1 101 Switching Protocols\r\nUpgrade: eco\r\nConnection: Upgrade\r\nX-Eco: sim\r\n\r\n")
+		brw.WriteString("HTTP/1.1 101 Switching Protocols\r\nUpgrade: echo\r\nConnection: Upgrade\r\nX-Echo: yes\r\n\r\n")
 		brw.Flush()
 		for {
 			line, err := brw.ReadString('\n')
 			if err != nil {
 				return
 			}
-			brw.WriteString("eco: " + line)
+			brw.WriteString("echo: " + line)
 			brw.Flush()
 		}
 	}))
@@ -629,9 +630,9 @@ func upgradeUpstream(t *testing.T) *httptest.Server {
 	return s
 }
 
-// Um upgrade de protocolo é registrado com o 101 e os cabeçalhos da resposta
-// do upstream, embora o ReverseProxy escreva essa resposta direto na conexão
-// sequestrada.
+// A protocol upgrade is recorded with the 101 and the upstream response's
+// headers, even though the ReverseProxy writes that response straight to the
+// hijacked connection.
 func TestUpgradeExchangeRecordedWith101(t *testing.T) {
 	up := upgradeUpstream(t)
 	g := capturing(t, recording(), route("ws", up.URL, "/*"))
@@ -642,37 +643,37 @@ func TestUpgradeExchangeRecordedWith101(t *testing.T) {
 	}
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(5 * time.Second))
-	io.WriteString(conn, "GET /canal HTTP/1.1\r\nHost: gw.local\r\nUpgrade: eco\r\nConnection: Upgrade\r\n\r\n")
+	io.WriteString(conn, "GET /channel HTTP/1.1\r\nHost: gw.local\r\nUpgrade: echo\r\nConnection: Upgrade\r\n\r\n")
 	br := bufio.NewReader(conn)
 	res, err := http.ReadResponse(br, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if res.StatusCode != http.StatusSwitchingProtocols {
-		t.Fatalf("o cliente deveria receber 101, recebeu %d", res.StatusCode)
+		t.Fatalf("the client should receive 101, it got %d", res.StatusCode)
 	}
-	io.WriteString(conn, "olá\n")
-	if line, err := br.ReadString('\n'); err != nil || line != "eco: olá\n" {
-		t.Fatalf("a conexão trocada deveria ecoar: %q %v", line, err)
+	io.WriteString(conn, "hello\n")
+	if line, err := br.ReadString('\n'); err != nil || line != "echo: hello\n" {
+		t.Fatalf("the swapped connection should echo: %q %v", line, err)
 	}
 	conn.Close()
 
-	// O registro fecha quando o túnel termina, depois do fim da conexão.
+	// The record closes when the tunnel ends, after the connection is over.
 	if err := g.rec.Wait(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	e := g.only(t)
 	if e.Status != http.StatusSwitchingProtocols || e.Outcome != exchange.OutcomeUpstream {
-		t.Fatalf("upgrade registrado com status %d e resultado %s", e.Status, e.Outcome)
+		t.Fatalf("upgrade recorded with status %d and outcome %s", e.Status, e.Outcome)
 	}
 	h := e.Response.Headers
-	if h.Get("Upgrade") != "eco" || h.Get("X-Eco") != "sim" || h.Get(HeaderGateway) != "route=ws" {
-		t.Fatalf("cabeçalhos da resposta do upgrade registrados: %v", h)
+	if h.Get("Upgrade") != "echo" || h.Get("X-Echo") != "yes" || h.Get(HeaderGateway) != "route=ws" {
+		t.Fatalf("headers of the upgrade response recorded: %v", h)
 	}
 }
 
-// Numa resposta do próprio gateway, um corpo sem Content-Length maior que o
-// limite de captura fica com o tamanho real.
+// On a response produced by the gateway itself, a body with no Content-Length
+// that is larger than the capture limit keeps its real size.
 func TestNoRouteChunkedBodyKeepsRealSize(t *testing.T) {
 	s := recording()
 	s.CaptureMaxBodyBytes = 8
@@ -685,13 +686,13 @@ func TestNoRouteChunkedBodyKeepsRealSize(t *testing.T) {
 		}
 		pw.Close()
 	}()
-	req, _ := http.NewRequest(http.MethodPost, g.URL+"/fora", pr)
+	req, _ := http.NewRequest(http.MethodPost, g.URL+"/outside", pr)
 	if res, _ := do(t, req); res.StatusCode != http.StatusNotFound {
-		t.Fatalf("esperado 404, recebido %d", res.StatusCode)
+		t.Fatalf("want 404, got %d", res.StatusCode)
 	}
 	e := g.only(t)
 	if e.Request.Size != int64(len(payload)) || !e.Request.Truncated || string(e.Request.Body) != "abcdefgh" {
-		t.Fatalf("corpo da requisição: tamanho %d (esperado %d), truncado %v, corpo %q",
+		t.Fatalf("request body: size %d (want %d), truncated %v, body %q",
 			e.Request.Size, len(payload), e.Request.Truncated, e.Request.Body)
 	}
 }

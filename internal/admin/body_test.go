@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Os exemplos da RFC 7396, apêndice A.
+// The examples from RFC 7396, appendix A.
 func TestMergePatchRFC7396(t *testing.T) {
 	cases := []struct{ target, patch, want string }{
 		{`{"a":"b"}`, `{"a":"c"}`, `{"a":"c"}`},
@@ -27,7 +27,7 @@ func TestMergePatchRFC7396(t *testing.T) {
 		json.Unmarshal([]byte(c.patch), &patch)
 		json.Unmarshal([]byte(c.want), &want)
 		if got := mergePatch(target, patch); !reflect.DeepEqual(got, want) {
-			t.Errorf("%s + %s: esperado %v, recebido %v", c.target, c.patch, want, got)
+			t.Errorf("%s + %s: want %v, got %v", c.target, c.patch, want, got)
 		}
 	}
 }

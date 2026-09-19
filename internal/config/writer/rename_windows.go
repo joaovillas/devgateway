@@ -7,10 +7,10 @@ import (
 	"time"
 )
 
-// No Windows, substituir ou remover um arquivo que outro processo mantém
-// aberto (um editor, o antivírus indexando o diretório) falha com acesso
-// negado ou violação de compartilhamento até o outro lado soltá-lo. Essas
-// falhas são transitórias: a operação é repetida por um intervalo curto.
+// On Windows, replacing or removing a file that another process holds open
+// (an editor, the antivirus indexing the directory) fails with access denied
+// or a sharing violation until the other side lets go. Those failures are
+// transient: the operation is retried for a short while.
 const retryFor = 500 * time.Millisecond
 
 func transient(err error) bool {

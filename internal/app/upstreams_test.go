@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/gamerjp64/gateway/internal/upstream"
+	"github.com/gamerjp64/devgateway/internal/upstream"
 )
 
-// Disponibilidade dos upstreams para o mapa (Requirement: Mapa de topologia,
-// cenário "Upstream indisponível é sinalizado").
+// Upstream availability for the map (Requirement: Topology map, scenario
+// "An unavailable upstream is flagged").
 
 type upstreamsData struct {
 	Items []upstream.Item `json:"items"`
@@ -45,34 +45,34 @@ func TestUpstreamRefusingConnectionsIsDown(t *testing.T) {
 
 	got := e.upstreams(t)
 	if len(got) != 2 {
-		t.Fatalf("esperados dois upstreams: %+v", got)
+		t.Fatalf("want two upstreams: %+v", got)
 	}
 	if it := got[closed]; it.Status != upstream.StatusUnknown || len(it.Routes) != 2 {
-		t.Fatalf("antes de qualquer tentativa, desconhecido e com as duas rotas: %+v", it)
+		t.Fatalf("before any attempt: unknown and carrying both routes: %+v", it)
 	}
 
 	for range 3 {
 		if st, _ := getBody(t, e.traffic+"/payments/x"); st != http.StatusInternalServerError {
-			t.Fatalf("o 500 do upstream deveria chegar ao cliente, veio %d", st)
+			t.Fatalf("the upstream's 500 should reach the client, got %d", st)
 		}
 		if st, _ := getBody(t, e.traffic+"/catalog/x"); st != http.StatusBadGateway {
-			t.Fatalf("conexão recusada deveria dar 502, veio %d", st)
+			t.Fatalf("a refused connection should give a 502, got %d", st)
 		}
 	}
 
 	got = e.upstreams(t)
 	if it := got[failing]; it.Status != upstream.StatusUp || it.Recent.Attempts != 3 || it.Recent.Failures != 0 {
-		t.Fatalf("um 5xx do próprio upstream não o torna indisponível: %+v", it)
+		t.Fatalf("a 5xx from the upstream itself does not make it unavailable: %+v", it)
 	}
 	it := got[closed]
 	if it.Status != upstream.StatusDown || it.Recent != (upstream.Recent{Attempts: 3, Failures: 3}) {
-		t.Fatalf("três conexões recusadas deveriam dar indisponível: %+v", it)
+		t.Fatalf("three refused connections should mark it as down: %+v", it)
 	}
 	if it.LastError == "" || it.LastFailureAt == nil || it.LastSuccessAt != nil {
-		t.Fatalf("detalhes da falha ausentes: %+v", it)
+		t.Fatalf("failure details are missing: %+v", it)
 	}
 
-	// O fluxo anuncia a mudança de status sem que o painel precise perguntar.
+	// The stream announces the status change without the panel having to ask.
 	for {
 		var d upstreamsData
 		s.next(t, "upstreams").decode(t, &d)

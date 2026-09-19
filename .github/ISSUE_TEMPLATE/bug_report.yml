@@ -1,0 +1,94 @@
+name: Bug report
+description: Something the gateway does that it should not, or does not do that it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. If this is a security issue, do not file it here:
+        see `SECURITY.md` in the repository and report it privately
+        through GitHub Security Advisories.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+      placeholder: |
+        A request to /payments/balance returned 502, but the upstream was up and
+        answered 200 when called directly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: >
+        The smallest thing that shows it: the gateway.json, the route document
+        and the requests you sent. Redact anything private.
+      placeholder: |
+        gateway.json:
+        { "schemaVersion": 1, "ports": { "traffic": 8080, "admin": 8081 } }
+
+        routes/payments.yaml:
+        schemaVersion: 1
+        name: payments
+        upstream: http://localhost:9001
+        match:
+          path: /payments/*
+
+        Then: curl -i localhost:8080/payments/balance
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What the gateway said
+      description: >
+        Relevant log lines, the response headers (`X-Gateway` especially), and
+        the captured exchange from `GET /api/exchanges` if you have it.
+      render: text
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`GET /api/status` reports it, or give the commit you built from."
+      placeholder: "v0.3.1, or commit 9a0bf6c"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: how-run
+    attributes:
+      label: How are you running it
+      options:
+        - Binary from a release
+        - Built from source
+        - Docker image
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: OS and architecture
+      placeholder: "macOS 15 arm64, Ubuntu 24.04 amd64, Windows 11 amd64"
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: >
+        Does it happen every time? Did it work in an earlier version? Is HTTP/2,
+        a proxy or a container in the path?
+    validations:
+      required: false

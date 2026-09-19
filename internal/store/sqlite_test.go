@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/exchange"
-	"github.com/gamerjp64/gateway/internal/store"
-	"github.com/gamerjp64/gateway/internal/store/storetest"
+	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/store/storetest"
 )
 
 func openSQLite(t storetest.TB, path string) *store.SQLite {
@@ -42,9 +42,9 @@ func TestSQLiteContract(t *testing.T) {
 	})
 }
 
-// Os filtros em SQL precisam casar exatamente como exchange.Filter.Match,
-// inclusive nos casos em que o SQL puro divergiria: dobra de caixa fora do
-// ASCII, instante zero e bordas da janela de tempo.
+// The SQL filters have to match exchange.Filter.Match exactly, including the
+// cases where plain SQL would diverge: case folding beyond ASCII, the zero
+// instant and the edges of the time window.
 func TestSQLiteFilterMatchesReferenceSemantics(t *testing.T) {
 	ctx := context.Background()
 	s := openSQLite(t, filepath.Join(t.TempDir(), "history.db"))
@@ -52,9 +52,9 @@ func TestSQLiteFilterMatchesReferenceSemantics(t *testing.T) {
 	all := []*exchange.Exchange{
 		{ID: "lock", Method: "LOCK", Path: "/a/%C3%A9/b", Start: at},
 		{ID: "zero", Method: "GET", Path: "/zero"},
-		{ID: "antes", Method: "get", Path: "/antes", Start: at.Add(-time.Nanosecond)},
-		{ID: "depois", Method: "Get", Path: "/depois", Start: at.Add(time.Nanosecond)},
-		{ID: "distante", Method: "GET", Path: "/distante", Start: time.Date(2400, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{ID: "before", Method: "get", Path: "/before", Start: at.Add(-time.Nanosecond)},
+		{ID: "after", Method: "Get", Path: "/after", Start: at.Add(time.Nanosecond)},
+		{ID: "distant", Method: "GET", Path: "/distant", Start: time.Date(2400, 1, 1, 0, 0, 0, 0, time.UTC)},
 	}
 	for _, e := range all {
 		if err := s.Record(ctx, e); err != nil {
@@ -62,17 +62,17 @@ func TestSQLiteFilterMatchesReferenceSemantics(t *testing.T) {
 		}
 	}
 	filters := map[string]exchange.Filter{
-		"kelvin dobra para k":   {Method: "locK"},
-		"método sem caixa":      {Method: "gEt"},
-		"path por substring":    {Path: "%C3%A9/"},
-		"desde o instante":      {Since: at},
-		"até o instante":        {Until: at},
-		"janela de um instante": {Since: at, Until: at.Add(time.Nanosecond)},
-		"desde antes do zero":   {Since: time.Date(1, 1, 1, 0, 0, 0, 1, time.UTC)},
-		"até depois de 2262":    {Until: time.Date(2300, 1, 1, 0, 0, 0, 0, time.UTC)},
+		"kelvin folds to k":    {Method: "locK"},
+		"method is case-blind": {Method: "gEt"},
+		"path by substring":    {Path: "%C3%A9/"},
+		"since the instant":    {Since: at},
+		"until the instant":    {Until: at},
+		"one-instant window":   {Since: at, Until: at.Add(time.Nanosecond)},
+		"since before zero":    {Since: time.Date(1, 1, 1, 0, 0, 0, 1, time.UTC)},
+		"until after 2262":     {Until: time.Date(2300, 1, 1, 0, 0, 0, 0, time.UTC)},
 	}
-	// A ordem de referência é a cronológica pelo início, da mais nova para a
-	// mais antiga, e não a de registro.
+	// The reference order is chronological by start, newest first, not the
+	// order in which the exchanges were recorded.
 	chrono := slices.Clone(all)
 	slices.SortStableFunc(chrono, func(a, b *exchange.Exchange) int { return b.Start.Compare(a.Start) })
 	for name, f := range filters {
@@ -91,7 +91,7 @@ func TestSQLiteFilterMatchesReferenceSemantics(t *testing.T) {
 			got = append(got, e.ID)
 		}
 		if len(want) == 0 || !equalStrings(got, want) {
-			t.Errorf("%s: recebido %v, esperado %v", name, got, want)
+			t.Errorf("%s: got %v, want %v", name, got, want)
 		}
 	}
 }
@@ -111,14 +111,14 @@ func equalStrings(a, b []string) bool {
 func TestSQLiteBadCursor(t *testing.T) {
 	s := openSQLite(t, filepath.Join(t.TempDir(), "history.db"))
 	if _, err := s.List(context.Background(), exchange.Filter{}, store.Page{Cursor: "x"}); err != store.ErrBadCursor {
-		t.Fatalf("esperado ErrBadCursor, recebido %v", err)
+		t.Fatalf("want ErrBadCursor, got %v", err)
 	}
 }
 
-// Requirement: Armazenamento plugável — Backend indisponível impede a
-// inicialização. Um banco que já existe mas não pode ser escrito abre só
-// para leitura no SQLite, sem erro; a abertura precisa recusá-lo, e não
-// deixar a falha para a primeira troca.
+// Requirement: Pluggable storage - an unavailable backend keeps the process
+// from starting. A database that already exists but cannot be written opens
+// read-only in SQLite, without an error; opening has to reject it instead of
+// leaving the failure for the first exchange.
 func TestSQLiteRefusesReadOnlyExistingDatabase(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.db")
 	s, err := store.OpenSQLite(path)
@@ -141,17 +141,18 @@ func TestSQLiteRefusesReadOnlyExistingDatabase(t *testing.T) {
 	})
 	if f, err := os.OpenFile(path, os.O_WRONLY, 0); err == nil {
 		f.Close()
-		t.Skip("este usuário escreve em arquivos somente leitura (root?); o cenário não se reproduz")
+		t.Skip("this user can write to read-only files (root?); the scenario does not reproduce")
 	}
 	s, err = store.OpenSQLite(path)
 	if err == nil {
 		s.Close()
-		t.Fatalf("um banco existente sem permissão de escrita deveria ser recusado na abertura")
+		t.Fatalf("an existing database without write permission should be rejected on open")
 	}
 }
 
-// Um banco criado antes da coluna seq é migrado na abertura, com a sequência
-// tirada do JSON de cada troca, e passa a seguir a ordem de chegada.
+// A database created before the seq column is migrated on open, with the
+// sequence taken from each exchange's JSON, and from then on follows arrival
+// order.
 func TestSQLiteMigratesDatabaseWithoutSeq(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "history.db")
@@ -177,7 +178,7 @@ func TestSQLiteMigratesDatabaseWithoutSeq(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
-	// Mesmo instante; a de sequência maior foi gravada primeiro.
+	// Same instant; the one with the higher sequence was written first.
 	for _, e := range []exchange.Exchange{{ID: "b", Seq: 2, Start: at}, {ID: "a", Seq: 1, Start: at}} {
 		data, _ := json.Marshal(e)
 		if _, err := db.Exec(`INSERT INTO exchanges (id, route, upstream, override, method, path, status, intervened, start_sec, start_nsec, data)
@@ -197,12 +198,12 @@ func TestSQLiteMigratesDatabaseWithoutSeq(t *testing.T) {
 		got = append(got, e.ID)
 	}
 	if !equalStrings(got, []string{"b", "a"}) {
-		t.Fatalf("após a migração, a ordem deveria seguir a sequência: %v", got)
+		t.Fatalf("after the migration, the order should follow the sequence: %v", got)
 	}
 	if err := s.Record(ctx, &exchange.Exchange{ID: "c", Seq: 3, Start: at}); err != nil {
-		t.Fatalf("Record após a migração: %v", err)
+		t.Fatalf("Record after the migration: %v", err)
 	}
 	if e, err := s.Neighbor(ctx, "b", store.Newer, exchange.Filter{}); err != nil || e.ID != "c" {
-		t.Fatalf("seguinte de b deveria ser c: %q %v", e.ID, err)
+		t.Fatalf("the one after b should be c: %q %v", e.ID, err)
 	}
 }

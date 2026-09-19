@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/exchange"
 )
 
-// Fluxo SSE da API de administração (Requirement: Atualização em tempo real).
+// SSE stream of the admin API (Requirement: Real-time updates).
 
 type result struct {
 	status int
@@ -35,14 +35,14 @@ func fetch(url string) result {
 	return result{status: res.StatusCode, body: string(b), err: err}
 }
 
-// sseEvent é um evento recebido, com o instante da chegada.
+// sseEvent is one received event, with the instant it arrived.
 type sseEvent struct {
 	name string
 	data string
 	at   time.Time
 }
 
-// sseStream lê um fluxo de eventos numa goroutine.
+// sseStream reads an event stream on a goroutine.
 type sseStream struct {
 	res    *http.Response
 	events chan sseEvent
@@ -59,7 +59,7 @@ func openEvents(t *testing.T, url string) *sseStream {
 		t.Fatal(err)
 	}
 	if res.StatusCode != 200 || !strings.HasPrefix(res.Header.Get("Content-Type"), "text/event-stream") {
-		t.Fatalf("fluxo de eventos: %d %v", res.StatusCode, res.Header)
+		t.Fatalf("event stream: %d %v", res.StatusCode, res.Header)
 	}
 	s := &sseStream{res: res, events: make(chan sseEvent, 1024), done: make(chan struct{})}
 	t.Cleanup(func() { res.Body.Close() })
@@ -88,7 +88,7 @@ func openEvents(t *testing.T, url string) *sseStream {
 	return s
 }
 
-// next espera o próximo evento de nome dado, descartando os demais.
+// next waits for the next event with the given name, discarding the rest.
 func (s *sseStream) next(t *testing.T, name string) sseEvent {
 	t.Helper()
 	timeout := time.After(10 * time.Second)
@@ -99,20 +99,20 @@ func (s *sseStream) next(t *testing.T, name string) sseEvent {
 				return ev
 			}
 		case <-s.done:
-			t.Fatalf("o fluxo terminou esperando %q", name)
+			t.Fatalf("the stream ended while waiting for %q", name)
 		case <-timeout:
-			t.Fatalf("nenhum evento %q chegou", name)
+			t.Fatalf("no %q event arrived", name)
 		}
 	}
 }
 
-// closed espera o fim do fluxo pelo servidor.
+// closed waits for the server to end the stream.
 func (s *sseStream) closed(t *testing.T) {
 	t.Helper()
 	select {
 	case <-s.done:
 	case <-time.After(10 * time.Second):
-		t.Fatal("o fluxo deveria ter terminado")
+		t.Fatal("the stream should have ended")
 	}
 }
 
@@ -124,12 +124,12 @@ type exchangesData struct {
 func (ev sseEvent) decode(t *testing.T, v any) {
 	t.Helper()
 	if err := json.Unmarshal([]byte(ev.data), v); err != nil {
-		t.Fatalf("evento %s com dados inválidos: %v: %s", ev.name, err, ev.data)
+		t.Fatalf("event %s with invalid data: %v: %s", ev.name, err, ev.data)
 	}
 }
 
-// collect junta as trocas dos eventos exchanges até somar n, devolvendo os
-// eventos recebidos.
+// collect gathers the exchanges from the exchanges events until it reaches n,
+// returning the events it received.
 func (s *sseStream) collect(t *testing.T, n int) ([]exchange.Exchange, []sseEvent) {
 	t.Helper()
 	var items []exchange.Exchange
@@ -139,7 +139,7 @@ func (s *sseStream) collect(t *testing.T, n int) ([]exchange.Exchange, []sseEven
 		var d exchangesData
 		ev.decode(t, &d)
 		if d.Dropped != 0 {
-			t.Fatalf("nenhuma troca deveria ser perdida: %+v", d)
+			t.Fatalf("no exchange should be lost: %+v", d)
 		}
 		items = append(items, d.Items...)
 		evs = append(evs, ev)
@@ -147,8 +147,8 @@ func (s *sseStream) collect(t *testing.T, n int) ([]exchange.Exchange, []sseEven
 	return items, evs
 }
 
-// Scenario: Nova troca aparece sozinha — o cliente conectado recebe as trocas
-// novas, em ordem, sem corpos.
+// Scenario: A new exchange shows up on its own — the connected client
+// receives the new exchanges, in order, without bodies.
 
 func TestEventsDeliverExchangesInOrder(t *testing.T) {
 	e := startAdmin(t, freePorts, statusRoutes(t))
@@ -170,16 +170,16 @@ func TestEventsDeliverExchangesInOrder(t *testing.T) {
 	}
 	items, _ := s.collect(t, 5)
 	if len(items) != 5 {
-		t.Fatalf("esperadas 5 trocas, vieram %d", len(items))
+		t.Fatalf("want 5 exchanges, got %d", len(items))
 	}
 	for i, it := range items {
 		if it.Path != fmt.Sprintf("/payments/%d", i) || it.Status != 200 || it.Response.Body != nil || it.ID == "" {
-			t.Fatalf("troca %d fora de ordem ou com corpo: %+v", i, it)
+			t.Fatalf("exchange %d out of order or carrying a body: %+v", i, it)
 		}
 	}
 }
 
-// As trocas são agregadas: no máximo uma atualização por segundo.
+// The exchanges are aggregated: at most one update per second.
 
 func TestEventsAggregatedPerSecond(t *testing.T) {
 	e := startAdmin(t, freePorts, statusRoutes(t))
@@ -193,21 +193,21 @@ func TestEventsAggregatedPerSecond(t *testing.T) {
 	items, evs := s.collect(t, n)
 	for i, it := range items {
 		if it.Path != fmt.Sprintf("/payments/%d", i) {
-			t.Fatalf("troca %d fora de ordem: %s", i, it.Path)
+			t.Fatalf("exchange %d out of order: %s", i, it.Path)
 		}
 	}
 	if len(evs) < 2 || len(evs) > 5 {
-		t.Fatalf("2,4 s de tráfego deveriam render de 2 a 5 atualizações agregadas, vieram %d", len(evs))
+		t.Fatalf("2.4 s of traffic should yield 2 to 5 aggregated updates, got %d", len(evs))
 	}
 	for i := 1; i < len(evs); i++ {
 		if gap := evs[i].at.Sub(evs[i-1].at); gap < 800*time.Millisecond {
-			t.Fatalf("atualizações com %v de intervalo; o mínimo é um segundo", gap)
+			t.Fatalf("updates %v apart; the minimum is one second", gap)
 		}
 	}
 }
 
-// A conexão sobrevive a períodos sem tráfego: o heartbeat a mantém viva e a
-// troca seguinte chega por ela.
+// The connection survives idle periods: the heartbeat keeps it alive and the
+// next exchange arrives over it.
 
 func TestEventsSurviveIdlePeriods(t *testing.T) {
 	e := startAdminWith(t, freePorts, statusRoutes(t), Options{Heartbeat: 200 * time.Millisecond})
@@ -219,27 +219,27 @@ func TestEventsSurviveIdlePeriods(t *testing.T) {
 		var hb struct{ Now time.Time }
 		s.next(t, "heartbeat").decode(t, &hb)
 		if hb.Now.IsZero() {
-			t.Fatal("heartbeat sem instante")
+			t.Fatal("heartbeat with no instant")
 		}
 		beats++
 	}
 	if beats < 5 {
-		t.Fatalf("esperados heartbeats a cada 200 ms, vieram %d em 2 s", beats)
+		t.Fatalf("want heartbeats every 200 ms, got %d in 2 s", beats)
 	}
-	getBody(t, e.traffic+"/payments/depois")
-	if items, _ := s.collect(t, 1); items[0].Path != "/payments/depois" {
-		t.Fatalf("a troca depois do silêncio deveria chegar: %+v", items)
+	getBody(t, e.traffic+"/payments/after")
+	if items, _ := s.collect(t, 1); items[0].Path != "/payments/after" {
+		t.Fatalf("the exchange after the idle period should arrive: %+v", items)
 	}
 }
 
-// Um cliente que não lê o fluxo não bloqueia o proxy.
+// A client that does not read the stream does not block the proxy.
 
 func TestEventsSlowClientDoesNotBlockProxy(t *testing.T) {
 	var hits atomic.Int64
 	up := countingUpstream(t, &hits)
 	e := startAdmin(t, freePorts, map[string]string{"payments.yaml": routeDoc("payments", up.URL, "/payments/*")})
 
-	// Um cliente que pede o fluxo e nunca lê nada.
+	// A client that asks for the stream and never reads a thing.
 	conn, err := net.Dial("tcp", e.AdminAddr())
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +249,7 @@ func TestEventsSlowClientDoesNotBlockProxy(t *testing.T) {
 	fmt.Fprintf(conn, "GET /api/events HTTP/1.1\r\nHost: %s\r\n\r\n", e.AdminAddr())
 	waitSubscribers(t, e, 1)
 
-	// Cabeçalhos grandes engordam cada resumo de troca no fluxo.
+	// Large headers fatten every exchange summary in the stream.
 	big := strings.Repeat("x", 4000)
 	start := time.Now()
 	var wg sync.WaitGroup
@@ -258,7 +258,7 @@ func TestEventsSlowClientDoesNotBlockProxy(t *testing.T) {
 		wg.Go(func() {
 			for i := range 100 {
 				req, _ := http.NewRequest("GET", fmt.Sprintf("%s/payments/%d/%d", e.traffic, w, i), nil)
-				req.Header.Set("X-Grande", big)
+				req.Header.Set("X-Large", big)
 				res, err := http.DefaultClient.Do(req)
 				if err != nil {
 					failed.Add(1)
@@ -274,10 +274,10 @@ func TestEventsSlowClientDoesNotBlockProxy(t *testing.T) {
 	}
 	wg.Wait()
 	if failed.Load() != 0 || hits.Load() != 800 {
-		t.Fatalf("todas as requisições deveriam ser atendidas: %d falhas, %d no upstream", failed.Load(), hits.Load())
+		t.Fatalf("every request should be served: %d failures, %d reached the upstream", failed.Load(), hits.Load())
 	}
 	if d := time.Since(start); d > 20*time.Second {
-		t.Fatalf("o proxy não deveria esperar pelo cliente lento: %v", d)
+		t.Fatalf("the proxy should not wait on the slow client: %v", d)
 	}
 }
 
@@ -286,14 +286,14 @@ func waitSubscribers(t *testing.T, e *adminEnv, n int) {
 	deadline := time.Now().Add(5 * time.Second)
 	for e.Recorder.Broker().Subscribers() < n {
 		if time.Now().After(deadline) {
-			t.Fatalf("esperadas %d assinaturas do fluxo", n)
+			t.Fatalf("want %d subscriptions to the stream", n)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 }
 
-// Alterações de configuração, limpeza e troca de backend do histórico e o
-// estado vivo dos overrides também chegam pelo fluxo.
+// Configuration changes, history clears and backend swaps, and the live state
+// of the overrides also arrive over the stream.
 
 func TestEventsConfigHistoryAndOverrides(t *testing.T) {
 	e := startAdmin(t, freePorts, adminRoutes(t))
@@ -308,17 +308,17 @@ func TestEventsConfigHistoryAndOverrides(t *testing.T) {
 	r := e.call(t, "POST", "/routes/payments/overrides", "",
 		`{"name":"once","match":{"path":"/payments/x"},"respond":{"status":418},"maxApplications":1}`)
 	if r.status != 201 {
-		t.Fatalf("criação do override: %d %s", r.status, r.body)
+		t.Fatalf("creating the override: %d %s", r.status, r.body)
 	}
 	var c configData
 	s.next(t, "config").decode(t, &c)
 	if c.Cause != "api" || len(c.Routes) != 1 || c.Routes[0] != "payments" || c.Settings == nil {
-		t.Fatalf("evento config da escrita: %+v", c)
+		t.Fatalf("config event of the write: %+v", c)
 	}
 
-	// O override é aplicado e expira pela contagem.
+	// The override is applied and expires by count.
 	if st, _ := getBody(t, e.traffic+"/payments/x"); st != 418 {
-		t.Fatalf("o override deveria sintetizar: %d", st)
+		t.Fatalf("the override should synthesize: %d", st)
 	}
 	type overridesData struct {
 		Now   time.Time `json:"now"`
@@ -337,47 +337,47 @@ func TestEventsConfigHistoryAndOverrides(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("o estado vivo deveria mostrar a expiração: %+v", o)
+			t.Fatalf("the live state should show the expiry: %+v", o)
 		}
 	}
 
 	if r := e.patchSettings(t, `{"seed":5}`); r.status != 200 {
-		t.Fatalf("alteração do seed: %d %s", r.status, r.body)
+		t.Fatalf("changing the seed: %d %s", r.status, r.body)
 	}
 	c = configData{}
 	s.next(t, "config").decode(t, &c)
 	if c.Cause != "api" || len(c.Settings) != 1 || c.Settings[0] != "seed" {
-		t.Fatalf("evento config da configuração do processo: %+v", c)
+		t.Fatalf("config event of the process configuration: %+v", c)
 	}
 
 	if r := e.call(t, "DELETE", "/exchanges", "", ""); r.status != 204 {
-		t.Fatalf("limpeza: %d", r.status)
+		t.Fatalf("clearing: %d", r.status)
 	}
 	var h struct{ Cause, Backend string }
 	s.next(t, "history").decode(t, &h)
 	if h.Cause != "cleared" || h.Backend != "memory" {
-		t.Fatalf("evento history da limpeza: %+v", h)
+		t.Fatalf("history event of the clear: %+v", h)
 	}
 	if r := e.patchSettings(t, `{"history":{"backend":"ndjson","path":"h.ndjson"}}`); r.status != 200 {
-		t.Fatalf("troca de backend: %d %s", r.status, r.body)
+		t.Fatalf("backend swap: %d %s", r.status, r.body)
 	}
 	h.Cause, h.Backend = "", ""
 	s.next(t, "history").decode(t, &h)
 	if h.Cause != "backend" || h.Backend != "ndjson" {
-		t.Fatalf("evento history da troca de backend: %+v", h)
+		t.Fatalf("history event of the backend swap: %+v", h)
 	}
 
 	if r := e.call(t, "POST", "/reload", "", ""); r.status != 200 {
-		t.Fatalf("recarga: %d", r.status)
+		t.Fatalf("reload: %d", r.status)
 	}
 	c = configData{}
 	s.next(t, "config").decode(t, &c)
 	if c.Cause != "reload" {
-		t.Fatalf("evento config da recarga: %+v", c)
+		t.Fatalf("config event of the reload: %+v", c)
 	}
 }
 
-// Com a exposição do histórico desligada, o fluxo não entrega trocas.
+// With history exposure off, the stream delivers no exchanges.
 
 func TestEventsWithoutExposureOmitExchanges(t *testing.T) {
 	e := startAdminWith(t, `{"ports":{"traffic":0,"admin":0},"history":{"expose":false}}`, statusRoutes(t),
@@ -390,7 +390,7 @@ func TestEventsWithoutExposureOmitExchanges(t *testing.T) {
 		select {
 		case ev := <-s.events:
 			if ev.name == "exchanges" {
-				t.Fatalf("nenhuma troca deveria sair com a exposição desligada: %s", ev.data)
+				t.Fatalf("no exchange should go out with exposure off: %s", ev.data)
 			}
 		case <-deadline:
 			return
@@ -398,7 +398,7 @@ func TestEventsWithoutExposureOmitExchanges(t *testing.T) {
 	}
 }
 
-// Um fluxo aberto não segura o encerramento do processo.
+// An open stream does not hold up the process shutdown.
 
 func TestShutdownWithOpenEventStream(t *testing.T) {
 	e := startAdmin(t, freePorts, nil)
@@ -408,10 +408,10 @@ func TestShutdownWithOpenEventStream(t *testing.T) {
 	defer cancel()
 	start := time.Now()
 	if err := e.Shutdown(ctx); err != nil {
-		t.Fatalf("encerramento: %v", err)
+		t.Fatalf("shutdown: %v", err)
 	}
 	if d := time.Since(start); d > 2*time.Second {
-		t.Fatalf("o encerramento esperou o fluxo aberto: %v", d)
+		t.Fatalf("the shutdown waited on the open stream: %v", d)
 	}
 	s.closed(t)
 }

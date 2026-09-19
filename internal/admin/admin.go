@@ -1,5 +1,5 @@
-// Package admin atende a porta de administração: API REST e interface web.
-// O contrato da API está em docs/api.md.
+// Package admin serves the admin port: the REST API and the web UI.
+// The API contract lives in docs/api.md.
 package admin
 
 import (
@@ -13,56 +13,56 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/capture"
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/config/writer"
-	"github.com/gamerjp64/gateway/internal/override"
-	"github.com/gamerjp64/gateway/internal/store"
-	"github.com/gamerjp64/gateway/internal/upstream"
+	"github.com/gamerjp64/devgateway/internal/capture"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config/writer"
+	"github.com/gamerjp64/devgateway/internal/override"
+	"github.com/gamerjp64/devgateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/upstream"
 )
 
-// Deps reúne o que a API opera.
+// Deps gathers what the API operates on.
 type Deps struct {
 	Live *config.Live
-	// Web é o frontend embutido.
+	// Web is the embedded frontend.
 	Web fs.FS
-	// History é o histórico em uso, com backend trocável a quente.
+	// History is the history in use, with a hot-swappable backend.
 	History *store.Switchable
-	// Recorder registra as trocas; a API espera por ele antes de ler o
-	// histórico e o usa para limpá-lo.
+	// Recorder records the exchanges; the API waits on it before reading
+	// the history, and uses it to clear the history.
 	Recorder *capture.Recorder
-	// Writer serializa as escritas de documento de rota e a recarga.
+	// Writer serializes route document writes and the reload.
 	Writer *writer.Writer
-	// Overrides é o estado vivo dos overrides.
+	// Overrides is the live state of the overrides.
 	Overrides *override.Tracker
-	// Upstreams é a disponibilidade recente dos upstreams, alimentada pela
-	// porta de tráfego. nil: um acompanhamento próprio, sempre desconhecido.
+	// Upstreams is the recent availability of the upstreams, fed by the
+	// traffic port. nil: a tracker of its own, always unknown.
 	Upstreams *upstream.Health
-	// Loader relê gateway.json e o diretório de rotas na recarga.
+	// Loader re-reads gateway.json and the routes directory on a reload.
 	Loader config.Loader
-	// Apply aplica a quente o que a configuração do processo controla fora
-	// do snapshot (portas, backend do histórico), antes de o snapshot novo
-	// ser publicado. Prepara o que for preciso, chama persist (que grava
-	// gateway.json numa alteração pela API; nil na recarga) e só então
-	// troca. Um erro recusa a mudança e preserva a configuração em vigor; um
-	// *ApplyError escolhe o código da resposta. nil: nada a aplicar além de
-	// persist.
+	// Apply hot-applies whatever the process configuration controls outside
+	// the snapshot (ports, history backend) before the new snapshot is
+	// published. It prepares what is needed, calls persist (which writes
+	// gateway.json on a change through the API; nil on a reload) and only
+	// then swaps. An error rejects the change and keeps the configuration
+	// in force; an *ApplyError picks the response code. nil: nothing to
+	// apply beyond persist.
 	Apply func(old, next config.Settings, persist func() error) error
-	// Ports informa as portas em que o processo atende agora, que diferem
-	// das configuradas quando a configuração pede a porta 0. nil: as
-	// configuradas.
+	// Ports reports the ports the process is listening on right now, which
+	// differ from the configured ones when the configuration asks for port
+	// 0. nil: the configured ones.
 	Ports func() (traffic, admin int)
-	// StartedAt é o instante em que o processo subiu.
+	// StartedAt is the moment the process came up.
 	StartedAt time.Time
-	// Heartbeat é o intervalo do heartbeat do fluxo de eventos; zero usa
+	// Heartbeat is the heartbeat interval of the event stream; zero uses
 	// DefaultHeartbeat.
 	Heartbeat time.Duration
 }
 
-// Version é a versão do gateway informada pela API.
+// Version is the gateway version reported by the API.
 var Version = "0.1.0"
 
-// Handler é o handler da porta de administração.
+// Handler is the handler of the admin port.
 type Handler struct {
 	live      *config.Live
 	history   *store.Switchable
@@ -80,7 +80,7 @@ type Handler struct {
 	mux       *http.ServeMux
 }
 
-// New monta a API sobre as dependências e serve o frontend embutido.
+// New builds the API over the dependencies and serves the embedded frontend.
 func New(d Deps) *Handler {
 	h := &Handler{
 		live:      d.Live,
@@ -110,13 +110,13 @@ func New(d Deps) *Handler {
 	if h.loader.Getenv == nil {
 		h.loader.Getenv = os.LookupEnv
 	}
-	// Toda alteração aplicada — pela API, pela recarga ou pelo aprendizado —
-	// vira um evento config no fluxo em tempo real.
+	// Every applied change, whether it comes from the API, a reload or
+	// learning, becomes a config event on the real-time stream.
 	if h.writer != nil {
 		h.writer.OnChange(h.configChanged)
 	}
 	h.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, http.StatusNotFound, "not_found", "recurso da API inexistente: "+r.URL.Path)
+		writeError(w, http.StatusNotFound, "not_found", "no such API resource: "+r.URL.Path)
 	})
 	h.historyRoutes()
 	h.routeRoutes()
@@ -130,8 +130,8 @@ func New(d Deps) *Handler {
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) { h.mux.ServeHTTP(w, r) }
 
-// handle registra os handlers de um path por método e responde 405 aos
-// demais métodos, com o cabeçalho Allow.
+// handle registers the handlers of a path by method and answers 405 to
+// every other method, with the Allow header.
 func (h *Handler) handle(path string, byMethod map[string]http.HandlerFunc) {
 	methods := slices.Sorted(maps.Keys(byMethod))
 	for _, m := range methods {
@@ -140,8 +140,8 @@ func (h *Handler) handle(path string, byMethod map[string]http.HandlerFunc) {
 	h.mux.HandleFunc(path, methodNotAllowed(strings.Join(methods, ", ")))
 }
 
-// spa serve o frontend embutido; paths que não são arquivos caem no
-// index.html, para que a navegação do lado do cliente funcione.
+// spa serves the embedded frontend; paths that are not files fall back to
+// index.html, so that client-side navigation works.
 func spa(web fs.FS) http.Handler {
 	files := http.FileServerFS(web)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -158,24 +158,25 @@ func spa(web fs.FS) http.Handler {
 	})
 }
 
-// apiError é o corpo de toda resposta de erro da API.
+// apiError is the body of every API error response.
 type apiError struct {
 	Error   string `json:"error"`
 	Message string `json:"message"`
-	// Field é o campo responsável, quando há.
+	// Field is the field at fault, when there is one.
 	Field string `json:"field,omitempty"`
-	// File é o documento responsável, quando há.
+	// File is the document at fault, when there is one.
 	File string `json:"file,omitempty"`
-	// Line e Column localizam o campo no documento, a partir de 1.
+	// Line and Column locate the field in the document, starting at 1.
 	Line   int `json:"line,omitempty"`
 	Column int `json:"column,omitempty"`
-	// Env é a variável de ambiente que define o valor, quando é o caso.
+	// Env is the environment variable that sets the value, when that is
+	// the case.
 	Env string `json:"env,omitempty"`
-	// Errors lista os problemas quando há mais de um.
+	// Errors lists the problems when there is more than one.
 	Errors []errorDetail `json:"errors,omitempty"`
 }
 
-// errorDetail é um dos problemas de uma resposta com vários.
+// errorDetail is one of the problems of a response carrying several.
 type errorDetail struct {
 	Message string `json:"message"`
 	Field   string `json:"field,omitempty"`
@@ -184,10 +185,10 @@ type errorDetail struct {
 	Column  int    `json:"column,omitempty"`
 }
 
-// ApplyError recusa aplicar a quente uma mudança da configuração do
-// processo, como uma porta indisponível ou um backend do histórico que não
-// inicializa. Code é o código de erro da API (port_unavailable,
-// backend_unavailable); a resposta é 409.
+// ApplyError refuses to hot-apply a change to the process configuration,
+// such as an unavailable port or a history backend that fails to start.
+// Code is the API error code (port_unavailable, backend_unavailable); the
+// response is 409.
 type ApplyError struct {
 	Code    string
 	Field   string
@@ -196,7 +197,7 @@ type ApplyError struct {
 
 func (e *ApplyError) Error() string { return e.Message }
 
-// requestError é uma requisição recusada antes de chegar à configuração.
+// requestError is a request rejected before it reaches the configuration.
 type requestError struct {
 	status int
 	body   apiError
@@ -224,7 +225,7 @@ func writeError(w http.ResponseWriter, status int, code, msg string) {
 	writeJSON(w, status, apiError{Error: code, Message: msg})
 }
 
-// writeErr traduz o erro de uma operação na resposta da API.
+// writeErr turns the error of an operation into the API response.
 func writeErr(w http.ResponseWriter, err error) {
 	var re *requestError
 	var ae *ApplyError
@@ -237,7 +238,7 @@ func writeErr(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "not_found", err.Error())
 	case errors.Is(err, writer.ErrStale):
 		writeError(w, http.StatusPreconditionFailed, "stale",
-			"o documento mudou desde a versão informada em If-Match; releia e tente de novo")
+			"the document changed since the version given in If-Match; re-read it and try again")
 	case errors.As(err, &ae):
 		writeJSON(w, http.StatusConflict, apiError{Error: ae.Code, Message: ae.Message, Field: ae.Field})
 	case errors.As(err, &ces) && len(ces) > 0:
@@ -249,9 +250,9 @@ func writeErr(w http.ResponseWriter, err error) {
 	}
 }
 
-// writeConfigErrors responde a uma configuração recusada: 409 quando há
-// colisão com outro documento, 422 quando um valor é inválido. Em ambos os
-// casos nada foi gravado.
+// writeConfigErrors answers a rejected configuration: 409 when it collides
+// with another document, 422 when a value is invalid. In both cases
+// nothing was written.
 func writeConfigErrors(w http.ResponseWriter, es config.Errors) {
 	status, code := http.StatusUnprocessableEntity, "invalid"
 	if es.HasConflict() {
@@ -276,11 +277,11 @@ func writeConfigErrors(w http.ResponseWriter, es config.Errors) {
 	writeJSON(w, status, body)
 }
 
-// methodNotAllowed responde 405 aos métodos não suportados num path da API.
+// methodNotAllowed answers 405 to the methods an API path does not support.
 func methodNotAllowed(allow string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Allow", allow)
 		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed",
-			"método "+r.Method+" não suportado em "+r.URL.Path+"; use "+allow)
+			"method "+r.Method+" is not supported on "+r.URL.Path+"; use "+allow)
 	}
 }

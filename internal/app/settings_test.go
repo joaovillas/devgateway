@@ -14,12 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/exchange"
-	"github.com/gamerjp64/gateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/store"
 )
 
-// Configuração do processo pela API e troca a quente das portas.
+// Process configuration through the API and live port swaps.
 
 type settingsRes struct {
 	Settings struct {
@@ -43,7 +43,7 @@ func (e *adminEnv) patchSettings(t *testing.T, patch string, header ...string) a
 	return e.call(t, "PATCH", "/settings", "application/merge-patch+json", patch, header...)
 }
 
-// gatewayFile lê e interpreta o gateway.json do processo.
+// gatewayFile reads and parses the process's gateway.json.
 func (e *adminEnv) gatewayFile(t *testing.T) (config.GatewayFile, string) {
 	t.Helper()
 	path := filepath.Join(e.dir, "gateway.json")
@@ -53,13 +53,13 @@ func (e *adminEnv) gatewayFile(t *testing.T) (config.GatewayFile, string) {
 	}
 	g, err := config.ParseGatewayFile(path, data)
 	if err != nil {
-		t.Fatalf("gateway.json gravado não é válido: %v\n%s", err, data)
+		t.Fatalf("the gateway.json that was written is not valid: %v\n%s", err, data)
 	}
 	return g, string(data)
 }
 
-// fileState guarda conteúdo e instante de modificação de um arquivo, para
-// verificar que ele não foi tocado.
+// fileState holds a file's content and modification time, so that we can
+// check it was left untouched.
 type fileState struct {
 	data  string
 	mtime time.Time
@@ -75,7 +75,7 @@ func stateOf(t *testing.T, path string) fileState {
 	return fileState{string(data), st.ModTime()}
 }
 
-// occupy ocupa uma porta livre até o fim do teste e devolve o número dela.
+// occupy takes a free port for the rest of the test and returns its number.
 func occupy(t *testing.T) int {
 	t.Helper()
 	ln, err := net.Listen("tcp", ":0")
@@ -86,7 +86,7 @@ func occupy(t *testing.T) int {
 	return ln.Addr().(*net.TCPAddr).Port
 }
 
-// waitRefused espera até que o endereço deixe de aceitar conexões.
+// waitRefused waits until the address stops accepting connections.
 func waitRefused(t *testing.T, addr string) {
 	t.Helper()
 	_, port, _ := net.SplitHostPort(addr)
@@ -98,18 +98,18 @@ func waitRefused(t *testing.T, addr string) {
 		}
 		c.Close()
 		if time.Now().After(deadline) {
-			t.Fatalf("a porta %s deveria ter deixado de aceitar conexões", port)
+			t.Fatalf("port %s should have stopped accepting connections", port)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
 }
 
-// Scenario: Configuração do processo alterada pela API
+// Scenario: Process configuration changed through the API
 
 func TestSettingsSeedChangedByAPI(t *testing.T) {
 	flaky := map[string]string{"flaky.yaml": "schemaVersion: 1\nname: flaky\nmatch:\n  path: /flaky/*\n" +
 		"overrides:\n  - name: half\n    match:\n      path: /flaky/*\n    respond:\n      status: 503\n    probability: 0.5\n"}
-	// Sem upstream: o que o override não intercepta responde 501.
+	// No upstream: whatever the override does not intercept answers 501.
 	pattern := func(traffic string) string {
 		var b strings.Builder
 		for i := range 30 {
@@ -124,40 +124,40 @@ func TestSettingsSeedChangedByAPI(t *testing.T) {
 	var res settingsRes
 	r.decode(t, &res)
 	if r.status != 200 || !slices.Equal(res.Applied, []string{"seed"}) || r.header.Get("ETag") == "" {
-		t.Fatalf("alteração do seed: %d %s", r.status, r.body)
+		t.Fatalf("changing the seed: %d %s", r.status, r.body)
 	}
 	if s := e.Live.Load().Settings; s.Seed == nil || *s.Seed != 42 {
-		t.Fatalf("o seed novo deveria valer sem reinício: %v", s.Seed)
+		t.Fatalf("the new seed should take effect without a restart: %v", s.Seed)
 	}
 	g, raw := e.gatewayFile(t)
 	if g.Seed == nil || *g.Seed != 42 || g.Ports == nil || g.Ports.Traffic == nil || *g.Ports.Traffic != 0 {
-		t.Fatalf("gateway.json deveria declarar o seed e manter as portas:\n%s", raw)
+		t.Fatalf("gateway.json should declare the seed and keep the ports:\n%s", raw)
 	}
 	for _, v := range res.Settings.Values {
 		if v.Key == "seed" && (v.Source.Origin != config.OriginFile || v.Value != float64(42)) {
-			t.Fatalf("a resposta deveria trazer o seed vindo do arquivo: %+v", v)
+			t.Fatalf("the response should report the seed as coming from the file: %+v", v)
 		}
 	}
 	got := pattern(e.traffic)
 
-	// Um processo que já sobe com o mesmo seed decide igual: o seed alterado
-	// pela API vale como se tivesse sido lido na carga.
+	// A process that starts up with the same seed decides the same way: the
+	// seed changed through the API counts as if it had been read at load time.
 	fresh := startAdmin(t, `{"ports":{"traffic":0,"admin":0},"seed":42}`, flaky)
 	if want := pattern(fresh.traffic); got != want {
-		t.Fatalf("as decisões deveriam seguir o seed 42:\napi:   %s\ncarga: %s", got, want)
+		t.Fatalf("the decisions should follow seed 42:\napi:  %s\nload: %s", got, want)
 	}
 	if !strings.Contains(got, "503") || !strings.Contains(got, "501") {
-		t.Fatalf("a probabilidade de 50%% deveria alternar as respostas: %s", got)
+		t.Fatalf("a 50%% probability should mix the responses: %s", got)
 	}
 
-	// null remove a chave do arquivo e o valor volta ao padrão.
+	// null drops the key from the file and the value goes back to the default.
 	r = e.patchSettings(t, `{"seed":null}`)
 	if g, raw := e.gatewayFile(t); r.status != 200 || g.Seed != nil || e.Live.Load().Settings.Seed != nil {
-		t.Fatalf("remoção do seed: %d %s\n%s", r.status, r.body, raw)
+		t.Fatalf("removing the seed: %d %s\n%s", r.status, r.body, raw)
 	}
 }
 
-// Scenario: Valor do ambiente é travado
+// Scenario: A value from the environment is locked
 
 func TestSettingsEnvValueIsLocked(t *testing.T) {
 	t.Setenv("GATEWAY_TRAFFIC_PORT", "0")
@@ -174,28 +174,28 @@ func TestSettingsEnvValueIsLocked(t *testing.T) {
 			t.Fatalf("%s: %d %s", patch, r.status, r.body)
 		}
 	}
-	// O documento bruto que altera a porta travada também é recusado.
+	// A raw document that changes the locked port is refused too.
 	r := e.call(t, "PUT", "/settings/document", "application/json", `{"ports":{"traffic":9090,"admin":0},"seed":1}`)
 	if ae := r.err(t); r.status != 409 || ae.Env != "GATEWAY_TRAFFIC_PORT" {
-		t.Fatalf("documento que altera a porta travada: %d %s", r.status, r.body)
+		t.Fatalf("document that changes the locked port: %d %s", r.status, r.body)
 	}
 	if after := stateOf(t, path); after != before {
-		t.Fatalf("gateway.json não deveria ser modificado:\n%s", after.data)
+		t.Fatalf("gateway.json should not be modified:\n%s", after.data)
 	}
 	if e.Live.Load() != snap {
-		t.Fatal("a configuração em vigor não deveria mudar")
+		t.Fatal("the configuration in effect should not change")
 	}
 
-	// Chaves não travadas continuam alteráveis, e um documento que não mexe
-	// na chave travada é aceito.
+	// Keys that are not locked stay changeable, and a document that leaves the
+	// locked key alone is accepted.
 	if r := e.patchSettings(t, `{"seed":2}`); r.status != 200 {
-		t.Fatalf("seed com a porta travada: %d %s", r.status, r.body)
+		t.Fatalf("seed with the port locked: %d %s", r.status, r.body)
 	}
 	if r := e.call(t, "PUT", "/settings/document", "application/json", `{"ports":{"admin":0},"seed":3}`); r.status != 200 {
-		t.Fatalf("documento que mantém a porta travada: %d %s", r.status, r.body)
+		t.Fatalf("document that keeps the locked port: %d %s", r.status, r.body)
 	}
 	if s := e.Live.Load().Settings; *s.Seed != 3 || s.Sources["ports.traffic"].Origin != config.OriginEnv {
-		t.Fatalf("configuração depois do documento: %+v", s)
+		t.Fatalf("configuration after the document: %+v", s)
 	}
 }
 
@@ -210,7 +210,7 @@ func TestSettingsPatchRefusesInvalid(t *testing.T) {
 		{`{"history":{"capacity":0}}`, "invalid", "history.capacity", 422},
 		{`{"history":{"backend":"redis"}}`, "invalid", "history.backend", 422},
 		{`{"ports":{"traffic":"x"}}`, "invalid", "ports.traffic", 422},
-		{`{"desconhecido":1}`, "invalid", "desconhecido", 422},
+		{`{"unknown":1}`, "invalid", "unknown", 422},
 		{`{"seed":`, "bad_request", "", 400},
 		{`[1]`, "bad_request", "", 400},
 	} {
@@ -220,17 +220,17 @@ func TestSettingsPatchRefusesInvalid(t *testing.T) {
 			t.Fatalf("%s: %d %s", c.patch, r.status, r.body)
 		}
 	}
-	// If-Match divergente não grava.
-	if r := e.patchSettings(t, `{"seed":1}`, "If-Match", `"outra"`); r.status != 412 || r.err(t).Error != "stale" {
-		t.Fatalf("If-Match divergente: %d %s", r.status, r.body)
+	// A mismatched If-Match writes nothing.
+	if r := e.patchSettings(t, `{"seed":1}`, "If-Match", `"other"`); r.status != 412 || r.err(t).Error != "stale" {
+		t.Fatalf("mismatched If-Match: %d %s", r.status, r.body)
 	}
 	if after := stateOf(t, path); after != before {
-		t.Fatalf("gateway.json não deveria ser modificado:\n%s", after.data)
+		t.Fatalf("gateway.json should not be modified:\n%s", after.data)
 	}
-	// If-Match com a versão atual grava.
+	// If-Match with the current version writes.
 	etag := e.call(t, "GET", "/settings/document", "", "").header.Get("ETag")
 	if r := e.patchSettings(t, `{"seed":1}`, "If-Match", etag); r.status != 200 {
-		t.Fatalf("If-Match atual: %d %s", r.status, r.body)
+		t.Fatalf("If-Match with the current version: %d %s", r.status, r.body)
 	}
 }
 
@@ -242,53 +242,53 @@ func TestSettingsDocument(t *testing.T) {
 
 	r := e.call(t, "GET", "/settings/document", "", "")
 	if r.status != 200 || strings.TrimSpace(string(r.body)) != "{}" || r.header.Get("X-Gateway-File-Exists") != "false" {
-		t.Fatalf("documento ausente: %d %v %s", r.status, r.header, r.body)
+		t.Fatalf("missing document: %d %v %s", r.status, r.header, r.body)
 	}
-	// A primeira alteração cria o arquivo, declarando a versão de schema.
+	// The first change creates the file, declaring the schema version.
 	if r := e.patchSettings(t, `{"seed":9}`); r.status != 200 {
-		t.Fatalf("criação por PATCH: %d %s", r.status, r.body)
+		t.Fatalf("creation through PATCH: %d %s", r.status, r.body)
 	}
 	if g, raw := e.gatewayFile(t); g.SchemaVersion == nil || *g.SchemaVersion != config.SchemaVersion || *g.Seed != 9 {
-		t.Fatalf("gateway.json criado:\n%s", raw)
+		t.Fatalf("gateway.json as created:\n%s", raw)
 	}
 
-	// O documento bruto é gravado como enviado e aplicado a quente.
+	// The raw document is written exactly as sent and applied live.
 	doc := "{\n  \"schemaVersion\": 1,\n  \"seed\": 11,\n  \"history\": { \"record\": false }\n}\n"
 	r = e.call(t, "PUT", "/settings/document", "application/json", doc)
 	var res settingsRes
 	r.decode(t, &res)
 	if r.status != 200 || !slices.Contains(res.Applied, "seed") || !slices.Contains(res.Applied, "history.record") {
-		t.Fatalf("gravação do documento: %d %s", r.status, r.body)
+		t.Fatalf("writing the document: %d %s", r.status, r.body)
 	}
 	if data, _ := os.ReadFile(path); string(data) != doc {
-		t.Fatalf("o documento deveria ser gravado como enviado:\n%s", data)
+		t.Fatalf("the document should be written exactly as sent:\n%s", data)
 	}
 	if s := e.Live.Load().Settings; *s.Seed != 11 || s.HistoryRecord {
-		t.Fatalf("o documento deveria valer sem reinício: %+v", s)
+		t.Fatalf("the document should take effect without a restart: %+v", s)
 	}
 	r = e.call(t, "GET", "/settings/document", "", "")
 	if string(r.body) != doc || r.header.Get("X-Gateway-File-Exists") != "true" || r.header.Get("ETag") == "" {
-		t.Fatalf("leitura do documento: %v %s", r.header, r.body)
+		t.Fatalf("reading the document: %v %s", r.header, r.body)
 	}
 
 	before := stateOf(t, path)
 	r = e.call(t, "PUT", "/settings/document", "application/json", "{\n  \"seed\": 1,\n}\n")
 	if ae := r.err(t); r.status != 422 || ae.Line != 3 || ae.Column == 0 {
-		t.Fatalf("JSON inválido: %d %s", r.status, r.body)
+		t.Fatalf("invalid JSON: %d %s", r.status, r.body)
 	}
 	r = e.call(t, "PUT", "/settings/document", "application/json", `{"ports":{"traffic":1,"admin":1}}`)
 	if r.status != 409 || r.err(t).Error != "locked" {
-		t.Fatalf("portas vindas do ambiente: %d %s", r.status, r.body)
+		t.Fatalf("ports coming from the environment: %d %s", r.status, r.body)
 	}
 	if r := e.call(t, "PUT", "/settings/document", "application/yaml", "seed: 1\n"); r.status != 415 {
-		t.Fatalf("tipo de conteúdo errado: %d %s", r.status, r.body)
+		t.Fatalf("wrong content type: %d %s", r.status, r.body)
 	}
 	if after := stateOf(t, path); after != before {
-		t.Fatal("gateway.json não deveria ser modificado pelas escritas recusadas")
+		t.Fatal("gateway.json should not be modified by the refused writes")
 	}
 }
 
-// Liga e desliga do modo aprendizado pela API.
+// Turning learning mode on and off through the API.
 
 func TestLearningToggledByAPI(t *testing.T) {
 	var hits atomic.Int64
@@ -306,19 +306,19 @@ func TestLearningToggledByAPI(t *testing.T) {
 	r := e.call(t, "GET", "/learning", "", "")
 	r.decode(t, &l)
 	if r.status != 200 || l.Enabled || l.Locked || l.Source.Origin != config.OriginDefault || l.Learned["api"] != 0 {
-		t.Fatalf("estado inicial do aprendizado: %d %s", r.status, r.body)
+		t.Fatalf("initial learning state: %d %s", r.status, r.body)
 	}
 
 	r = e.call(t, "PUT", "/learning", "", `{"enabled":true}`)
 	l = learning{}
 	r.decode(t, &l)
 	if r.status != 200 || !l.Enabled || l.Source.Origin != config.OriginFile {
-		t.Fatalf("ligar o aprendizado: %d %s", r.status, r.body)
+		t.Fatalf("turning learning on: %d %s", r.status, r.body)
 	}
 	if g, raw := e.gatewayFile(t); g.Learning == nil || g.Learning.Enabled == nil || !*g.Learning.Enabled {
-		t.Fatalf("gateway.json deveria declarar o aprendizado ligado:\n%s", raw)
+		t.Fatalf("gateway.json should declare learning as on:\n%s", raw)
 	}
-	getBody(t, e.traffic+"/api/novo")
+	getBody(t, e.traffic+"/api/new")
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		e.Recorder.Wait(t.Context())
@@ -329,24 +329,24 @@ func TestLearningToggledByAPI(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("o endpoint novo deveria ser aprendido: %+v", l)
+			t.Fatalf("the new endpoint should be learned: %+v", l)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
 	if r := e.call(t, "PUT", "/learning", "", `{"enabled":false}`); r.status != 200 {
-		t.Fatalf("desligar o aprendizado: %d %s", r.status, r.body)
+		t.Fatalf("turning learning off: %d %s", r.status, r.body)
 	}
-	getBody(t, e.traffic+"/api/outro")
+	getBody(t, e.traffic+"/api/other")
 	e.Recorder.Wait(t.Context())
 	e.Learner.Sync(t.Context())
 	l = learning{}
 	e.call(t, "GET", "/learning", "", "").decode(t, &l)
 	if l.Enabled || l.Learned["api"] != 1 {
-		t.Fatalf("com o aprendizado desligado nada deveria ser aprendido: %+v", l)
+		t.Fatalf("with learning off nothing should be learned: %+v", l)
 	}
 	if r := e.call(t, "PUT", "/learning", "", `{}`); r.status != 422 || r.err(t).Field != "enabled" {
-		t.Fatalf("corpo sem enabled: %d %s", r.status, r.body)
+		t.Fatalf("body without enabled: %d %s", r.status, r.body)
 	}
 }
 
@@ -356,24 +356,24 @@ func TestLearningLockedByEnv(t *testing.T) {
 	before := stateOf(t, filepath.Join(e.dir, "gateway.json"))
 	r := e.call(t, "PUT", "/learning", "", `{"enabled":true}`)
 	if ae := r.err(t); r.status != 409 || ae.Error != "locked" || ae.Env != "GATEWAY_LEARNING" {
-		t.Fatalf("aprendizado travado pelo ambiente: %d %s", r.status, r.body)
+		t.Fatalf("learning locked by the environment: %d %s", r.status, r.body)
 	}
 	if stateOf(t, filepath.Join(e.dir, "gateway.json")) != before || e.Live.Load().Settings.LearningEnabled {
-		t.Fatal("nada deveria mudar")
+		t.Fatal("nothing should change")
 	}
 	var l struct{ Locked bool }
 	e.call(t, "GET", "/learning", "", "").decode(t, &l)
 	if !l.Locked {
-		t.Fatal("a leitura deveria informar a trava")
+		t.Fatal("the read should report the lock")
 	}
 }
 
-// Scenarios: Backend do histórico trocado a quente, Backend novo indisponível
-// preserva o atual — pela API.
+// Scenarios: History backend swapped live, a new backend that is unavailable
+// keeps the current one — through the API.
 
 func TestSettingsSwitchesHistoryBackend(t *testing.T) {
 	e := startAdmin(t, freePorts, statusRoutes(t))
-	getBody(t, e.traffic+"/payments/memoria")
+	getBody(t, e.traffic+"/payments/memory")
 	e.Recorder.Sync(t.Context())
 	old := e.History.Backend()
 
@@ -382,47 +382,48 @@ func TestSettingsSwitchesHistoryBackend(t *testing.T) {
 	var res settingsRes
 	r.decode(t, &res)
 	if r.status != 200 || !slices.Contains(res.Applied, "history.backend") || len(res.Notes) != 1 ||
-		!strings.Contains(res.Notes[0], "não foram migradas") || !strings.Contains(res.Notes[0], old) {
-		t.Fatalf("troca de backend: %d %s", r.status, r.body)
+		!strings.Contains(res.Notes[0], "not migrated") || !strings.Contains(res.Notes[0], old) {
+		t.Fatalf("backend swap: %d %s", r.status, r.body)
 	}
 	if e.History.Backend() != config.BackendSQLite {
-		t.Fatalf("o backend em uso deveria ser sqlite: %s", e.History.Backend())
+		t.Fatalf("the backend in use should be sqlite: %s", e.History.Backend())
 	}
 	getBody(t, e.traffic+"/payments/sqlite")
 	var l listBody
 	e.call(t, "GET", "/exchanges", "", "").decode(t, &l)
 	if l.Backend != config.BackendSQLite || len(l.Items) != 1 || l.Items[0].Path != "/payments/sqlite" {
-		t.Fatalf("as trocas seguintes deveriam ir para o sqlite, sem migração: %s %v", l.Backend, l.Items)
+		t.Fatalf("later exchanges should go into sqlite, with no migration: %s %v", l.Backend, l.Items)
 	}
 	if _, err := os.Stat(dbPath); err != nil {
-		t.Fatalf("o banco deveria estar ao lado do gateway.json: %v", err)
+		t.Fatalf("the database should sit next to gateway.json: %v", err)
 	}
 
-	// Backend que não inicializa: recusado, o atual segue em uso.
-	writeFile(t, filepath.Join(e.dir, "arquivo-comum"), "x")
+	// A backend that does not initialize: refused, the current one stays in
+	// use.
+	writeFile(t, filepath.Join(e.dir, "plain-file"), "x")
 	before := stateOf(t, filepath.Join(e.dir, "gateway.json"))
-	r = e.patchSettings(t, `{"history":{"backend":"ndjson","path":"arquivo-comum/history.ndjson"}}`)
+	r = e.patchSettings(t, `{"history":{"backend":"ndjson","path":"plain-file/history.ndjson"}}`)
 	if ae := r.err(t); r.status != 409 || ae.Error != "backend_unavailable" || !strings.Contains(ae.Message, "ndjson") || !strings.Contains(ae.Message, "sqlite") {
-		t.Fatalf("backend indisponível: %d %s", r.status, r.body)
+		t.Fatalf("unavailable backend: %d %s", r.status, r.body)
 	}
 	if e.History.Backend() != config.BackendSQLite || stateOf(t, filepath.Join(e.dir, "gateway.json")) != before {
-		t.Fatal("o backend atual e o gateway.json deveriam ficar como estavam")
+		t.Fatal("the current backend and gateway.json should be left as they were")
 	}
-	getBody(t, e.traffic+"/payments/depois")
+	getBody(t, e.traffic+"/payments/after")
 	e.Recorder.Sync(t.Context())
 	if res, err := e.History.List(t.Context(), exchange.Filter{}, store.Page{}); err != nil || len(res.Items) != 2 {
-		t.Fatalf("o sqlite deveria seguir registrando: %d %v", len(res.Items), err)
+		t.Fatalf("sqlite should keep recording: %d %v", len(res.Items), err)
 	}
 }
 
-// Scenario: Porta trocada a quente
+// Scenario: Port swapped live
 
 func TestTrafficPortSwitchedHot(t *testing.T) {
 	arrived, release := make(chan struct{}), make(chan struct{})
 	slow := httpServer(t, func(w http.ResponseWriter, r *http.Request) {
 		close(arrived)
 		<-release
-		io.WriteString(w, "lento")
+		io.WriteString(w, "slow")
 	})
 	var hits atomic.Int64
 	fast := countingUpstream(t, &hits)
@@ -441,33 +442,33 @@ func TestTrafficPortSwitchedHot(t *testing.T) {
 	var res settingsRes
 	r.decode(t, &res)
 	if r.status != 200 || !slices.Equal(res.Applied, []string{"ports.traffic"}) || len(res.Notes) != 1 || !strings.Contains(res.Notes[0], strconv.Itoa(port)) {
-		t.Fatalf("troca da porta de tráfego: %d %s", r.status, r.body)
+		t.Fatalf("traffic port swap: %d %s", r.status, r.body)
 	}
 	newBase := fmt.Sprintf("http://127.0.0.1:%d", port)
 	if st, body := getBody(t, newBase+"/fast/y"); st != 200 || body != "upstream:/fast/y" {
-		t.Fatalf("a porta nova deveria atender: %d %q", st, body)
+		t.Fatalf("the new port should serve: %d %q", st, body)
 	}
 	if !strings.HasSuffix(e.TrafficAddr(), ":"+strconv.Itoa(port)) {
-		t.Fatalf("o endereço de tráfego deveria ser o novo: %s", e.TrafficAddr())
+		t.Fatalf("the traffic address should be the new one: %s", e.TrafficAddr())
 	}
 	waitRefused(t, oldAddr)
 	if g, raw := e.gatewayFile(t); g.Ports == nil || g.Ports.Traffic == nil || *g.Ports.Traffic != port {
-		t.Fatalf("gateway.json deveria declarar a porta nova:\n%s", raw)
+		t.Fatalf("gateway.json should declare the new port:\n%s", raw)
 	}
 
-	// A requisição em curso na porta antiga conclui normalmente.
+	// The request in flight on the old port finishes normally.
 	close(release)
 	select {
 	case res := <-done:
-		if res.err != nil || res.status != 200 || res.body != "lento" {
-			t.Fatalf("a requisição em curso deveria concluir: %+v", res)
+		if res.err != nil || res.status != 200 || res.body != "slow" {
+			t.Fatalf("the request in flight should finish: %+v", res)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("a requisição em curso não concluiu")
+		t.Fatal("the request in flight did not finish")
 	}
 }
 
-// Scenario: Porta nova indisponível preserva a atual
+// Scenario: A new port that is unavailable keeps the current one
 
 func TestTrafficPortUnavailableKeepsCurrent(t *testing.T) {
 	e := startAdmin(t, freePorts, adminRoutes(t))
@@ -480,16 +481,16 @@ func TestTrafficPortUnavailableKeepsCurrent(t *testing.T) {
 	ae := r.err(t)
 	if r.status != 409 || ae.Error != "port_unavailable" || ae.Field != "ports.traffic" ||
 		!strings.Contains(ae.Message, strconv.Itoa(busy)) || !strings.Contains(ae.Message, "bind") {
-		t.Fatalf("porta ocupada: %d %s", r.status, r.body)
+		t.Fatalf("busy port: %d %s", r.status, r.body)
 	}
-	if !strings.Contains(ae.Message, "segue na") {
-		t.Fatalf("a recusa deveria dizer em que porta o tráfego segue: %s", ae.Message)
+	if !strings.Contains(ae.Message, "stays on") {
+		t.Fatalf("the refusal should say which port traffic stays on: %s", ae.Message)
 	}
 	if st, body := getBody(t, e.traffic+"/payments/x"); st != 200 || body != "upstream:/payments/x" {
-		t.Fatalf("a porta atual deveria seguir atendendo: %d %q", st, body)
+		t.Fatalf("the current port should keep serving: %d %q", st, body)
 	}
 	if stateOf(t, path) != before || e.Live.Load() != snap {
-		t.Fatal("nada deveria mudar: nem gateway.json, nem a configuração em vigor (seed incluído)")
+		t.Fatal("nothing should change: neither gateway.json nor the configuration in effect (seed included)")
 	}
 }
 
@@ -497,8 +498,8 @@ func TestAdminPortSwitchedHot(t *testing.T) {
 	e := startAdminWith(t, freePorts, nil, Options{Heartbeat: time.Hour})
 	oldAddr := e.AdminAddr()
 
-	// Um fluxo de eventos aberto na porta antiga não segura a troca: ele
-	// termina quando a porta sai de serviço, e o cliente reconecta.
+	// An event stream open on the old port does not hold up the swap: it ends
+	// when the port goes out of service, and the client reconnects.
 	stream := openEvents(t, "http://"+oldAddr+"/api/events")
 	stream.next(t, "hello")
 
@@ -507,16 +508,16 @@ func TestAdminPortSwitchedHot(t *testing.T) {
 	var res settingsRes
 	r.decode(t, &res)
 	if r.status != 200 || !slices.Equal(res.Applied, []string{"ports.admin"}) {
-		t.Fatalf("a resposta deveria sair pela porta antiga: %d %s", r.status, r.body)
+		t.Fatalf("the response should go out over the old port: %d %s", r.status, r.body)
 	}
 	for _, v := range res.Settings.Values {
 		if v.Key == "ports.admin" && v.Value != float64(port) {
-			t.Fatalf("a resposta deveria trazer a porta nova: %+v", v)
+			t.Fatalf("the response should report the new port: %+v", v)
 		}
 	}
 	e.api = fmt.Sprintf("http://127.0.0.1:%d/api", port)
 	if r := e.call(t, "GET", "/status", "", ""); r.status != 200 {
-		t.Fatalf("a API deveria atender na porta nova: %d", r.status)
+		t.Fatalf("the API should serve on the new port: %d", r.status)
 	}
 	waitRefused(t, oldAddr)
 	stream.closed(t)

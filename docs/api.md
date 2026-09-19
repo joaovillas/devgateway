@@ -1,70 +1,70 @@
-# API de administração
+# Admin API
 
-Contrato da API REST servida na porta de administração (padrão `8081`), sob o prefixo `/api/`. O backend a implementa em `internal/admin` (fase 7 de `openspec/changes/add-test-gateway/tasks.md`). O painel em `web/` é um cliente dela e nada mais: toda operação que o painel faz tem aqui um equivalente executável por `curl`.
+The contract of the REST API served on the admin port (`8081` by default), under the `/api/` prefix. The backend implements it in `internal/admin`. The panel in `web/` is a client of this API and nothing else: every operation the panel performs has a runnable `curl` equivalent here.
 
-Tudo o que este documento descreve está implementado.
+Everything this document describes is implemented.
 
-Os campos JSON são os dos tipos Go em `internal/config` (`Route`, `Override`, `EffectiveValue`) e em `internal/exchange` (`Exchange`, `Filter`). Quando este documento e o código divergirem, o código dos tipos manda e este documento é corrigido.
+The JSON fields are those of the Go types in `internal/config` (`Route`, `Override`, `EffectiveValue`) and in `internal/exchange` (`Exchange`, `Filter`). Where this document and the code disagree, the types in the code win and this document gets fixed.
 
-Nos exemplos, `$A` é `http://localhost:8081`.
+In the examples, `$A` is `http://localhost:8081`.
 
-## Sumário
+## Summary
 
-| Grupo | Método e path | Operação |
+| Group | Method and path | Operation |
 |---|---|---|
-| Processo | `GET /api/status` | estado resumido do processo |
-| Rotas | `GET /api/routes` | listar rotas |
-| | `GET /api/routes/{route}` | ler uma rota |
-| | `POST /api/routes` | criar rota |
-| | `PUT /api/routes/{route}` | substituir rota |
-| | `PATCH /api/routes/{route}` | alterar campos da rota |
-| | `DELETE /api/routes/{route}` | remover rota e seu documento |
-| | `GET /api/routes/{route}/document` | ler o YAML bruto |
-| | `PUT /api/routes/{route}/document` | gravar o YAML bruto |
-| Overrides | `GET /api/routes/{route}/overrides` | listar overrides da rota |
-| | `GET /api/routes/{route}/overrides/{override}` | ler um override |
-| | `POST /api/routes/{route}/overrides` | criar override |
-| | `PUT /api/routes/{route}/overrides/{override}` | substituir override |
-| | `PATCH /api/routes/{route}/overrides/{override}` | alterar campos (inclui liga/desliga) |
-| | `DELETE /api/routes/{route}/overrides/{override}` | remover override |
-| | `POST /api/routes/{route}/overrides/{override}/reset` | reiniciar TTL e contagem |
-| | `POST /api/routes/{route}/overrides/derive` | derivar override de uma troca |
-| | `GET /api/overrides/state` | estado vivo de todos os overrides |
-| Configuração | `GET /api/settings` | configuração efetiva com origem |
-| | `PATCH /api/settings` | alterar `gateway.json` e aplicar a quente |
-| | `GET /api/settings/document` | ler `gateway.json` bruto |
-| | `PUT /api/settings/document` | gravar `gateway.json` bruto |
-| | `GET /api/learning` | estado do modo aprendizado |
-| | `PUT /api/learning` | ligar ou desligar o aprendizado |
-| | `POST /api/reload` | recarregar arquivos do disco |
-| Histórico | `GET /api/exchanges` | listar trocas com filtros e cursor |
-| | `GET /api/exchanges/{id}` | ler uma troca completa |
-| | `GET /api/exchanges/{id}/older` | troca anterior (mais antiga) |
-| | `GET /api/exchanges/{id}/newer` | troca seguinte (mais nova) |
-| | `DELETE /api/exchanges` | limpar o histórico |
-| Upstreams | `GET /api/upstreams` | disponibilidade recente por upstream |
-| Tempo real | `GET /api/events` | fluxo SSE |
+| Process | `GET /api/status` | process state at a glance |
+| Routes | `GET /api/routes` | list routes |
+| | `GET /api/routes/{route}` | read one route |
+| | `POST /api/routes` | create a route |
+| | `PUT /api/routes/{route}` | replace a route |
+| | `PATCH /api/routes/{route}` | change fields of a route |
+| | `DELETE /api/routes/{route}` | remove a route and its document |
+| | `GET /api/routes/{route}/document` | read the raw YAML |
+| | `PUT /api/routes/{route}/document` | write the raw YAML |
+| Overrides | `GET /api/routes/{route}/overrides` | list the route's overrides |
+| | `GET /api/routes/{route}/overrides/{override}` | read one override |
+| | `POST /api/routes/{route}/overrides` | create an override |
+| | `PUT /api/routes/{route}/overrides/{override}` | replace an override |
+| | `PATCH /api/routes/{route}/overrides/{override}` | change fields (including on/off) |
+| | `DELETE /api/routes/{route}/overrides/{override}` | remove an override |
+| | `POST /api/routes/{route}/overrides/{override}/reset` | restart the TTL and the count |
+| | `POST /api/routes/{route}/overrides/derive` | derive an override from an exchange |
+| | `GET /api/overrides/state` | live state of every override |
+| Settings | `GET /api/settings` | effective settings with their origin |
+| | `PATCH /api/settings` | change `gateway.json` and apply it live |
+| | `GET /api/settings/document` | read the raw `gateway.json` |
+| | `PUT /api/settings/document` | write the raw `gateway.json` |
+| | `GET /api/learning` | learning mode state |
+| | `PUT /api/learning` | turn learning on or off |
+| | `POST /api/reload` | reload the files from disk |
+| History | `GET /api/exchanges` | list exchanges, with filters and a cursor |
+| | `GET /api/exchanges/{id}` | read one full exchange |
+| | `GET /api/exchanges/{id}/older` | the previous (older) exchange |
+| | `GET /api/exchanges/{id}/newer` | the next (newer) exchange |
+| | `DELETE /api/exchanges` | clear the history |
+| Upstreams | `GET /api/upstreams` | recent availability per upstream |
+| Live | `GET /api/events` | SSE stream |
 
-## Convenções
+## Conventions
 
-### Formato
+### Format
 
-- Corpo de requisição e de resposta em `application/json; charset=utf-8`, exceto os documentos brutos: `application/yaml` para rotas e `application/json` para `gateway.json`.
-- Chaves em camelCase, iguais às dos documentos.
-- Durações são texto no formato do Go: `"150ms"`, `"2s"`, `"1m30s"`.
-- Instantes são RFC 3339 com fração, em UTC: `"2026-09-18T15:04:05.123Z"`.
-- Tempos medidos (`timing`, `ttlRemainingMs`) são números em milissegundos.
-- Nomes de rota e de override aparecem no path como estão, com percent-encoding quando necessário.
-- Corpos capturados (`request.body`, `response.body` de uma troca) são `[]byte` no Go e, portanto, chegam em **base64**. O cliente decodifica e usa `headers["Content-Type"]` para decidir como exibir. O campo `size` guarda o tamanho real, e `truncated` indica corte no limite de captura.
+- Request and response bodies are `application/json; charset=utf-8`, except the raw documents: `application/yaml` for routes and `application/json` for `gateway.json`.
+- Keys are camelCase, the same as in the documents.
+- Durations are strings in Go's format: `"150ms"`, `"2s"`, `"1m30s"`.
+- Instants are RFC 3339 with a fraction, in UTC: `"2026-09-18T15:04:05.123Z"`.
+- Measured times (`timing`, `ttlRemainingMs`) are numbers in milliseconds.
+- Route and override names appear in the path as they are, percent-encoded where necessary.
+- Captured bodies (`request.body`, `response.body` of an exchange) are `[]byte` in Go and therefore arrive **base64-encoded**. The client decodes them and uses `headers["Content-Type"]` to decide how to display them. The `size` field holds the real size, and `truncated` says the body was cut at the capture limit.
 
-### Erros
+### Errors
 
-Toda resposta de erro tem este corpo:
+Every error response has this body:
 
 ```json
 {
   "error": "invalid",
-  "message": "routes/payments.yaml: campo overrides[0].probability (linha 12, coluna 18): deve estar entre 0 e 1 (recebido 1.5)",
+  "message": "routes/payments.yaml: field overrides[0].probability (line 12, column 18): must be between 0.0 and 1.0 (got 1.5)",
   "field": "overrides[0].probability",
   "file": "routes/payments.yaml",
   "line": 12,
@@ -72,52 +72,52 @@ Toda resposta de erro tem este corpo:
 }
 ```
 
-| Campo | Presença | Significado |
+| Field | Presence | Meaning |
 |---|---|---|
-| `error` | sempre | código estável, para o cliente decidir o que fazer |
-| `message` | sempre | texto em pt-BR para exibir como está |
-| `field` | quando há campo responsável | caminho do campo (`overrides[0].latency.min`, `ports.traffic`) |
-| `file` | quando há documento responsável | caminho do arquivo, ou `variável de ambiente X` |
-| `line`, `column` | quando o campo foi localizado no documento | posição 1-based |
-| `env` | só em `locked` | variável de ambiente que trava o valor |
-| `errors` | quando há mais de um problema | lista de objetos com `message`, `field`, `file`, `line`, `column` |
+| `error` | always | stable code, for the client to decide what to do |
+| `message` | always | human-readable text, ready to display as is |
+| `field` | when a field is responsible | path of the field (`overrides[0].latency.min`, `ports.traffic`) |
+| `file` | when a document is responsible | path of the file, or the environment variable that holds the value |
+| `line`, `column` | when the field was located in the document | 1-based position |
+| `env` | only on `locked` | the environment variable that locks the value |
+| `errors` | when there is more than one problem | list of objects with `message`, `field`, `file`, `line`, `column` |
 
-Códigos usados:
+The codes in use:
 
-| HTTP | `error` | Quando |
+| HTTP | `error` | When |
 |---|---|---|
-| 400 | `bad_request` | JSON malformado, parâmetro de query inválido, corpo ausente |
-| 400 | `bad_cursor` | cursor de paginação não emitido por este backend |
-| 403 | `history_disabled` | exposição do histórico desligada (`history.expose = false`) |
-| 404 | `not_found` | rota, override, troca ou recurso da API inexistente |
-| 404 | `no_more` | navegação item a item chegou ao fim naquela direção |
-| 405 | `method_not_allowed` | método não suportado no path |
-| 409 | `conflict` | nome já usado, ou casamento idêntico ao de outra rota |
-| 409 | `locked` | valor definido por variável de ambiente |
-| 409 | `port_unavailable` | porta nova não pôde ser aberta; a atual segue em uso |
-| 409 | `backend_unavailable` | backend novo do histórico não inicializou; o atual segue em uso |
-| 412 | `stale` | `If-Match` não confere com a versão atual do documento |
-| 415 | `unsupported_media_type` | `Content-Type` diferente do esperado |
-| 422 | `invalid` | falha de validação; nada foi gravado |
-| 500 | `internal` | falha inesperada, inclusive de escrita em disco |
+| 400 | `bad_request` | malformed JSON, invalid query parameter, missing body |
+| 400 | `bad_cursor` | pagination cursor not issued by this backend |
+| 403 | `history_disabled` | history exposure is off (`history.expose = false`) |
+| 404 | `not_found` | no such route, override, exchange or API resource |
+| 404 | `no_more` | item-by-item navigation reached the end in that direction |
+| 405 | `method_not_allowed` | method not supported on that path |
+| 409 | `conflict` | name already taken, or the same match as another route |
+| 409 | `locked` | value set by an environment variable |
+| 409 | `port_unavailable` | the new port could not be opened; the current one stays in use |
+| 409 | `backend_unavailable` | the new history backend did not initialize; the current one stays in use |
+| 412 | `stale` | `If-Match` does not agree with the document's current version |
+| 415 | `unsupported_media_type` | `Content-Type` other than the expected one |
+| 422 | `invalid` | validation failed; nothing was written |
+| 500 | `internal` | unexpected failure, including a failed disk write |
 
-`history_disabled` é deliberadamente distinto de uma lista vazia: o painel mostra "histórico desabilitado" num caso e "nenhuma troca ainda" no outro.
+`history_disabled` is deliberately distinct from an empty list: the panel says "history disabled" in one case and "no exchanges yet" in the other.
 
-### Escrita e documentos
+### Writes and documents
 
-- Toda escrita valida primeiro. Se a validação falha, a resposta é `422 invalid` e nenhum arquivo é tocado.
-- Uma escrita de rota ou override reescreve **somente** o documento daquela rota, de forma atômica (arquivo temporário e rename), sob um mutex de escrita. Os demais documentos ficam byte a byte iguais.
-- A reescrita perde os comentários e a ordem das chaves do documento tocado. Por isso a leitura de rota informa `hasComments`, e o painel avisa antes da primeira escrita.
-- Cada documento tem uma versão opaca devolvida no cabeçalho `ETag`. Toda escrita aceita `If-Match` opcional. Com ele, uma versão divergente responde `412 stale` sem gravar. Sem ele, a última escrita vence.
-- Toda escrita bem-sucedida reconstrói o snapshot, aplica a configuração a quente e emite um evento `config` no fluxo SSE.
+- Every write validates first. If validation fails, the response is `422 invalid` and no file is touched.
+- A route or override write rewrites **only** that route's document, atomically (temporary file and rename), under a write mutex. The other documents stay byte for byte the same.
+- The rewrite loses the comments and the key order of the document it touched. That is why reading a route reports `hasComments`, and why the panel warns before the first write.
+- Every document has an opaque version, returned in the `ETag` header. Every write accepts an optional `If-Match`. With it, a diverging version answers `412 stale` and writes nothing. Without it, the last write wins.
+- Every successful write rebuilds the snapshot, applies the configuration live and emits a `config` event on the SSE stream.
 
 ---
 
-## Processo
+## Process
 
 ### `GET /api/status`
 
-Estado resumido, usado pela barra superior do painel. É também o corpo do evento `hello` do fluxo SSE.
+State at a glance, used by the panel's top bar. It is also the body of the SSE stream's `hello` event.
 
 ```json
 {
@@ -133,8 +133,8 @@ Estado resumido, usado pela barra superior do painel. É também o corpo do even
 }
 ```
 
-- `ports` são as portas em que o processo atende agora. Com a porta `0` na configuração, que pede ao sistema uma porta livre, aparece a porta escolhida.
-- `history.backend` é o backend em uso, que muda com a troca a quente.
+- `ports` are the ports the process is listening on right now. With port `0` in the configuration, which asks the system for a free port, the chosen port shows up here.
+- `history.backend` is the backend in use, which changes with a live switch.
 
 ```sh
 curl -s $A/api/status
@@ -142,11 +142,11 @@ curl -s $A/api/status
 
 ---
 
-## Rotas
+## Routes
 
-### O recurso rota
+### The route resource
 
-A leitura de uma rota embrulha o documento (`route`, idêntico ao tipo `config.Route`) com metadados que não pertencem ao documento.
+Reading a route wraps the document (`route`, identical to the `config.Route` type) in metadata that does not belong to the document.
 
 ```json
 {
@@ -169,7 +169,7 @@ A leitura de uma rota embrulha o documento (`route`, idêntico ao tipo `config.R
         "respond": {
           "status": 503,
           "headers": { "Retry-After": "1" },
-          "body": { "error": "indisponível" }
+          "body": { "error": "unavailable" }
         },
         "probability": 0.3,
         "latency": { "min": "100ms", "max": "500ms" },
@@ -192,23 +192,23 @@ A leitura de uma rota embrulha o documento (`route`, idêntico ao tipo `config.R
 }
 ```
 
-- `order` é a posição da rota na precedência (0 é a mais específica).
-- `state` é o estado vivo de cada override, pelo nome (ver [estado vivo](#get-apioverridesstate)).
-- Campos omitidos seguem as regras do documento: `enabled` ausente equivale a ligado, `probability` ausente a `1.0`, `respond.status` ausente a `200`.
-- `match.path` é exato (`/viacep/01001000/json`), com parâmetros de segmento (`/viacep/:id/json`, em que cada `:nome` casa exatamente um segmento não vazio) ou curinga de sufixo (`/viacep/*`); `match.pathRegex` é a alternativa por expressão regular. O nome do parâmetro segue `[A-Za-z_][A-Za-z0-9_]*`, não se repete no mesmo path e não divide o segmento com o curinga; o erro vem em `422` com `field: "match.path"`. O `match.path` da rota não aceita parâmetros. Na precedência, o parâmetro de segmento fica depois do path exato e antes da expressão regular e do curinga, e entre dois paths com parâmetros vence o de mais segmentos literais.
-- `latency` é texto (`"2s"`, atraso fixo) ou `{ "min", "max" }` (intervalo sorteado).
-- Um critério de `headers`, `query` ou `body` é texto (igualdade) ou um objeto com exatamente um de `equals`, `regex`, `json`, `contains`.
-- `source` aparece nos overrides aprendidos ou derivados: `{ "kind": "learned" | "derived", "exchange": "<id>", "at": "<instante>", "bodyIncomplete": true }`.
+- `order` is the route's position in the precedence order (0 is the most specific).
+- `state` is the live state of each override, by name (see [live state](#get-apioverridesstate)).
+- Omitted fields follow the document's rules: an absent `enabled` means on, an absent `probability` means `1.0`, an absent `respond.status` means `200`.
+- `match.path` is exact (`/zip/01001000/json`), parameterized (`/zip/:id/json`, where each `:name` matches exactly one non-empty segment) or a suffix wildcard (`/zip/*`); `match.pathRegex` is the regular-expression alternative. A parameter name follows `[A-Za-z_][A-Za-z0-9_]*`, does not repeat within a path and does not share a segment with the wildcard; the error comes back as `422` with `field: "match.path"`. A route's `match.path` does not take parameters. In the precedence order, a parameterized path comes after an exact path and before a regular expression and a wildcard, and between two parameterized paths the one with more literal segments wins.
+- `latency` is either a string (`"2s"`, a fixed delay) or `{ "min", "max" }` (a delay drawn from the range).
+- A `headers`, `query` or `body` criterion is either a string (equality) or an object with exactly one of `equals`, `regex`, `json`, `contains`.
+- `source` shows up on learned or derived overrides: `{ "kind": "learned" | "derived", "exchange": "<id>", "at": "<instant>", "bodyIncomplete": true }`.
 
 ### `GET /api/routes`
 
-Lista as rotas na ordem de precedência.
+Lists the routes in precedence order.
 
 ```json
 { "items": [ { "file": "routes/payments.yaml", "hasComments": false, "order": 0, "route": { "...": "..." }, "state": { } } ] }
 ```
 
-Sem rotas, `items` é `[]`.
+With no routes, `items` is `[]`.
 
 ```sh
 curl -s $A/api/routes
@@ -216,9 +216,9 @@ curl -s $A/api/routes
 
 ### `GET /api/routes/{route}`
 
-Devolve o recurso rota e o cabeçalho `ETag` do documento.
+Returns the route resource and the document's `ETag` header.
 
-Erros: `404 not_found`.
+Errors: `404 not_found`.
 
 ```sh
 curl -si $A/api/routes/payments
@@ -226,9 +226,9 @@ curl -si $A/api/routes/payments
 
 ### `POST /api/routes`
 
-Cria a rota e o documento `routes/{name}.yaml`. O corpo é um `config.Route`. `schemaVersion` ausente assume a versão do binário.
+Creates the route and the document `routes/{name}.yaml`. The body is a `config.Route`. An absent `schemaVersion` takes the binary's version.
 
-Uma rota renomeada mantém o arquivo original (ver `PUT /api/routes/{route}`), então `routes/{name}.yaml` pode ser o documento de outra rota. Nesse caso a rota nova vai para o primeiro `routes/{name}-N.yaml` livre, a partir de `N = 2`, e o campo `file` do recurso informa o caminho. Um arquivo existente nunca é sobrescrito. Se `routes/{name}.yaml` existe mas não é documento de nenhuma rota em vigor, a criação responde `409 conflict`. A mesma regra vale para a criação por `PUT /api/routes/{route}/document`.
+A renamed route keeps its original file (see `PUT /api/routes/{route}`), so `routes/{name}.yaml` may already be another route's document. In that case the new route goes to the first free `routes/{name}-N.yaml`, starting at `N = 2`, and the resource's `file` field says where. An existing file is never overwritten. If `routes/{name}.yaml` exists but is not the document of any route in force, creation answers `409 conflict`. The same rule applies to creation through `PUT /api/routes/{route}/document`.
 
 ```json
 {
@@ -239,9 +239,9 @@ Uma rota renomeada mantém o arquivo original (ver `PUT /api/routes/{route}`), e
 }
 ```
 
-Resposta `201 Created` com o recurso rota, `Location: /api/routes/orders` e `ETag`.
+Answers `201 Created` with the route resource, `Location: /api/routes/orders` and an `ETag`.
 
-Erros: `400 bad_request`, `409 conflict` (nome já usado, ou mesmo host e path de outra rota; a mensagem nomeia o arquivo em conflito), `422 invalid`.
+Errors: `400 bad_request`, `409 conflict` (name already taken, or the same host and path as another route; the message names the conflicting file), `422 invalid`.
 
 ```sh
 curl -s -X POST $A/api/routes -H 'Content-Type: application/json' \
@@ -250,9 +250,9 @@ curl -s -X POST $A/api/routes -H 'Content-Type: application/json' \
 
 ### `PUT /api/routes/{route}`
 
-Substitui a rota inteira, overrides incluídos. Um `name` diferente do path renomeia a rota, e o documento mantém o caminho de arquivo atual. Overrides mantidos com o mesmo nome preservam o estado vivo (TTL e contagem).
+Replaces the whole route, overrides included. A `name` different from the one in the path renames the route, and the document keeps its current file path. Overrides kept under the same name keep their live state (TTL and count).
 
-Resposta `200` com o recurso rota. Erros: `400`, `404 not_found`, `409 conflict`, `412 stale`, `422 invalid`.
+Answers `200` with the route resource. Errors: `400`, `404 not_found`, `409 conflict`, `412 stale`, `422 invalid`.
 
 ```sh
 curl -s -X PUT $A/api/routes/orders -H 'Content-Type: application/json' \
@@ -261,13 +261,13 @@ curl -s -X PUT $A/api/routes/orders -H 'Content-Type: application/json' \
 
 ### `PATCH /api/routes/{route}`
 
-Altera campos da rota com JSON Merge Patch (RFC 7396): as chaves presentes substituem as atuais e `null` remove o campo do documento. `overrides` não é aceito aqui (`422`), porque os overrides têm endpoints próprios.
+Changes fields of the route with JSON Merge Patch (RFC 7396): the keys present replace the current ones, and `null` removes the field from the document. `overrides` is not accepted here (`422`), because overrides have endpoints of their own.
 
 ```json
 { "upstream": "http://localhost:9003", "timeout": null }
 ```
 
-Resposta `200` com o recurso rota. Erros: `400`, `404`, `409 conflict`, `412`, `422`.
+Answers `200` with the route resource. Errors: `400`, `404`, `409 conflict`, `412`, `422`.
 
 ```sh
 curl -s -X PATCH $A/api/routes/orders -H 'Content-Type: application/merge-patch+json' \
@@ -276,7 +276,7 @@ curl -s -X PATCH $A/api/routes/orders -H 'Content-Type: application/merge-patch+
 
 ### `DELETE /api/routes/{route}`
 
-Remove a rota e apaga o documento. Resposta `204`. Erros: `404`, `412`.
+Removes the route and deletes the document. Answers `204`. Errors: `404`, `412`.
 
 ```sh
 curl -s -X DELETE $A/api/routes/orders
@@ -284,10 +284,10 @@ curl -s -X DELETE $A/api/routes/orders
 
 ### `GET /api/routes/{route}/document`
 
-Devolve o documento YAML exatamente como está em disco, comentários incluídos, com `Content-Type: application/yaml; charset=utf-8` e `ETag`.
+Returns the YAML document exactly as it is on disk, comments included, with `Content-Type: application/yaml; charset=utf-8` and an `ETag`.
 
 ```yaml
-# Pagamentos: o serviço local da equipe de billing
+# Payments: the billing team's local service
 schemaVersion: 1
 name: payments
 upstream: http://localhost:9001
@@ -303,7 +303,7 @@ overrides:
     probability: 0.3
 ```
 
-Erros: `404`.
+Errors: `404`.
 
 ```sh
 curl -s $A/api/routes/payments/document
@@ -311,9 +311,9 @@ curl -s $A/api/routes/payments/document
 
 ### `PUT /api/routes/{route}/document`
 
-Grava o documento bruto. O corpo é YAML (`Content-Type: application/yaml`). O texto é validado como na carga do disco e gravado **como enviado**, comentários incluídos. Se a rota não existe, é criada (`201`). O `name` declarado precisa ser igual ao `{route}` do path, senão `422` com `field: "name"`.
+Writes the raw document. The body is YAML (`Content-Type: application/yaml`). The text is validated as it would be when loaded from disk and written **as sent**, comments included. If the route does not exist, it is created (`201`). The declared `name` has to equal the `{route}` in the path, otherwise `422` with `field: "name"`.
 
-Resposta `200` ou `201` com o recurso rota e o novo `ETag`. Erros: `409 conflict`, `412 stale`, `415`, `422 invalid` com `file`, `field`, `line` e `column` apontando o problema.
+Answers `200` or `201` with the route resource and the new `ETag`. Errors: `409 conflict`, `412 stale`, `415`, `422 invalid` with `file`, `field`, `line` and `column` pointing at the problem.
 
 ```sh
 curl -s -X PUT $A/api/routes/payments/document -H 'Content-Type: application/yaml' \
@@ -324,7 +324,7 @@ curl -s -X PUT $A/api/routes/payments/document -H 'Content-Type: application/yam
 
 ## Overrides
 
-### O recurso override
+### The override resource
 
 ```json
 {
@@ -353,7 +353,7 @@ curl -s -X PUT $A/api/routes/payments/document -H 'Content-Type: application/yam
 }
 ```
 
-`override` é o tipo `config.Override`. `order` é a posição do override na precedência dentro da rota. `state` é descrito em [estado vivo](#get-apioverridesstate).
+`override` is the `config.Override` type. `order` is the override's position in the precedence order within the route. `state` is described under [live state](#get-apioverridesstate).
 
 ### `GET /api/routes/{route}/overrides`
 
@@ -361,7 +361,7 @@ curl -s -X PUT $A/api/routes/payments/document -H 'Content-Type: application/yam
 { "items": [ { "route": "payments", "order": 0, "override": { "...": "..." }, "state": { "...": "..." } } ] }
 ```
 
-Erros: `404` (rota).
+Errors: `404` (route).
 
 ```sh
 curl -s $A/api/routes/payments/overrides
@@ -369,7 +369,7 @@ curl -s $A/api/routes/payments/overrides
 
 ### `GET /api/routes/{route}/overrides/{override}`
 
-Erros: `404` (rota ou override).
+Errors: `404` (route or override).
 
 ```sh
 curl -s $A/api/routes/payments/overrides/flaky
@@ -377,7 +377,7 @@ curl -s $A/api/routes/payments/overrides/flaky
 
 ### `POST /api/routes/{route}/overrides`
 
-Acrescenta um override ao fim da lista declarada da rota. O corpo é um `config.Override`. Resposta `201` com o recurso override. Erros: `404` (rota), `409 conflict` (nome repetido na rota), `412`, `422`.
+Appends an override to the end of the route's declared list. The body is a `config.Override`. Answers `201` with the override resource. Errors: `404` (route), `409 conflict` (name already used in the route), `412`, `422`.
 
 ```sh
 curl -s -X POST $A/api/routes/payments/overrides -H 'Content-Type: application/json' \
@@ -386,7 +386,7 @@ curl -s -X POST $A/api/routes/payments/overrides -H 'Content-Type: application/j
 
 ### `PUT /api/routes/{route}/overrides/{override}`
 
-Substitui o override inteiro, mantendo sua posição na lista declarada. Um `name` diferente renomeia. Resposta `200`. Erros: `404`, `409`, `412`, `422`.
+Replaces the whole override, keeping its position in the declared list. A different `name` renames it. Answers `200`. Errors: `404`, `409`, `412`, `422`.
 
 ```sh
 curl -s -X PUT $A/api/routes/payments/overrides/flaky -H 'Content-Type: application/json' \
@@ -395,21 +395,21 @@ curl -s -X PUT $A/api/routes/payments/overrides/flaky -H 'Content-Type: applicat
 
 ### `PATCH /api/routes/{route}/overrides/{override}`
 
-JSON Merge Patch sobre o override. É o endpoint dos controles contínuos e do liga/desliga. `null` remove o campo (por exemplo, `"latency": null` tira o atraso).
+JSON Merge Patch over the override. This is the endpoint behind the continuous controls and the on/off switch. `null` removes a field (`"latency": null`, for instance, takes the delay away).
 
-A API não liga o override por conta própria. A spec pede que ajustar probabilidade, latência ou queda de um override desligado o ligue no mesmo gesto, e quem cumpre isso é o cliente, mandando `"enabled": true` junto:
+The API does not turn an override on by itself. The spec asks that adjusting the probability, latency or drop of a disabled override turn it on in the same gesture, and the client is the one who does that, by sending `"enabled": true` along:
 
 ```json
 { "probability": 0.3, "enabled": true }
 ```
 
-Liga/desliga isolado:
+On/off by itself:
 
 ```json
 { "enabled": false }
 ```
 
-Desligar e religar preserva todos os demais campos. Resposta `200` com o recurso override. Erros: `400`, `404`, `412`, `422`.
+Turning it off and back on preserves every other field. Answers `200` with the override resource. Errors: `400`, `404`, `412`, `422`.
 
 ```sh
 curl -s -X PATCH $A/api/routes/payments/overrides/flaky -H 'Content-Type: application/merge-patch+json' \
@@ -420,7 +420,7 @@ curl -s -X PATCH $A/api/routes/payments/overrides/flaky -H 'Content-Type: applic
 
 ### `DELETE /api/routes/{route}/overrides/{override}`
 
-Resposta `204`. Erros: `404`, `412`.
+Answers `204`. Errors: `404`, `412`.
 
 ```sh
 curl -s -X DELETE $A/api/routes/payments/overrides/flaky
@@ -428,7 +428,7 @@ curl -s -X DELETE $A/api/routes/payments/overrides/flaky
 
 ### `POST /api/routes/{route}/overrides/{override}/reset`
 
-Reinicia o relógio do TTL e zera a contagem de aplicações, reativando um override expirado. Não altera o documento. Resposta `200` com o recurso override. Erros: `404`.
+Restarts the TTL clock and zeroes the application count, reactivating an expired override. It does not change the document. Answers `200` with the override resource. Errors: `404`.
 
 ```sh
 curl -s -X POST $A/api/routes/payments/overrides/flaky/reset
@@ -436,20 +436,20 @@ curl -s -X POST $A/api/routes/payments/overrides/flaky/reset
 
 ### `POST /api/routes/{route}/overrides/derive`
 
-Monta um override a partir de uma troca do histórico: critério de path exato e método da requisição observada, e resposta com status, cabeçalhos e corpo devolvidos pelo upstream. Ficam de fora dos cabeçalhos só `Date`, `Content-Length`, o `X-Gateway` do próprio gateway e os hop-by-hop (inclusive os nomeados em `Connection`). Um cabeçalho repetido, como vários `Set-Cookie`, vira lista, na ordem observada. `source.kind` é `derived` e `source.exchange` aponta a troca de origem.
+Builds an override out of an exchange from the history: an exact-path and method criterion taken from the observed request, and a response with the status, headers and body the upstream returned. The only headers left out are `Date`, `Content-Length`, the gateway's own `X-Gateway` and the hop-by-hop ones (including those named in `Connection`). A repeated header, such as several `Set-Cookie`, becomes a list, in the observed order. `source.kind` is `derived` and `source.exchange` points at the source exchange.
 
-Corpo:
+Body:
 
 ```json
 { "exchange": "01K5E3V3C8Q2M4Z8N6P0R2T4W6", "name": "charge-ok", "save": false }
 ```
 
-- `exchange` é obrigatório (`422` com `field: "exchange"` sem ele).
-- `name` é opcional. Sem ele, o nome é gerado a partir de método e path (`post-api-payments-charge`), com sufixo `-2`, `-3`... se já estiver em uso na rota.
-- `save: false` (padrão) devolve o rascunho com `200`, sem gravar nada: o override derivado não vale antes de ser revisado. É a etapa de revisão: o painel mostra o rascunho, o usuário edita e cria com `POST /api/routes/{route}/overrides`.
-- `save: true` grava direto e responde `201`, como o `POST` de criação: o recurso override, com `Location` e `ETag`, acrescido de `warnings`. Um `name` já usado na rota responde `409 conflict`.
+- `exchange` is required (`422` with `field: "exchange"` without it).
+- `name` is optional. Without it, the name is generated from the method and path (`post-api-payments-charge`), with a `-2`, `-3`… suffix if it is already taken in the route.
+- `save: false` (the default) returns the draft with `200`, writing nothing: a derived override does not apply before it has been reviewed. This is the review step: the panel shows the draft, the user edits it and creates it with `POST /api/routes/{route}/overrides`.
+- `save: true` writes it straight away and answers `201`, like the creating `POST`: the override resource, with `Location` and `ETag`, plus `warnings`. A `name` already used in the route answers `409 conflict`.
 
-Resposta (rascunho):
+The response (a draft):
 
 ```json
 {
@@ -472,13 +472,13 @@ Resposta (rascunho):
 }
 ```
 
-Um corpo JSON válido, completo e cujos números cabem sem perda vira estrutura em `respond.body`. Qualquer outro corpo vira texto, idêntico ao observado. Um path que não pode ser escrito como path exato (contém `*` literal ou um segmento começado por `:`) vira `pathRegex` ancorado. A derivação não generaliza o path: ela reproduz uma troca específica.
+A JSON body that is valid, complete and whose numbers survive the round trip becomes a structure in `respond.body`. Any other body becomes text, identical to the observed one. A path that cannot be written as an exact path (it holds a literal `*`, or a segment starting with `:`) becomes an anchored `pathRegex`. Deriving does not generalize the path: it replays one specific exchange.
 
-Se o corpo da resposta foi truncado na captura, ou a transferência foi interrompida, o rascunho sai com `source.bodyIncomplete: true` e um aviso em `warnings`. A derivação não é recusada, e o painel mostra o aviso antes de gravar. `warnings` também avisa quando a rota já tem um override para o mesmo método e path, quando o `name` pedido já está em uso na rota (só no rascunho) e quando a troca foi atendida por outra rota.
+If the response body was truncated on capture, or the transfer was interrupted, the draft comes out with `source.bodyIncomplete: true` and a warning in `warnings`. Deriving is not refused, and the panel shows the warning before writing. `warnings` also fires when the route already has an override for the same method and path, when the requested `name` is already taken in the route (drafts only), and when the exchange was served by another route.
 
-Erros: `400`, `403 history_disabled`, `404 not_found` (rota, ou troca inexistente: `"message": "troca 01K5... não encontrada no histórico"`), `409 conflict` (só com `save`), `412` (só com `save`), `422` (sem `exchange`, ou troca sem resposta do upstream: sintetizada, derrubada, erro do gateway ou upgrade de protocolo).
+Errors: `400`, `403 history_disabled`, `404 not_found` (no such route, or no such exchange: `"message": "exchange 01K5... not found in the history"`), `409 conflict` (only with `save`), `412` (only with `save`), `422` (no `exchange`, or an exchange with no upstream response: synthesized, dropped, a gateway error or a protocol upgrade).
 
-O path `.../overrides/derive` só é reservado para `POST`: um override chamado `derive` continua lido, alterado e removido pelos demais métodos.
+The `.../overrides/derive` path is reserved for `POST` only: an override named `derive` is still read, changed and removed through the other methods.
 
 ```sh
 curl -s -X POST $A/api/routes/payments/overrides/derive -H 'Content-Type: application/json' \
@@ -489,7 +489,7 @@ curl -s -X POST $A/api/routes/payments/overrides/derive -H 'Content-Type: applic
 
 ### `GET /api/overrides/state`
 
-Estado vivo de todos os overrides de todas as rotas, para o mapa e os contadores do painel.
+The live state of every override of every route, for the panel's map and counters.
 
 ```json
 {
@@ -523,18 +523,18 @@ Estado vivo de todos os overrides de todas as rotas, para o mapa e os contadores
 }
 ```
 
-| Campo | Significado |
+| Field | Meaning |
 |---|---|
-| `enabled` | valor do documento |
-| `active` | participa da seleção agora: ligado e não expirado |
-| `expired` | `null`, `"ttl"` ou `"applications"` |
-| `registeredAt` | início do relógio do TTL: criação, última alteração de `ttl` ou `maxApplications`, religação ou `reset` |
-| `ttlRemainingMs` | restante do TTL, `null` sem TTL, `0` expirado |
-| `applications` | aplicações desde `registeredAt` |
-| `maxApplications` | limite declarado, `null` sem limite |
-| `lastAppliedAt` | última aplicação, `null` se nunca |
+| `enabled` | the value in the document |
+| `active` | takes part in the selection right now: on and not expired |
+| `expired` | `null`, `"ttl"` or `"applications"` |
+| `registeredAt` | when the TTL clock started: creation, last change to `ttl` or `maxApplications`, being turned back on, or a `reset` |
+| `ttlRemainingMs` | TTL left, `null` with no TTL, `0` when expired |
+| `applications` | applications since `registeredAt` |
+| `maxApplications` | the declared limit, `null` with no limit |
+| `lastAppliedAt` | last application, `null` if never |
 
-O painel decrementa `ttlRemainingMs` localmente entre eventos, a partir de `now`.
+The panel counts `ttlRemainingMs` down locally between events, starting from `now`.
 
 ```sh
 curl -s $A/api/overrides/state
@@ -542,11 +542,11 @@ curl -s $A/api/overrides/state
 
 ---
 
-## Configuração do processo
+## Process settings
 
 ### `GET /api/settings`
 
-Configuração efetiva com a origem de cada valor, na ordem de `Settings.Effective()`. Cada item é um `config.EffectiveValue` acrescido de `locked`.
+The effective settings with the origin of every value, in `Settings.Effective()` order. Each item is a `config.EffectiveValue` plus `locked`.
 
 ```json
 {
@@ -567,9 +567,9 @@ Configuração efetiva com a origem de cada valor, na ordem de `Settings.Effecti
 }
 ```
 
-- `source.origin` é `env`, `file` ou `default`. `source.name` é a variável ou o arquivo.
-- `locked` é verdadeiro quando `origin` é `env`: a API recusa alterar esse valor.
-- `seed` com `value: null` significa aleatoriedade não reproduzível.
+- `source.origin` is `env`, `file` or `default`. `source.name` is the variable or the file.
+- `locked` is true when `origin` is `env`: the API refuses to change that value.
+- `seed` with `value: null` means randomness that does not repeat.
 
 ```sh
 curl -s $A/api/settings
@@ -577,46 +577,46 @@ curl -s $A/api/settings
 
 ### `PATCH /api/settings`
 
-Altera `gateway.json` com JSON Merge Patch sobre o formato do arquivo (`config.GatewayFile`) e aplica o resultado a quente, sem reiniciar. `null` remove a chave do arquivo, e o valor volta ao padrão. Caminhos relativos (`history.path`, `routesDir`) partem do diretório do `gateway.json`. O arquivo é regravado inteiro, com indentação de dois espaços. Se ainda não existe, é criado, declarando `schemaVersion`.
+Changes `gateway.json` with JSON Merge Patch over the file's shape (`config.GatewayFile`) and applies the result live, with no restart. `null` removes the key from the file, and the value goes back to its default. Relative paths (`history.path`, `routesDir`) resolve against the directory of `gateway.json`. The file is rewritten whole, indented with two spaces. If it does not exist yet, it is created, declaring `schemaVersion`.
 
 ```json
 { "seed": 42, "ports": { "traffic": 9090 }, "history": { "backend": "sqlite", "path": "data/history.db" } }
 ```
 
-Ordem de aplicação, toda sob o mutex de escrita (duas alterações concorrentes são serializadas, e nenhuma se perde):
+The order in which it is applied, all under the write mutex (two concurrent changes are serialized, and neither is lost):
 
-1. Recusa com `409 locked` se alguma chave tocada vem do ambiente, mesmo que o valor pedido seja igual ao atual. Um objeto trocado por `null` toca todas as chaves abaixo dele. Nada é gravado.
-2. Valida o arquivo resultante: forma (`422 invalid` com `field`, inclusive para chave desconhecida) e valores (`422 invalid`, por exemplo portas iguais ou backend desconhecido). Com `If-Match` divergente do `ETag` de `GET /api/settings/document`, `412 stale`.
-3. Se a porta de tráfego ou de administração muda, abre o listener novo. Se falhar, responde `409 port_unavailable` e nada muda.
-4. Se o backend do histórico muda (ou o arquivo dele, ou a capacidade do backend em memória), inicializa o novo. Se falhar, fecha o que o passo 3 abriu, responde `409 backend_unavailable` e nada muda.
-5. Grava `gateway.json` de forma atômica (arquivo temporário e rename). Se falhar, desfaz os passos 3 e 4 e responde `500`.
-6. Troca: o backend novo do histórico passa a valer e o antigo é fechado (**o histórico não é migrado**); as portas novas passam a atender e o servidor antigo recebe `Shutdown`, que para de aceitar conexões e deixa as requisições em curso terminarem nele; o snapshot novo é publicado. Seed, registro e exposição do histórico, limite de captura, aprendizado e diretório de rotas passam a valer para as requisições seguintes. Se `routesDir` muda, as rotas são lidas do diretório novo, e um diretório inválido recusa a alteração no passo 2.
+1. Refuses with `409 locked` if any key touched comes from the environment, even when the requested value equals the current one. An object replaced by `null` touches every key under it. Nothing is written.
+2. Validates the resulting file: its shape (`422 invalid` with `field`, unknown keys included) and its values (`422 invalid`, for instance equal ports or an unknown backend). With an `If-Match` that diverges from the `ETag` of `GET /api/settings/document`, `412 stale`.
+3. If the traffic or admin port changes, opens the new listener. If that fails, answers `409 port_unavailable` and nothing changes.
+4. If the history backend changes (or its file, or the in-memory backend's capacity), initializes the new one. If that fails, closes what step 3 opened, answers `409 backend_unavailable` and nothing changes.
+5. Writes `gateway.json` atomically (temporary file and rename). If that fails, undoes steps 3 and 4 and answers `500`.
+6. Swaps: the new history backend takes over and the old one is closed (**the history is not migrated**); the new ports start serving and the old server gets a `Shutdown`, which stops accepting connections and lets the requests in flight finish on it; the new snapshot is published. Seed, history recording and exposure, capture limit, learning and the routes directory take effect for the requests that follow. If `routesDir` changes, the routes are read from the new directory, and an invalid directory gets the change refused back in step 2.
 
-Resposta `200`, com o `ETag` novo de `gateway.json`:
+Answers `200`, with the new `ETag` of `gateway.json`:
 
 ```json
 {
   "settings": { "file": { "path": "gateway.json", "exists": true }, "values": [ "..." ] },
   "applied": ["ports.traffic", "seed", "history.backend", "history.path"],
   "notes": [
-    "porta de tráfego agora é 9090; a 8080 deixou de aceitar conexões e conclui as requisições em curso",
-    "histórico agora em sqlite (data/history.db); as trocas anteriores continuam no backend memory e não foram migradas"
+    "the traffic port is now 9090; 8080 stopped accepting connections and is finishing the requests in flight",
+    "the history is now in sqlite (data/history.db); the earlier exchanges stay in the memory backend and were not migrated"
   ]
 }
 ```
 
-- `settings` é o corpo de `GET /api/settings` depois da alteração.
-- `applied` são as chaves cujo valor efetivo (ou origem) mudou, na ordem de `GET /api/settings`. Vazio quando o patch não muda nada.
-- `notes` explica efeitos colaterais: porta antiga fechada, histórico não migrado. Vazio quando não há.
+- `settings` is the body of `GET /api/settings` after the change.
+- `applied` lists the keys whose effective value (or origin) changed, in `GET /api/settings` order. Empty when the patch changes nothing.
+- `notes` explains the side effects: the old port closed, the history not migrated. Empty when there are none.
 
-Com mudança da porta de administração, a resposta sai pela porta antiga e só depois ela fecha; o fluxo SSE aberto nela termina. O cliente usa `ports.admin` de `settings.values` para se reconectar.
+When the admin port changes, the response goes out through the old port and only then does it close; the SSE stream open on it ends. The client uses `ports.admin` from `settings.values` to reconnect.
 
-Erros:
+Errors:
 
 ```json
 {
   "error": "locked",
-  "message": "ports.traffic vem da variável de ambiente GATEWAY_TRAFFIC_PORT e não pode ser alterado pela API; gateway.json não foi modificado",
+  "message": "ports.traffic comes from environment variable GATEWAY_TRAFFIC_PORT and cannot be changed through the API; gateway.json was left untouched",
   "field": "ports.traffic",
   "env": "GATEWAY_TRAFFIC_PORT"
 }
@@ -625,7 +625,7 @@ Erros:
 ```json
 {
   "error": "port_unavailable",
-  "message": "porta 9090 indisponível: bind: address already in use; a porta de tráfego segue na 8080",
+  "message": "port 9090 unavailable: bind: address already in use; the traffic port stays on 8080",
   "field": "ports.traffic"
 }
 ```
@@ -633,12 +633,12 @@ Erros:
 ```json
 {
   "error": "backend_unavailable",
-  "message": "backend do histórico sqlite em /ro/history.db: permission denied; o histórico segue em memory",
+  "message": "history backend sqlite at /ro/history.db: permission denied; history stays on memory",
   "field": "history.backend"
 }
 ```
 
-Os demais: `400` (JSON malformado ou patch que não é objeto), `412 stale`, `415`, `422 invalid`, `500`.
+The rest: `400` (malformed JSON, or a patch that is not an object), `412 stale`, `415`, `422 invalid`, `500`.
 
 ```sh
 curl -s -X PATCH $A/api/settings -H 'Content-Type: application/merge-patch+json' -d '{"seed":42}'
@@ -650,7 +650,7 @@ curl -s -X PATCH $A/api/settings -H 'Content-Type: application/merge-patch+json'
 
 ### `GET /api/settings/document`
 
-Devolve `gateway.json` como está em disco, com `ETag` e `X-Gateway-File-Exists: true`. Se o arquivo não existe, responde `200` com `{}` e o cabeçalho `X-Gateway-File-Exists: false`, sem `ETag`.
+Returns `gateway.json` as it is on disk, with an `ETag` and `X-Gateway-File-Exists: true`. If the file does not exist, answers `200` with `{}` and the header `X-Gateway-File-Exists: false`, with no `ETag`.
 
 ```sh
 curl -si $A/api/settings/document
@@ -658,9 +658,9 @@ curl -si $A/api/settings/document
 
 ### `PUT /api/settings/document`
 
-Grava `gateway.json` bruto (`Content-Type: application/json`) e aplica a quente, com a mesma ordem, a mesma resposta e os mesmos erros de `PATCH /api/settings`. O texto é gravado como enviado, sem reformatar.
+Writes the raw `gateway.json` (`Content-Type: application/json`) and applies it live, with the same order, the same response and the same errors as `PATCH /api/settings`. The text is written as sent, without reformatting.
 
-A trava do ambiente compara o documento enviado com o que está em disco: uma chave travada cujo valor no documento muda é recusada com `409 locked`. Um documento que mantém a chave travada como estava (inclusive ausente), ou que só repete o valor em vigor, é aceito. Erros adicionais: `412 stale`, `415`, `422` com `line` e `column` para JSON inválido.
+The environment lock compares the document sent against the one on disk: a locked key whose value changes in the document is refused with `409 locked`. A document that leaves the locked key as it was (absent included), or that merely repeats the value in force, is accepted. Additional errors: `412 stale`, `415`, `422` with `line` and `column` for invalid JSON.
 
 ```sh
 curl -s -X PUT $A/api/settings/document -H 'Content-Type: application/json' --data-binary @gateway.json
@@ -677,9 +677,9 @@ curl -s -X PUT $A/api/settings/document -H 'Content-Type: application/json' --da
 }
 ```
 
-`learned` conta, por rota, os overrides com `source.kind = "learned"`, e traz todas as rotas, inclusive as sem nenhum. É a contagem que o painel mostra para o usuário consolidar em curinga ou em parâmetro de segmento.
+`learned` counts, per route, the overrides with `source.kind = "learned"`, and covers every route, including the ones with none. This is the count the panel shows so the user can consolidate them into a wildcard or a segment parameter.
 
-O aprendizado grava o path generalizado: segmentos que parecem identificador (só dígitos, UUID, ou alfanumérico com dígitos e ao menos 8 caracteres) viram `:id`, `:id2`…, e o nome sai do método e desse path (`get-viacep-id-json`). Uma combinação é conhecida quando a rota já tem override do mesmo método, ligado ou desligado, com o path generalizado igual ou com path exato ou de parâmetros que casa com a requisição; curingas e expressões regulares não contam. Ao gravar um generalizado, os aprendidos de path exato que ele cobre (ainda desligados e sem outros critérios) são substituídos por ele, e o evento `config` sai com `cause: "learning"`.
+Learning writes the generalized path: segments that look like an identifier (all digits, a UUID, or alphanumeric with digits and at least 8 characters) become `:id`, `:id2`…, and the name comes from the method and that path (`get-zip-id-json`). A combination counts as known when the route already has an override for the same method, on or off, with the same generalized path or with an exact or parameterized path that matches the request; wildcards and regular expressions do not count. When a generalized override is written, the learned exact-path ones it covers (still disabled and with no other criteria) are replaced by it, and the `config` event goes out with `cause: "learning"`.
 
 ```sh
 curl -s $A/api/learning
@@ -687,13 +687,13 @@ curl -s $A/api/learning
 
 ### `PUT /api/learning`
 
-Atalho para `PATCH /api/settings` com `{"learning":{"enabled":...}}`, gravado em `gateway.json` e aplicado a quente: a próxima requisição já é (ou deixa de ser) aprendida.
+A shortcut for `PATCH /api/settings` with `{"learning":{"enabled":...}}`, written into `gateway.json` and applied live: the next request is already being learned (or already is not).
 
 ```json
 { "enabled": true }
 ```
 
-Resposta `200` com o mesmo corpo de `GET /api/learning`. Erros: `409 locked` (`env: "GATEWAY_LEARNING"`), `412`, `422` (sem `enabled`).
+Answers `200` with the same body as `GET /api/learning`. Errors: `409 locked` (`env: "GATEWAY_LEARNING"`), `412`, `422` (no `enabled`).
 
 ```sh
 curl -s -X PUT $A/api/learning -H 'Content-Type: application/json' -d '{"enabled":true}'
@@ -702,19 +702,19 @@ curl -s -X PUT $A/api/learning -H 'Content-Type: application/json' -d '{"enabled
 
 ### `POST /api/reload`
 
-Relê `gateway.json` e o diretório de rotas e aplica a quente, sob as mesmas regras de `PATCH /api/settings` para portas e backend: uma porta alterada no arquivo é aberta e passa a atender, e o backend alterado é inicializado antes da troca. Se algo falha, a configuração anterior continua em vigor, e as requisições em curso terminam sob a configuração que as iniciou.
+Rereads `gateway.json` and the routes directory and applies them live, under the same rules as `PATCH /api/settings` for ports and backend: a port changed in the file is opened and starts serving, and a changed backend is initialized before the swap. If anything fails, the previous configuration stays in force, and requests in flight finish under the configuration they started with.
 
-Resposta `200`:
+Answers `200`:
 
 ```json
 {
   "routes": 4,
   "changed": { "routes": ["orders"], "settings": ["seed"] },
-  "warnings": ["routes/README.md ignorado: extensão não reconhecida"]
+  "warnings": ["routes directory routes holds no .yaml documents; starting with no routes"]
 }
 ```
 
-Erros: `409 port_unavailable`, `409 backend_unavailable`, `409 conflict` (colisão entre documentos, nomeando os dois arquivos), `422 invalid` (com `errors` quando há vários problemas).
+Errors: `409 port_unavailable`, `409 backend_unavailable`, `409 conflict` (a collision between documents, naming both files), `422 invalid` (with `errors` when there is more than one problem).
 
 ```sh
 curl -s -X POST $A/api/reload
@@ -722,24 +722,24 @@ curl -s -X POST $A/api/reload
 
 ---
 
-## Histórico
+## History
 
-Com `history.expose = false`, todos os endpoints de leitura desta seção respondem `403 history_disabled`:
+With `history.expose = false`, every read endpoint in this section answers `403 history_disabled`:
 
 ```json
 {
   "error": "history_disabled",
-  "message": "o histórico está desabilitado: history.expose = false (origem: variável de ambiente GATEWAY_HISTORY_EXPOSE)",
+  "message": "the history is disabled: history.expose = false (origin: environment variable GATEWAY_HISTORY_EXPOSE)",
   "field": "history.expose",
   "env": "GATEWAY_HISTORY_EXPOSE"
 }
 ```
 
-`env` aparece quando o valor vem do ambiente e `file` quando vem de `gateway.json`.
+`env` shows up when the value comes from the environment, and `file` when it comes from `gateway.json`.
 
-### O recurso troca
+### The exchange resource
 
-É o tipo `exchange.Exchange`:
+It is the `exchange.Exchange` type:
 
 ```json
 {
@@ -764,55 +764,55 @@ Com `history.expose = false`, todos os endpoints de leitura desta seção respon
   },
   "response": {
     "headers": { "Content-Type": ["application/json"], "X-Gateway": ["route=payments; override=payments/flaky; intervention=synthesized"] },
-    "body": "eyJlcnJvciI6ImluZGlzcG9uw612ZWwifQ==",
-    "size": 26
+    "body": "eyJlcnJvciI6InVuYXZhaWxhYmxlIn0=",
+    "size": 23
   },
   "timing": { "totalMs": 2001.4, "upstreamMs": 0, "injectedMs": 2000, "gatewayMs": 1.4 }
 }
 ```
 
-- `outcome`: `upstream`, `synthesized`, `dropped` ou `gateway` (erro do próprio gateway: `404` sem rota, `502`, `504`, `501`).
-- `interventions`: o que o override fez (`synthesized`, `delayed`, `dropped`). Vazio ou ausente quando não houve intervenção.
-- `dropMode`: `hijack` (HTTP/1.1), `stream_reset` (HTTP/2) ou `abort` (HTTP/1.x sem sequestro possível), só em quedas.
-- `error`: texto do erro do upstream ou do gateway, quando houve.
-- `status`: zero numa queda.
-- `headers`: `http.Header`, ou seja, cada nome aponta uma lista de valores.
-- `body`: base64. Ausente na listagem, que devolve o resumo sem corpos.
+- `outcome`: `upstream`, `synthesized`, `dropped` or `gateway` (an error from the gateway itself: `404` with no route, `502`, `504`, `501`).
+- `interventions`: what the override did (`synthesized`, `delayed`, `dropped`). Empty or absent when there was no intervention.
+- `dropMode`: `hijack` (HTTP/1.1), `stream_reset` (HTTP/2) or `abort` (HTTP/1.x where hijacking is not possible), only on drops.
+- `error`: the text of the upstream's or the gateway's error, when there was one.
+- `status`: zero on a drop.
+- `headers`: an `http.Header`, that is, each name maps to a list of values.
+- `body`: base64. Absent from the listing, which returns the summary without bodies.
 
 ### `GET /api/exchanges`
 
-Lista em ordem cronológica inversa, da troca mais nova para a mais antiga, sem os corpos.
+Lists in reverse chronological order, newest exchange first, without the bodies.
 
-Parâmetros de query (todos opcionais e conjuntivos, espelhando `exchange.Filter`):
+Query parameters (all optional and conjunctive, mirroring `exchange.Filter`):
 
-| Parâmetro | Exemplo | Filtro |
+| Parameter | Example | Filter |
 |---|---|---|
-| `route` | `payments` | rota casada, igualdade |
-| `upstream` | `http://localhost:9001` | upstream, igualdade |
-| `override` | `payments/flaky` | override responsável, igualdade |
-| `method` | `POST` | método, sem diferenciar caixa |
-| `path` | `/charge` | path contém o texto |
-| `statusMin`, `statusMax` | `500`, `599` | faixa inclusiva de status |
-| `intervened` | `true` ou `false` | com ou sem intervenção |
-| `since`, `until` | RFC 3339 | janela `[since, until)` |
-| `limit` | `50` | tamanho da página, padrão 50 e máximo 500 |
-| `cursor` | valor de `next` | continuação da página anterior |
+| `route` | `payments` | matched route, equality |
+| `upstream` | `http://localhost:9001` | upstream, equality |
+| `override` | `payments/flaky` | the override responsible, equality |
+| `method` | `POST` | method, case-insensitive |
+| `path` | `/charge` | path contains the text |
+| `statusMin`, `statusMax` | `500`, `599` | inclusive status range |
+| `intervened` | `true` or `false` | with or without an intervention |
+| `since`, `until` | RFC 3339 | the window `[since, until)` |
+| `limit` | `50` | page size, 50 by default and 500 at most |
+| `cursor` | the value of `next` | continues the previous page |
 
-Resposta `200`:
+Answers `200`:
 
 ```json
 {
-  "items": [ { "id": "01K5E3V3C8Q2M4Z8N6P0R2T4W6", "seq": 128, "...": "resumo sem body" } ],
+  "items": [ { "id": "01K5E3V3C8Q2M4Z8N6P0R2T4W6", "seq": 128, "...": "summary without body" } ],
   "next": "eyJzZXEiOjc4fQ",
   "recording": true,
   "backend": "memory"
 }
 ```
 
-- `next` vazio indica que não há mais páginas.
-- `recording: false` indica que o registro está desligado (`history.record = false`). A lista pode estar vazia por isso, e o painel diz isso.
+- An empty `next` means there are no more pages.
+- `recording: false` means recording is off (`history.record = false`). The list may be empty just because of that, and the panel says so.
 
-Erros: `400 bad_request` (parâmetro inválido, com `field`), `400 bad_cursor`, `403 history_disabled`.
+Errors: `400 bad_request` (invalid parameter, with `field`), `400 bad_cursor`, `403 history_disabled`.
 
 ```sh
 curl -s "$A/api/exchanges?route=payments&statusMin=500&statusMax=599&intervened=true&limit=50"
@@ -821,17 +821,17 @@ curl -s "$A/api/exchanges?cursor=eyJzZXEiOjc4fQ"
 
 ### `GET /api/exchanges/{id}`
 
-Troca completa, com corpos. Erros: `403`, `404 not_found`.
+The full exchange, bodies included. Errors: `403`, `404 not_found`.
 
 ```sh
 curl -s $A/api/exchanges/01K5E3V3C8Q2M4Z8N6P0R2T4W6
 ```
 
-### `GET /api/exchanges/{id}/older` e `GET /api/exchanges/{id}/newer`
+### `GET /api/exchanges/{id}/older` and `GET /api/exchanges/{id}/newer`
 
-Navegação item a item: devolve a troca completa imediatamente mais antiga (`older`) ou mais nova (`newer`) que `{id}`, entre as que satisfazem os filtros da query. Os filtros são os mesmos de `GET /api/exchanges`, exceto `limit` e `cursor`. A troca `{id}` não precisa satisfazer o filtro.
+Item-by-item navigation: returns the full exchange immediately older (`older`) or newer (`newer`) than `{id}`, among those that satisfy the filters in the query. The filters are the same as for `GET /api/exchanges`, except `limit` and `cursor`. Exchange `{id}` itself does not have to satisfy the filter.
 
-Erros: `403`, `404 not_found` (`{id}` inexistente), `404 no_more` (fim do histórico naquela direção, com `"message": "não há trocas mais antigas com esse filtro"`).
+Errors: `403`, `404 not_found` (no such `{id}`), `404 no_more` (the end of the history in that direction, with `"message": "no older exchange matches this filter"`).
 
 ```sh
 curl -s "$A/api/exchanges/01K5E3V3C8Q2M4Z8N6P0R2T4W6/older?statusMin=500&statusMax=599"
@@ -840,7 +840,7 @@ curl -s "$A/api/exchanges/01K5E3V3C8Q2M4Z8N6P0R2T4W6/newer?route=payments"
 
 ### `DELETE /api/exchanges`
 
-Esvazia o histórico no backend em uso. As trocas seguintes voltam a ser registradas normalmente. Funciona também com a exposição desligada, porque não devolve dados. Resposta `204` e evento `history` no SSE.
+Empties the history in the backend in use. The exchanges that follow are recorded as usual. It works with exposure turned off too, because it returns no data. Answers `204` and a `history` event on the SSE stream.
 
 ```sh
 curl -s -X DELETE $A/api/exchanges
@@ -852,7 +852,7 @@ curl -s -X DELETE $A/api/exchanges
 
 ### `GET /api/upstreams`
 
-Disponibilidade recente de cada upstream, para o mapa. O gateway não sonda os upstreams: o estado vem das últimas tentativas de encaminhamento, contadas no caminho da requisição e independentes do registro do histórico.
+Recent availability of each upstream, for the map. The gateway does not probe the upstreams: the state comes from the most recent forwarding attempts, counted on the request path and independent of history recording.
 
 ```json
 {
@@ -879,11 +879,11 @@ Disponibilidade recente de cada upstream, para o mapa. O gateway não sonda os u
 }
 ```
 
-- `status`: `down` quando as três tentativas mais recentes ficaram sem resposta do upstream (conexão recusada, tempo limite de conexão, ou o `timeout` da rota esgotado antes da resposta, que o gateway devolve como `504`); `unknown` quando não houve nenhuma tentativa desde o início ou desde que o upstream passou a ser declarado (uma recarga ou escrita que tira o upstream de todas as rotas descarta o que foi contado para ele); `up` nos demais casos. Com menos de três tentativas o status é `up`, e as falhas aparecem em `recent`.
-- `recent` cobre as últimas 20 tentativas.
-- Uma resposta `5xx` do próprio upstream, inclusive um `504` escrito por ele, **não** o torna `down`: ele respondeu. A desistência do cliente também não conta como tentativa.
-- A ordem dos itens é a das rotas na precedência, e `routes` lista as rotas que apontam para o upstream.
-- Rotas sem `upstream` não aparecem aqui.
+- `status`: `down` when the three most recent attempts got no response from the upstream (connection refused, connection timeout, or the route's `timeout` running out before the response, which the gateway returns as a `504`); `unknown` when there has been no attempt since startup or since the upstream was first declared (a reload or write that takes the upstream out of every route discards what was counted for it); `up` otherwise. With fewer than three attempts the status is `up`, and the failures show up in `recent`.
+- `recent` covers the last 20 attempts.
+- A `5xx` from the upstream itself, including a `504` written by it, does **not** make it `down`: it answered. A client giving up does not count as an attempt either.
+- The items come in route precedence order, and `routes` lists the routes pointing at that upstream.
+- Routes with no `upstream` do not show up here.
 
 ```sh
 curl -s $A/api/upstreams
@@ -891,42 +891,42 @@ curl -s $A/api/upstreams
 
 ---
 
-## Tempo real
+## Live
 
 ### `GET /api/events`
 
-Fluxo `text/event-stream`. O painel mantém uma conexão aberta e reage aos eventos. Cada evento tem `event:` e `data:` com um JSON numa linha. O servidor não reenvia eventos perdidos: ao reconectar, recebe `hello` e o cliente recarrega por REST o que exibe.
+A `text/event-stream` stream. The panel keeps one connection open and reacts to the events. Each event has an `event:` and a `data:` holding JSON on a single line. The server does not resend missed events: on reconnect the client gets `hello` and reloads what it displays over REST.
 
-| `event` | Quando | `data` |
+| `event` | When | `data` |
 |---|---|---|
-| `hello` | logo ao conectar | o mesmo corpo de `GET /api/status` |
-| `exchanges` | no máximo uma vez por segundo, se houve trocas novas | `{ "items": [resumo...], "dropped": 0 }` |
-| `config` | após qualquer escrita, recarga ou aprendizado | `{ "cause": "api" \| "reload" \| "learning", "routes": ["payments"], "settings": ["seed"] }` |
-| `overrides` | quando o estado vivo muda de forma não contínua (surgiu, sumiu, ligou, desligou, expirou, reativou, aplicou), no máximo uma vez por segundo | o mesmo corpo de `GET /api/overrides/state` |
-| `upstreams` | quando o `status` de algum upstream muda, conferido no máximo uma vez por segundo; as contagens de `recent` mudarem não basta | o mesmo corpo de `GET /api/upstreams` |
-| `history` | limpeza ou troca de backend | `{ "cause": "cleared" \| "backend", "backend": "sqlite" }` |
-| `heartbeat` | a cada 15 s | `{ "now": "2026-09-18T15:05:15Z" }` |
+| `hello` | right after connecting | the same body as `GET /api/status` |
+| `exchanges` | at most once a second, if there were new exchanges | `{ "items": [summary...], "dropped": 0 }` |
+| `config` | after any write, reload or learning | `{ "cause": "api" \| "reload" \| "learning", "routes": ["payments"], "settings": ["seed"] }` |
+| `overrides` | when live state changes discretely (appeared, disappeared, turned on, turned off, expired, reactivated, applied), at most once a second | the same body as `GET /api/overrides/state` |
+| `upstreams` | when some upstream's `status` changes, checked at most once a second; the `recent` counts changing is not enough | the same body as `GET /api/upstreams` |
+| `history` | cleared or backend switched | `{ "cause": "cleared" \| "backend", "backend": "sqlite" }` |
+| `heartbeat` | every 15 s | `{ "now": "2026-09-18T15:05:15Z" }` |
 
-- `exchanges.items` vem na ordem de registro (mais antiga primeiro), sem corpos, no máximo 200 por evento; num intervalo com mais trocas, ficam as 200 mais novas. `dropped` conta as trocas do intervalo que ficaram de fora, inclusive as perdidas por um cliente que não leu a tempo.
-- Com a exposição do histórico desligada, `exchanges` não é emitido.
-- `config.routes` e `config.settings` são sempre listas (vazias quando nada mudou naquele lado). Uma alteração pela API que não muda nada não emite evento; a recarga sempre emite.
-- `overrides` não sai só porque `ttlRemainingMs` diminuiu: o painel decrementa o restante localmente, a partir de `now`.
-- O cliente considera a conexão perdida se passar 45 s sem nenhum evento, porque o `heartbeat` garante ao menos um a cada 15 s.
+- `exchanges.items` comes in recording order (oldest first), without bodies, at most 200 per event; in an interval with more exchanges, the newest 200 are the ones kept. `dropped` counts the exchanges from that interval that were left out, including those lost to a client that did not read in time.
+- With history exposure off, `exchanges` is not emitted.
+- `config.routes` and `config.settings` are always lists (empty when nothing changed on that side). A change through the API that changes nothing emits no event; a reload always emits one.
+- `overrides` does not go out just because `ttlRemainingMs` went down: the panel counts the remainder down locally, starting from `now`.
+- The client treats the connection as lost after 45 s with no event at all, since `heartbeat` guarantees one every 15 s.
 
-Garantias do servidor:
+What the server guarantees:
 
-- Um cliente lento nunca atrasa o proxy. As trocas chegam ao fluxo por uma fila que nunca espera por quem assina: o que não cabe é descartado e contado em `dropped`. Cada escrita no fluxo tem prazo de 10 s; um cliente que não lê nesse prazo é desconectado e reconecta quando puder.
-- Uma conexão sem tráfego continua aberta indefinidamente, mantida pelo `heartbeat`.
-- O fluxo termina quando a porta de administração sai de serviço (troca de porta ou encerramento do processo), para não segurar o `Shutdown` gracioso. O cliente reconecta na porta nova.
+- A slow client never slows the proxy down. Exchanges reach the stream through a queue that never waits on a subscriber: what does not fit is dropped and counted in `dropped`. Each write to the stream has a 10 s deadline; a client that does not read within it is disconnected and reconnects when it can.
+- A connection with no traffic stays open indefinitely, kept alive by the `heartbeat`.
+- The stream ends when the admin port goes out of service (a port switch or the process shutting down), so it does not hold the graceful `Shutdown` back. The client reconnects on the new port.
 
-Exemplo do fluxo:
+An example of the stream:
 
 ```text
 event: hello
 data: {"version":"0.1.0","schemaVersion":1,"startedAt":"2026-09-18T15:00:00Z","configPath":"gateway.json","routesDir":"routes","ports":{"traffic":8080,"admin":8081},"history":{"backend":"memory","record":true,"expose":true},"learning":{"enabled":false},"routes":3}
 
 event: exchanges
-data: {"items":[{"id":"01K5E3V3C8Q2M4Z8N6P0R2T4W6","seq":128,"start":"2026-09-18T15:05:10.050Z","method":"POST","host":"localhost:8080","path":"/api/payments/charge","route":"payments","override":"payments/flaky","interventions":["synthesized"],"outcome":"synthesized","status":503,"request":{"size":14},"response":{"size":26},"timing":{"totalMs":2001.4,"upstreamMs":0,"injectedMs":2000,"gatewayMs":1.4}}],"dropped":0}
+data: {"items":[{"id":"01K5E3V3C8Q2M4Z8N6P0R2T4W6","seq":128,"start":"2026-09-18T15:05:10.050Z","method":"POST","host":"localhost:8080","path":"/api/payments/charge","route":"payments","override":"payments/flaky","interventions":["synthesized"],"outcome":"synthesized","status":503,"request":{"size":14},"response":{"size":23},"timing":{"totalMs":2001.4,"upstreamMs":0,"injectedMs":2000,"gatewayMs":1.4}}],"dropped":0}
 
 event: heartbeat
 data: {"now":"2026-09-18T15:05:15Z"}
@@ -938,16 +938,16 @@ curl -sN $A/api/events
 
 ---
 
-## Paridade com os arquivos
+## Parity with the files
 
-| No arquivo | Na API |
+| In the file | In the API |
 |---|---|
-| criar `routes/x.yaml` | `POST /api/routes` ou `PUT /api/routes/x/document` |
-| editar um campo da rota | `PATCH /api/routes/x` |
-| editar o YAML à mão | `PUT /api/routes/x/document` |
-| apagar `routes/x.yaml` | `DELETE /api/routes/x` |
-| acrescentar, editar ou remover um override | `POST`, `PATCH` e `DELETE /api/routes/x/overrides[/y]` |
-| `enabled: false` num override | `PATCH ... {"enabled": false}` |
-| editar `gateway.json` | `PATCH /api/settings` ou `PUT /api/settings/document` |
+| create `routes/x.yaml` | `POST /api/routes` or `PUT /api/routes/x/document` |
+| edit a field of the route | `PATCH /api/routes/x` |
+| edit the YAML by hand | `PUT /api/routes/x/document` |
+| delete `routes/x.yaml` | `DELETE /api/routes/x` |
+| add, edit or remove an override | `POST`, `PATCH` and `DELETE /api/routes/x/overrides[/y]` |
+| `enabled: false` on an override | `PATCH ... {"enabled": false}` |
+| edit `gateway.json` | `PATCH /api/settings` or `PUT /api/settings/document` |
 | `learning.enabled` | `PUT /api/learning` |
-| editar os arquivos fora do painel | `POST /api/reload` |
+| edit the files outside the panel | `POST /api/reload` |

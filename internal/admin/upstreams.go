@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gamerjp64/gateway/internal/upstream"
+	"github.com/gamerjp64/devgateway/internal/upstream"
 )
 
 func (h *Handler) upstreamRoutes() {
@@ -13,7 +13,8 @@ func (h *Handler) upstreamRoutes() {
 	})
 }
 
-// upstreamsBody é o corpo de GET /api/upstreams e do evento upstreams.
+// upstreamsBody is the body of GET /api/upstreams and of the upstreams
+// event.
 type upstreamsBody struct {
 	Items []upstream.Item `json:"items"`
 }
@@ -22,14 +23,14 @@ func (h *Handler) upstreamsReport() upstreamsBody {
 	return upstreamsBody{Items: h.upstreams.Report(h.live.Load().Routes)}
 }
 
-// listUpstreams devolve a disponibilidade recente de cada upstream declarado.
+// listUpstreams returns the recent availability of every declared upstream.
 func (h *Handler) listUpstreams(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.upstreamsReport())
 }
 
-// upstreamsKey resume o que o evento upstreams anuncia: o status de cada
-// upstream. As contagens mudam a cada requisição e não geram evento; o
-// painel as relê junto com o resto quando recebe um.
+// upstreamsKey summarizes what the upstreams event announces: the status
+// of each upstream. The counters change on every request and raise no
+// event; the panel re-reads them along with the rest when one arrives.
 func upstreamsKey(b upstreamsBody) string {
 	var s strings.Builder
 	for _, it := range b.Items {

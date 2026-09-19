@@ -8,15 +8,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/exchange"
 )
 
-// Record é o registro de uma requisição em curso. É usado pela goroutine que
-// atende a requisição; só o corpo da requisição, lido também pelo transporte
-// do upstream, tem proteção própria.
+// Record is the record of a request in flight. It is used by the goroutine
+// that serves the request; only the request body, which the upstream
+// transport also reads, has protection of its own.
 type Record struct {
 	rec *Recorder
-	// enabled liga a observação da troca; store, a gravação no histórico.
+	// enabled turns on observing the exchange; store, writing it to the
+	// history.
 	enabled, store bool
 	seq            uint64
 	start          time.Time
@@ -28,42 +29,42 @@ type Record struct {
 
 	ex exchange.Exchange
 
-	// upgradeStatus e upgradeHeader guardam a resposta de um upgrade de
-	// protocolo, que o ReverseProxy escreve direto na conexão sequestrada,
-	// sem passar pelo writer da captura.
+	// upgradeStatus and upgradeHeader hold the response of a protocol
+	// upgrade, which the ReverseProxy writes straight to the hijacked
+	// connection, without going through the capture's writer.
 	upgradeStatus int
 	upgradeHeader http.Header
 
 	upStart, upEnd time.Time
-	// injected é o atraso injetado medido; injectedUp é a parte dele que
-	// aconteceu dentro da janela do upstream e dela é descontada.
+	// injected is the measured injected delay; injectedUp is the part of it
+	// that happened inside the upstream window and is subtracted from it.
 	injected, injectedUp time.Duration
 	finished             bool
 }
 
-// Seq é o número de sequência de chegada da requisição no processo.
+// Seq is the request's arrival sequence number within the process.
 func (rec *Record) Seq() uint64 { return rec.seq }
 
-// Enabled informa se esta requisição está sendo registrada no histórico.
+// Enabled reports whether this request is being recorded in the history.
 func (rec *Record) Enabled() bool { return rec.store }
 
-// Writer é o ResponseWriter a usar daqui em diante: com o registro ligado,
-// ele observa status, cabeçalhos e corpo sem alterar o que chega ao cliente.
+// Writer is the ResponseWriter to use from here on: with recording on, it
+// observes status, headers and body without changing what reaches the client.
 func (rec *Record) Writer() http.ResponseWriter { return rec.w }
 
-// Request é a requisição a usar daqui em diante: com o registro ligado, o
-// corpo é observado à medida que é lido, e chega inteiro a quem o ler.
+// Request is the request to use from here on: with recording on, the body is
+// observed as it is read, and reaches whoever reads it in full.
 func (rec *Record) Request() *http.Request { return rec.req }
 
-// SetRoute anota a rota casada e o upstream de destino.
+// SetRoute notes the matched route and the destination upstream.
 func (rec *Record) SetRoute(route, upstream string) {
 	rec.ex.Route = route
 	rec.ex.Upstream = upstream
 }
 
-// Intervene anota o override responsável ("rota/override") e o que ele fez:
-// synthesized, delayed ou dropped. Sintetizar ou derrubar define o resultado
-// da troca.
+// Intervene notes the override responsible ("route/override") and what it
+// did: synthesized, delayed or dropped. Synthesizing or dropping sets the
+// exchange's outcome.
 func (rec *Record) Intervene(override, kind string) {
 	if override != "" {
 		rec.ex.Override = override
@@ -79,25 +80,26 @@ func (rec *Record) Intervene(override, kind string) {
 	}
 }
 
-// Dropped anota uma queda de conexão e como ela aconteceu (hijack ou
-// stream_reset). A troca fica sem status de resposta.
+// Dropped notes a dropped connection and how it happened (hijack or
+// stream_reset). The exchange is left with no response status.
 func (rec *Record) Dropped(override, mode string) {
 	rec.Intervene(override, "dropped")
 	rec.ex.DropMode = mode
 }
 
-// Fail marca a troca como resposta de erro do próprio gateway (sem rota,
-// sem upstream, upstream indisponível ou lento), com a descrição da falha.
+// Fail marks the exchange as an error response from the gateway itself (no
+// route, no upstream, upstream unavailable or slow), with the description of
+// the failure.
 func (rec *Record) Fail(msg string) {
 	rec.ex.Outcome = exchange.OutcomeGateway
 	rec.ex.Error = msg
 }
 
-// Abort anota que a transferência foi interrompida depois de começar, sem
-// mudar quem produziu a resposta.
+// Abort notes that the transfer was interrupted after it had started, without
+// changing who produced the response.
 func (rec *Record) Abort(msg string) {
-	// Uma queda provocada por override encerra o handler pelo mesmo pânico
-	// de uma transferência interrompida, mas não é falha.
+	// A drop caused by an override ends the handler through the same panic as
+	// an interrupted transfer, but it is not a failure.
 	if rec.ex.Outcome == exchange.OutcomeDropped {
 		return
 	}
@@ -106,12 +108,12 @@ func (rec *Record) Abort(msg string) {
 	}
 }
 
-// Upgrade anota a resposta de um upgrade de protocolo (101 Switching
-// Protocols, como no WebSocket). Nesse caminho o ReverseProxy sequestra a
-// conexão e escreve a resposta nela sem chamar o WriteHeader do writer da
-// captura; sem esta anotação a troca ficaria com status 200 e sem os
-// cabeçalhos. Uma resposta escrita pelo writer depois disso (a falha do
-// upgrade, por exemplo) prevalece.
+// Upgrade notes the response of a protocol upgrade (101 Switching Protocols,
+// as in WebSocket). On that path the ReverseProxy hijacks the connection and
+// writes the response to it without calling the capture writer's WriteHeader;
+// without this note the exchange would end up with status 200 and no headers.
+// A response written by the writer after that (the upgrade's failure, for
+// instance) wins.
 func (rec *Record) Upgrade(status int, h http.Header) {
 	if !rec.enabled {
 		return
@@ -120,27 +122,27 @@ func (rec *Record) Upgrade(status int, h http.Header) {
 	rec.upgradeHeader = sentHeader(h)
 }
 
-// UpstreamStarted marca o envio da requisição ao upstream.
+// UpstreamStarted marks the request being sent to the upstream.
 func (rec *Record) UpstreamStarted() {
 	if rec.upStart.IsZero() {
 		rec.upStart = rec.rec.now()
 	}
 }
 
-// UpstreamDone marca o fim do contato com o upstream: o fim do corpo da
-// resposta ou a falha. Sem UpstreamStarted antes, não tem efeito. Com o
-// corpo em streaming, o fim do corpo inclui a espera por um cliente lento
-// (ver exchange.Timing).
+// UpstreamDone marks the end of the contact with the upstream: the end of the
+// response body or the failure. With no UpstreamStarted before it, it has no
+// effect. With a streaming body, the end of the body includes waiting on a
+// slow client (see exchange.Timing).
 func (rec *Record) UpstreamDone() {
 	if !rec.upStart.IsZero() && rec.upEnd.IsZero() {
 		rec.upEnd = rec.rec.now()
 	}
 }
 
-// Delay é o ponto de injeção de atraso: chamado entre a resposta pronta e a
-// escrita ao cliente, espera d e contabiliza o tempo realmente esperado como
-// injetado. Com d zero não faz nada. Devolve o erro do contexto se o cliente
-// desistir durante a espera.
+// Delay is the delay injection point: called between the response being ready
+// and the write to the client, it waits d and counts the time actually waited
+// as injected. With d zero it does nothing. Returns the context's error if
+// the client gives up during the wait.
 func (rec *Record) Delay(ctx context.Context, override string, d time.Duration) error {
 	if d <= 0 {
 		return nil
@@ -163,16 +165,16 @@ func (rec *Record) Delay(ctx context.Context, override string, d time.Duration) 
 	return err
 }
 
-// DrainMaxBytes limita quanto DrainRequest lê além do limite de captura.
-// Um corpo maior que isso fica com o tamanho declarado em Content-Length,
-// quando há, ou com o que foi lido, e marcado como truncado.
+// DrainMaxBytes caps how much DrainRequest reads beyond the capture limit. A
+// body larger than that ends up with the size declared in Content-Length,
+// when there is one, or with whatever was read, and marked as truncated.
 const DrainMaxBytes = 64 << 20
 
-// DrainRequest lê o corpo da requisição até o fim quando ninguém vai
-// encaminhá-lo (resposta do próprio gateway), guardando só o começo, até o
-// limite de captura, e contando o tamanho real, inclusive de um corpo sem
-// Content-Length. Não deve ser chamado depois de a requisição ir ao
-// upstream.
+// DrainRequest reads the request body to the end when no one is going to
+// forward it (a response from the gateway itself), keeping only the
+// beginning, up to the capture limit, and counting the real size, including
+// that of a body with no Content-Length. It must not be called after the
+// request has gone to the upstream.
 func (rec *Record) DrainRequest() {
 	if rec.body == nil {
 		return
@@ -185,9 +187,9 @@ func (rec *Record) DrainRequest() {
 	}
 }
 
-// Finish fecha o registro com os tempos decompostos e, com o registro ligado,
-// entrega a troca à gravação, sem esperar por ela. Chamadas repetidas não têm
-// efeito.
+// Finish closes the record with the broken-down timings and, with recording
+// on, hands the exchange over to be written, without waiting for it. Repeated
+// calls have no effect.
 func (rec *Record) Finish() {
 	if rec.finished {
 		return
@@ -226,7 +228,7 @@ func (rec *Record) Finish() {
 	case rec.upgradeStatus != 0:
 		e.Status, header = rec.upgradeStatus, rec.upgradeHeader
 	case e.Error == "":
-		// O handler terminou sem escrever: o servidor responde 200 vazio.
+		// The handler ended without writing: the server answers an empty 200.
 		e.Status = http.StatusOK
 	}
 	e.Response = cw.tap.message(header)
@@ -235,9 +237,9 @@ func (rec *Record) Finish() {
 	}
 }
 
-// Exchange devolve a troca observada, depois de Finish. Falso quando a troca
-// não foi observada. A cópia compartilha cabeçalhos e corpos com a troca
-// entregue à gravação e deve ser tratada como somente leitura.
+// Exchange returns the observed exchange, after Finish. False when the
+// exchange was not observed. The copy shares headers and bodies with the
+// exchange handed over to be written and must be treated as read-only.
 func (rec *Record) Exchange() (exchange.Exchange, bool) {
 	if !rec.enabled || !rec.finished {
 		return exchange.Exchange{}, false
@@ -245,7 +247,8 @@ func (rec *Record) Exchange() (exchange.Exchange, bool) {
 	return rec.ex, true
 }
 
-// tap guarda o começo de um corpo, até limit bytes, e conta o tamanho real.
+// tap keeps the beginning of a body, up to limit bytes, and counts the real
+// size.
 type tap struct {
 	limit int
 	buf   []byte
@@ -268,9 +271,9 @@ func (t *tap) message(h http.Header) exchange.Message {
 	}
 }
 
-// bodyTap observa o corpo da requisição enquanto ele é lido. O transporte do
-// upstream pode ler numa goroutine própria, inclusive depois que o
-// ReverseProxy retorna, por isso o estado é protegido.
+// bodyTap observes the request body as it is read. The upstream transport may
+// read it in a goroutine of its own, including after the ReverseProxy
+// returns, which is why the state is guarded.
 type bodyTap struct {
 	rc  io.ReadCloser
 	mu  sync.Mutex
@@ -291,9 +294,9 @@ func (b *bodyTap) Read(p []byte) (int, error) {
 
 func (b *bodyTap) Close() error { return b.rc.Close() }
 
-// message monta o lado da requisição. Um corpo que não foi lido até o fim
-// tem o tamanho declarado em Content-Length, quando há, e fica marcado como
-// truncado, porque a captura não viu tudo.
+// message builds the request side. A body that was not read to the end gets
+// the size declared in Content-Length, when there is one, and is marked as
+// truncated, because the capture did not see all of it.
 func (b *bodyTap) message(contentLength int64, h http.Header) exchange.Message {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -306,9 +309,9 @@ func (b *bodyTap) message(contentLength int64, h http.Header) exchange.Message {
 	return m
 }
 
-// writer observa a resposta a caminho do cliente. Implementa Flush e Unwrap
-// para que o streaming continue incremental e para que o ReverseProxy ainda
-// alcance o Hijacker do servidor num upgrade de protocolo.
+// writer observes the response on its way to the client. It implements Flush
+// and Unwrap so that streaming stays incremental and so that the ReverseProxy
+// can still reach the server's Hijacker on a protocol upgrade.
 type writer struct {
 	http.ResponseWriter
 	status int
@@ -317,7 +320,8 @@ type writer struct {
 }
 
 func (w *writer) WriteHeader(code int) {
-	// As respostas informativas passam sem fixar o status; 101 é final.
+	// Informational responses go through without fixing the status; 101 is
+	// final.
 	if code >= 100 && code < 200 && code != http.StatusSwitchingProtocols {
 		w.ResponseWriter.WriteHeader(code)
 		return
@@ -339,20 +343,20 @@ func (w *writer) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// FlushError repassa o Flush ao ResponseWriter do servidor.
+// FlushError passes the Flush on to the server's ResponseWriter.
 func (w *writer) FlushError() error {
 	return http.NewResponseController(w.ResponseWriter).Flush()
 }
 
-// Flush atende a quem usa a interface http.Flusher diretamente.
+// Flush serves whoever uses the http.Flusher interface directly.
 func (w *writer) Flush() { w.FlushError() }
 
 func (w *writer) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
-// sentHeader copia os cabeçalhos como vão ao cliente. Uma chave com lista
-// vazia não é enviada — o net/http a usa para suprimir um cabeçalho
-// automático, como o Content-Type deduzido do corpo — e por isso fica de
-// fora da captura, em vez de aparecer como null na API.
+// sentHeader copies the headers as they go to the client. A key with an empty
+// list is not sent — net/http uses it to suppress an automatic header, such
+// as the Content-Type guessed from the body — and so it is left out of the
+// capture, instead of showing up as null in the API.
 func sentHeader(h http.Header) http.Header {
 	out := make(http.Header, len(h))
 	for k, v := range h {

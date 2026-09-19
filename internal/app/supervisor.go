@@ -11,49 +11,47 @@ import (
 	"time"
 )
 
-// port é uma porta atendida pelo processo — a de tráfego ou a de
-// administração — sob o supervisor de listeners, fora do snapshot. A troca a
-// quente abre o listener novo primeiro; só se ele abrir o servidor novo
-// passa a atender e o antigo recebe Shutdown, que para de aceitar conexões e
-// deixa as requisições em curso terminarem. Se o listener novo falha, nada
-// muda.
+// port is a port the process serves — the traffic one or the admin one —
+// under the listener supervisor, outside the snapshot. A live swap opens the
+// new listener first; only if it opens does the new server start serving and
+// the old one get a Shutdown, which stops accepting connections and lets the
+// requests in flight finish. If the new listener fails, nothing changes.
 type port struct {
-	// name nomeia a porta nas mensagens ("tráfego", "administração").
+	// name names the port in messages ("traffic", "admin").
 	name string
-	// key é a chave da configuração do processo ("ports.traffic").
+	// key is the process configuration key ("ports.traffic").
 	key     string
 	handler http.Handler
-	// baseContext, quando presente, monta o contexto base das requisições
-	// do servidor a partir do sinal de encerramento dele, para que conexões
-	// longas (o fluxo de eventos) terminem quando ele sai de serviço.
+	// baseContext, when present, builds the base context of the server's
+	// requests from its shutdown signal, so that long-lived connections (the
+	// event stream) end when it goes out of service.
 	baseContext func(stop <-chan struct{}) context.Context
-	// fatal recebe o erro de um servidor que parou de atender por conta
-	// própria.
+	// fatal receives the error of a server that stopped serving on its own.
 	fatal func(error)
 
 	mu  sync.Mutex
 	cur *binding
-	// retiring são os servidores já substituídos que ainda concluem
-	// requisições em curso.
+	// retiring are the servers already replaced that are still finishing
+	// requests in flight.
 	retiring map[*binding]struct{}
-	// closing marca que o encerramento da porta começou. Uma troca a quente
-	// ainda em curso (um PATCH /api/settings que o encerramento aguarda) não
-	// publica mais o binding novo, que ficaria escutando fora do alcance do
-	// Shutdown.
+	// closing marks that the port's shutdown has begun. A live swap still in
+	// progress (a PATCH /api/settings that the shutdown is waiting on) no
+	// longer publishes the new binding, which would end up listening beyond
+	// Shutdown's reach.
 	closing bool
 }
 
-// binding é um listener aberto e o servidor que o atende.
+// binding is an open listener and the server that serves it.
 type binding struct {
 	ln   net.Listener
 	srv  *http.Server
 	stop chan struct{}
 	once sync.Once
-	// done fecha quando o Shutdown do servidor conclui.
+	// done closes when the server's Shutdown completes.
 	done chan struct{}
 }
 
-// open abre o listener da porta dada, sem ainda atendê-lo.
+// open opens the listener for the given port, without serving it yet.
 func (p *port) open(n int) (*binding, error) {
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(n))
 	if err != nil {
@@ -69,16 +67,18 @@ func (p *port) open(n int) (*binding, error) {
 	return b, nil
 }
 
-// signal avisa as conexões longas de que o servidor sai de serviço.
+// signal tells the long-lived connections that the server is going out of
+// service.
 func (b *binding) signal() { b.once.Do(func() { close(b.stop) }) }
 
-// abort fecha o listener de uma troca que não será feita.
+// abort closes the listener of a swap that will not happen.
 func (b *binding) abort() { b.ln.Close() }
 
-// commit passa a atender pelo binding dado e tira de serviço o anterior, cujo
-// Shutdown conclui as requisições em curso em segundo plano. Se o
-// encerramento da porta já começou, o binding é descartado e commit devolve
-// false: a porta segue na atual até sair de serviço.
+// commit starts serving through the given binding and takes the previous one
+// out of service; its Shutdown finishes the requests in flight in the
+// background. If the port's shutdown has already begun, the binding is
+// discarded and commit returns false: the port stays on the current one
+// until it goes out of service.
 func (p *port) commit(b *binding) bool {
 	p.mu.Lock()
 	if p.closing {
@@ -111,18 +111,18 @@ func (p *port) commit(b *binding) bool {
 
 func (p *port) serve(b *binding) {
 	if err := b.srv.Serve(b.ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		p.fatal(fmt.Errorf("porta de %s: %w", p.name, err))
+		p.fatal(fmt.Errorf("%s port: %w", p.name, err))
 	}
 }
 
-// addr é o endereço em que a porta atende agora.
+// addr is the address the port is serving on right now.
 func (p *port) addr() net.Addr {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.cur.ln.Addr()
 }
 
-// number é o número da porta em que ela atende agora.
+// number is the number of the port it is serving on right now.
 func (p *port) number() int {
 	if a, ok := p.addr().(*net.TCPAddr); ok {
 		return a.Port
@@ -130,10 +130,10 @@ func (p *port) number() int {
 	return 0
 }
 
-// shutdown encerra o servidor em uso e os que ainda concluem requisições,
-// aguardando as requisições em curso até o prazo de ctx. Passado o prazo, as
-// conexões restantes são fechadas. Nenhuma troca a quente é feita depois de
-// o encerramento começar.
+// shutdown closes the server in use and the ones still finishing requests,
+// waiting for the requests in flight up to ctx's deadline. Past the
+// deadline, the remaining connections are closed. No live swap happens once
+// the shutdown has begun.
 func (p *port) shutdown(ctx context.Context) error {
 	p.mu.Lock()
 	p.closing = true
@@ -149,7 +149,7 @@ func (p *port) shutdown(ctx context.Context) error {
 			b.signal()
 			if err := b.srv.Shutdown(ctx); err != nil {
 				b.srv.Close()
-				errs[i] = fmt.Errorf("porta de %s: %w", p.name, err)
+				errs[i] = fmt.Errorf("%s port: %w", p.name, err)
 			}
 		})
 	}

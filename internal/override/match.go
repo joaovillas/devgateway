@@ -1,8 +1,7 @@
-// Package override decide se um override da rota intervém numa requisição:
-// seleciona o override ligado mais específico que casa (passo 3 do caminho da
-// requisição), sorteia aplicação, queda e atraso de uma fonte de
-// aleatoriedade própria da requisição (passo 4) e prepara a resposta
-// declarada.
+// Package override decides whether one of the route's overrides steps into a
+// request: it selects the most specific enabled override that matches (step 3
+// of the request path), draws application, drop and delay from a randomness
+// source of the request's own (step 4) and prepares the declared response.
 package override
 
 import (
@@ -12,16 +11,16 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config"
 )
 
-// MaxBodyMatchBytes limita quanto do corpo da requisição é lido para avaliar
-// um critério de corpo. Um corpo maior não casa com nenhum critério de corpo,
-// e segue inteiro para o upstream do mesmo jeito.
+// MaxBodyMatchBytes caps how much of the request body is read to evaluate a
+// body criterion. A larger body matches no body criterion, and is forwarded
+// to the upstream in full all the same.
 const MaxBodyMatchBytes = 8 << 20
 
-// Request é a requisição sob avaliação. A query é interpretada e o corpo é
-// lido só quando algum critério precisa deles, uma única vez.
+// Request is the request under evaluation. The query is parsed and the body
+// is read only when some criterion needs them, and only once.
 type Request struct {
 	r *http.Request
 
@@ -29,17 +28,17 @@ type Request struct {
 
 	bodyRead bool
 	body     []byte
-	// bodyOK informa que o corpo foi lido inteiro, dentro do limite.
+	// bodyOK reports that the body was read in full, within the limit.
 	bodyOK bool
 }
 
-// NewRequest prepara a avaliação da requisição.
+// NewRequest prepares the request for evaluation.
 func NewRequest(r *http.Request) *Request { return &Request{r: r} }
 
-// Request devolve a requisição a usar daqui em diante. Se o corpo foi lido
-// para casar, ela carrega um corpo que entrega de novo exatamente os mesmos
-// bytes, seguidos do que ainda não havia sido lido, para que o upstream o
-// receba íntegro.
+// Request returns the request to use from here on. If the body was read for
+// matching, it carries a body that hands back exactly the same bytes again,
+// followed by whatever had not been read yet, so that the upstream receives
+// it intact.
 func (q *Request) Request() *http.Request {
 	if !q.bodyRead || q.r.Body == nil || q.r.Body == http.NoBody {
 		return q.r
@@ -49,8 +48,8 @@ func (q *Request) Request() *http.Request {
 	return &r2
 }
 
-// replayBody devolve os bytes já lidos e depois o restante do corpo original,
-// que é quem se fecha.
+// replayBody hands back the bytes already read and then the rest of the
+// original body, which is the one that gets closed.
 type replayBody struct {
 	io.Reader
 	c io.Closer
@@ -65,9 +64,9 @@ func (q *Request) queryValues() url.Values {
 	return q.query
 }
 
-// readBody lê o corpo até o limite. Um corpo acima do limite ou uma falha de
-// leitura deixam bodyOK falso: nenhum critério de corpo casa, e o que foi lido
-// é devolvido ao encaminhamento por Request.
+// readBody reads the body up to the limit. A body over the limit or a read
+// failure leaves bodyOK false: no body criterion matches, and what was read
+// is handed back to forwarding by Request.
 func (q *Request) readBody() ([]byte, bool) {
 	if q.bodyRead {
 		return q.body, q.bodyOK
@@ -81,25 +80,26 @@ func (q *Request) readBody() ([]byte, bool) {
 	q.body = b
 	q.bodyOK = err == nil && len(b) <= MaxBodyMatchBytes
 	if err != nil && !errors.Is(err, io.EOF) {
-		// Quem encaminhar lerá o restante e observará a mesma falha.
+		// Whoever forwards it will read the rest and hit the same failure.
 		q.bodyOK = false
 	}
 	return q.body, q.bodyOK
 }
 
-// Select devolve o override que vale para a requisição: entre os ligados que
-// a selecionam, o mais específico. Os overrides da rota já estão em ordem de
-// precedência (path exato; parâmetros de segmento, do de mais literais ao de
-// menos; expressão regular; curinga do mais longo ao mais curto; mais
-// critérios; ordem de declaração), então vale o primeiro que casa. Devolve nil
-// quando nenhum casa.
+// Select returns the override that holds for the request: among the enabled
+// ones that select it, the most specific. The route's overrides are already
+// in precedence order (exact path; segment parameters, from most literals to
+// fewest; regular expression; wildcard from longest to shortest; more
+// criteria; declaration order), so the first one that matches wins. Returns
+// nil when none matches.
 func Select(route *config.CompiledRoute, q *Request) *config.CompiledOverride {
 	return SelectWhere(route, q, nil)
 }
 
-// SelectWhere é Select restrito aos overrides aceitos por ok: os recusados
-// ficam fora da seleção e da precedência, como os desligados, e não escondem
-// um menos específico que também case. Com ok nil, vale Select.
+// SelectWhere is Select restricted to the overrides accepted by ok: the
+// rejected ones stay out of the selection and out of precedence, like the
+// disabled ones, and do not hide a less specific one that also matches. With
+// ok nil, this is Select.
 func SelectWhere(route *config.CompiledRoute, q *Request, ok func(*config.CompiledOverride) bool) *config.CompiledOverride {
 	for _, o := range route.Overrides {
 		if !o.Doc.Enabled() || (ok != nil && !ok(o)) {
@@ -112,9 +112,9 @@ func SelectWhere(route *config.CompiledRoute, q *Request, ok func(*config.Compil
 	return nil
 }
 
-// Match informa se o override seleciona a requisição: todos os critérios
-// declarados precisam casar. O corpo é avaliado por último, porque é o único
-// critério que exige ler a requisição.
+// Match reports whether the override selects the request: every declared
+// criterion has to match. The body is evaluated last, because it is the only
+// criterion that requires reading the request.
 func Match(o *config.CompiledOverride, q *Request) bool {
 	r := q.r
 	path := r.URL.Path
@@ -151,8 +151,9 @@ func Match(o *config.CompiledOverride, q *Request) bool {
 	return true
 }
 
-// headerValues devolve os valores do cabeçalho de nome canônico k. O Host,
-// que o servidor tira dos cabeçalhos, vem do campo próprio da requisição.
+// headerValues returns the values of the header with canonical name k. Host,
+// which the server strips from the headers, comes from the request's own
+// field.
 func headerValues(r *http.Request, k string) []string {
 	if k == "Host" {
 		return []string{r.Host}
@@ -160,8 +161,8 @@ func headerValues(r *http.Request, k string) []string {
 	return r.Header.Values(k)
 }
 
-// anyMatch casa quando algum dos valores observados satisfaz o operador. Um
-// cabeçalho ou parâmetro ausente não casa com nenhum operador.
+// anyMatch matches when one of the observed values satisfies the operator. A
+// missing header or parameter matches no operator.
 func anyMatch(m config.CompiledMatcher, vs []string) bool {
 	for _, v := range vs {
 		if m.MatchString(v) {

@@ -1,7 +1,7 @@
-// Package capture registra as trocas que atravessam a porta de tráfego: abre
-// o registro na entrada da requisição, observa corpo e resposta sem alterar o
-// que é repassado, decompõe a latência e grava a troca no histórico em uso,
-// fora do caminho da requisição.
+// Package capture records the exchanges that go through the traffic port: it
+// opens the record when the request comes in, observes body and response
+// without changing what is passed along, breaks the latency down and writes
+// the exchange to the history in use, off the request path.
 package capture
 
 import (
@@ -12,34 +12,34 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/exchange"
-	"github.com/gamerjp64/gateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/store"
 )
 
-// QueueSize é quantas trocas podem aguardar gravação. Com a fila cheia a
-// troca é descartada com um aviso no log: o encaminhamento nunca espera pelo
-// histórico.
+// QueueSize is how many exchanges can wait to be written. With the queue full
+// the exchange is dropped with a warning in the log: forwarding never waits
+// for the history.
 const QueueSize = 1024
 
-// Recorder abre os registros das requisições e grava as trocas fechadas no
-// histórico, numa única goroutine, na ordem em que foram fechadas. Cada troca
-// gravada é publicada no broker.
+// Recorder opens the records of the requests and writes the finished
+// exchanges to the history, in a single goroutine, in the order they were
+// finished. Every exchange written is published on the broker.
 type Recorder struct {
 	store  store.Store
 	broker *Broker
 	log    *slog.Logger
 	now    func() time.Time
 
-	// seq numera as requisições na ordem de chegada, registradas ou não.
+	// seq numbers the requests in arrival order, recorded or not.
 	seq atomic.Uint64
 
-	// open conta os registros abertos e ainda não fechados, para que o
-	// encerramento possa esperar por eles.
+	// open counts the records opened and not yet closed, so that shutdown can
+	// wait for them.
 	open atomic.Int64
 
 	queue chan item
-	// mu protege closed: com ele, nenhuma troca entra na fila depois que a
-	// goroutine de gravação começa a esvaziá-la para encerrar.
+	// mu guards closed: with it, no exchange enters the queue after the
+	// writing goroutine starts draining it to shut down.
 	mu     sync.RWMutex
 	closed bool
 	stop   chan struct{}
@@ -47,15 +47,16 @@ type Recorder struct {
 	once   sync.Once
 }
 
-// item é uma troca a gravar ou uma barreira de sincronização.
+// item is an exchange to write or a synchronization barrier.
 type item struct {
 	ex      *exchange.Exchange
 	barrier chan struct{}
 }
 
-// NewRecorder grava no store dado, que normalmente é o histórico trocável do
-// processo, de modo que a troca de backend a quente vale para a captura
-// seguinte. broker pode ser nil; log nil usa o padrão.
+// NewRecorder writes to the given store, which is normally the process's
+// switchable history, so that swapping the backend at runtime takes effect
+// from the next capture on. broker may be nil; a nil log uses the default
+// one.
 func NewRecorder(st store.Store, broker *Broker, log *slog.Logger) *Recorder {
 	if log == nil {
 		log = slog.Default()
@@ -76,23 +77,24 @@ func NewRecorder(st store.Store, broker *Broker, log *slog.Logger) *Recorder {
 	return r
 }
 
-// Broker devolve o broker em que as trocas gravadas são publicadas.
+// Broker returns the broker the recorded exchanges are published on.
 func (r *Recorder) Broker() *Broker { return r.broker }
 
-// Options é o que a configuração em vigor diz sobre uma requisição.
+// Options is what the configuration in effect says about a request.
 type Options struct {
-	// Record liga o registro (history.record).
+	// Record turns recording on (history.record).
 	Record bool
-	// Observe liga a observação da troca mesmo com o registro desligado, sem
-	// gravá-la no histórico: o modo aprendizado precisa da resposta observada.
+	// Observe turns on observing the exchange even with recording off,
+	// without writing it to the history: learning mode needs the observed
+	// response.
 	Observe bool
-	// MaxBodyBytes é o limite de captura de cada corpo (capture.maxBodyBytes).
+	// MaxBodyBytes is the capture limit for each body (capture.maxBodyBytes).
 	MaxBodyBytes int
 }
 
-// Begin abre o registro de uma requisição que acaba de chegar e inicia a
-// cronometragem. O número de sequência é atribuído mesmo com o registro
-// desligado, porque ele também ordena as decisões da requisição.
+// Begin opens the record of a request that has just arrived and starts the
+// clock. The sequence number is assigned even with recording off, because it
+// also orders the request's decisions.
 func (r *Recorder) Begin(w http.ResponseWriter, req *http.Request, o Options) *Record {
 	start := r.now()
 	r.open.Add(1)
@@ -132,35 +134,34 @@ func (r *Recorder) Begin(w http.ResponseWriter, req *http.Request, o Options) *R
 	return rec
 }
 
-// enqueue entrega a troca à goroutine de gravação sem esperar. Depois de
-// Close não há quem grave: a troca é descartada com um aviso no log, em vez
-// de sumir na fila.
+// enqueue hands the exchange to the writing goroutine without waiting. After
+// Close there is no one left to write it: the exchange is dropped with a
+// warning in the log, instead of vanishing into the queue.
 func (r *Recorder) enqueue(e *exchange.Exchange) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if r.closed {
-		r.log.Warn("troca descartada: o registro do histórico já foi encerrado",
-			"id", e.ID, "metodo", e.Method, "path", e.Path)
+		r.log.Warn("exchange dropped: history recording has already been shut down",
+			"id", e.ID, "method", e.Method, "path", e.Path)
 		return
 	}
 	select {
 	case r.queue <- item{ex: e}:
 	default:
-		r.log.Warn("troca descartada: fila de gravação do histórico cheia",
-			"id", e.ID, "metodo", e.Method, "path", e.Path)
+		r.log.Warn("exchange dropped: the history write queue is full",
+			"id", e.ID, "method", e.Method, "path", e.Path)
 	}
 }
 
-// finished conta o fechamento de um registro aberto por Begin.
+// finished counts the closing of a record opened by Begin.
 func (r *Recorder) finished() { r.open.Add(-1) }
 
-// Open informa quantos registros foram abertos e ainda não fechados.
+// Open reports how many records have been opened and not yet closed.
 func (r *Recorder) Open() int64 { return r.open.Load() }
 
-// Wait espera que todo registro aberto seja fechado, ou que ctx termine.
-// Serve ao encerramento do processo: http.Server.Shutdown não espera as
-// conexões sequestradas (upgrades de protocolo), cujos registros ainda
-// fecharão depois dele.
+// Wait waits for every open record to be closed, or for ctx to end. It serves
+// process shutdown: http.Server.Shutdown does not wait for hijacked
+// connections (protocol upgrades), whose records are still closed after it.
 func (r *Recorder) Wait(ctx context.Context) error {
 	t := time.NewTicker(5 * time.Millisecond)
 	defer t.Stop()
@@ -181,7 +182,7 @@ func (r *Recorder) run() {
 		case it := <-r.queue:
 			r.handle(it)
 		case <-r.stop:
-			// Grava o que já estava na fila antes de encerrar.
+			// Write whatever was already in the queue before shutting down.
 			for {
 				select {
 				case it := <-r.queue:
@@ -199,18 +200,19 @@ func (r *Recorder) handle(it item) {
 		close(it.barrier)
 		return
 	}
-	// A gravação não herda o contexto da requisição, que já terminou.
+	// Writing does not inherit the request's context, which has already
+	// ended.
 	if err := r.store.Record(context.Background(), it.ex); err != nil {
-		r.log.Error("falha ao gravar a troca no histórico; o encaminhamento não foi afetado",
-			"id", it.ex.ID, "metodo", it.ex.Method, "path", it.ex.Path, "erro", err)
+		r.log.Error("failed to write the exchange to the history; forwarding was not affected",
+			"id", it.ex.ID, "method", it.ex.Method, "path", it.ex.Path, "error", err)
 		return
 	}
 	r.broker.Publish(*it.ex)
 }
 
-// Sync espera até que toda troca fechada antes da chamada tenha sido gravada
-// (ou descartada por falha de gravação). Serve a quem lê o histórico logo
-// depois de uma requisição e quer vê-la.
+// Sync waits until every exchange finished before the call has been written
+// (or dropped after a write failure). It serves whoever reads the history
+// right after a request and wants to see it there.
 func (r *Recorder) Sync(ctx context.Context) error {
 	b := make(chan struct{})
 	select {
@@ -230,9 +232,9 @@ func (r *Recorder) Sync(ctx context.Context) error {
 	}
 }
 
-// Clear esvazia o histórico em uso. As trocas fechadas antes da chamada são
-// gravadas primeiro, para que nenhuma delas reapareça depois da limpeza; as
-// seguintes voltam a ser registradas normalmente.
+// Clear empties the history in use. The exchanges finished before the call
+// are written first, so that none of them shows up again after the cleanup;
+// the ones after it go on being recorded as usual.
 func (r *Recorder) Clear(ctx context.Context) error {
 	if err := r.Sync(ctx); err != nil {
 		return err
@@ -240,8 +242,9 @@ func (r *Recorder) Clear(ctx context.Context) error {
 	return r.store.Clear(ctx)
 }
 
-// Close grava o que ainda estiver na fila e encerra a goroutine de gravação.
-// Não fecha o store, que pertence a quem o criou.
+// Close writes whatever is still in the queue and stops the writing
+// goroutine. It does not close the store, which belongs to whoever created
+// it.
 func (r *Recorder) Close() {
 	r.once.Do(func() {
 		r.mu.Lock()

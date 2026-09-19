@@ -11,9 +11,10 @@ import (
 	"time"
 )
 
-// Encerramento durante uma troca a quente das portas.
+// Shutting down in the middle of a live port swap.
 
-// dialable diz se algo aceita conexões na porta local dada.
+// dialable reports whether anything accepts connections on the given local
+// port.
 func dialable(port int) bool {
 	c, err := net.DialTimeout("tcp", "127.0.0.1:"+strconv.Itoa(port), time.Second)
 	if err != nil {
@@ -24,13 +25,13 @@ func dialable(port int) bool {
 }
 
 func TestPortCommitAfterShutdownIsDiscarded(t *testing.T) {
-	p := &port{name: "tráfego", key: "ports.traffic", handler: http.NotFoundHandler(), fatal: func(err error) { t.Error(err) }}
+	p := &port{name: "traffic", key: "ports.traffic", handler: http.NotFoundHandler(), fatal: func(err error) { t.Error(err) }}
 	cur, err := p.open(0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !p.commit(cur) {
-		t.Fatal("a primeira troca deveria ser feita")
+		t.Fatal("the first swap should go through")
 	}
 	next, err := p.open(0)
 	if err != nil {
@@ -41,13 +42,13 @@ func TestPortCommitAfterShutdownIsDiscarded(t *testing.T) {
 		t.Fatal(err)
 	}
 	if p.commit(next) {
-		t.Fatal("a troca não deveria ser feita depois de o encerramento começar")
+		t.Fatal("the swap should not go through once the shutdown has begun")
 	}
 	if dialable(nextPort) {
-		t.Fatalf("o listener descartado na porta %d deveria estar fechado", nextPort)
+		t.Fatalf("the listener discarded on port %d should be closed", nextPort)
 	}
 	if p.cur != cur {
-		t.Fatal("a porta deveria seguir no binding que o encerramento alcançou")
+		t.Fatal("the port should stay on the binding the shutdown reached")
 	}
 }
 
@@ -57,8 +58,8 @@ func TestShutdownDuringPortSwitchLeavesNothingListening(t *testing.T) {
 			e := startAdmin(t, freePorts, adminRoutes(t))
 			port := freePort(t)
 
-			// O writer fica preso enquanto o PATCH chega e o encerramento
-			// começa; o PATCH só aplica a troca depois disso.
+			// The writer stays held while the PATCH arrives and the shutdown
+			// begins; the PATCH only applies the swap after that.
 			held, release := make(chan struct{}), make(chan struct{})
 			go e.Writer.Exclusive(func() error {
 				close(held)
@@ -76,7 +77,7 @@ func TestShutdownDuringPortSwitchLeavesNothingListening(t *testing.T) {
 					res.Body.Close()
 				}
 			}()
-			// Dá tempo de o PATCH chegar ao writer antes do encerramento.
+			// Give the PATCH time to reach the writer before the shutdown.
 			time.Sleep(200 * time.Millisecond)
 
 			stopped := make(chan error, 1)
@@ -87,14 +88,14 @@ func TestShutdownDuringPortSwitchLeavesNothingListening(t *testing.T) {
 			select {
 			case err := <-stopped:
 				if err != nil {
-					t.Fatalf("encerramento: %v", err)
+					t.Fatalf("shutdown: %v", err)
 				}
 			case <-time.After(10 * time.Second):
-				t.Fatal("o encerramento não concluiu")
+				t.Fatal("the shutdown did not complete")
 			}
 			<-patched
 			if dialable(port) {
-				t.Fatalf("depois do encerramento a porta nova %d não deveria aceitar conexões", port)
+				t.Fatalf("after the shutdown the new port %d should not accept connections", port)
 			}
 		})
 	}

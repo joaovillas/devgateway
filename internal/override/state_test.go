@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config"
 )
 
-// clock é um relógio de teste que só anda quando mandado.
+// clock is a test clock that only moves when told to.
 type clock struct {
 	mu sync.Mutex
 	t  time.Time
@@ -56,27 +56,27 @@ func stateOf(t *testing.T, tr *Tracker, name string) LiveState {
 	t.Helper()
 	s, ok := tr.State("payments", name)
 	if !ok {
-		t.Fatalf("override %s sem estado vivo", name)
+		t.Fatalf("override %s has no live state", name)
 	}
 	return s
 }
 
-// Requirement: Expiração por tempo e por contagem
+// Requirement: Expiry by time and by count
 
 func TestOverrideExpiresByTime(t *testing.T) {
 	tr, live, c := tracked(t, limited("o", 30*time.Second, 0))
 	o := live.Load().Routes[0].Overrides[0]
 	c.advance(29 * time.Second)
 	if !tr.Active(o) || !tr.Claim(o) {
-		t.Fatal("antes de 30s o override deveria estar ativo")
+		t.Fatal("before 30s the override should be active")
 	}
 	c.advance(1*time.Second + time.Millisecond)
 	if tr.Active(o) || tr.Claim(o) {
-		t.Fatal("passados 30s o override deveria ter expirado sem ação do usuário")
+		t.Fatal("after 30s the override should have expired with no action from the user")
 	}
 	s := stateOf(t, tr, "o")
 	if s.Active || s.Expired == nil || *s.Expired != ExpiredTTL || *s.TTLRemainingMs != 0 {
-		t.Fatalf("estado de expiração pelo tempo inesperado: %+v", s)
+		t.Fatalf("unexpected expiry-by-time state: %+v", s)
 	}
 }
 
@@ -85,14 +85,14 @@ func TestOverrideExpiresByCount(t *testing.T) {
 	o := live.Load().Routes[0].Overrides[0]
 	got := []bool{tr.Claim(o), tr.Claim(o), tr.Claim(o)}
 	if !got[0] || !got[1] || got[2] {
-		t.Fatalf("as duas primeiras aplicações deveriam valer e a terceira não: %v", got)
+		t.Fatalf("the first two applications should hold and the third should not: %v", got)
 	}
 	if tr.Active(o) {
-		t.Fatal("esgotado o limite, o override deveria sair da seleção")
+		t.Fatal("once the limit is used up, the override should drop out of the selection")
 	}
 	s := stateOf(t, tr, "o")
 	if s.Expired == nil || *s.Expired != ExpiredApplications || s.Applications != 2 {
-		t.Fatalf("estado de expiração pela contagem inesperado: %+v", s)
+		t.Fatalf("unexpected expiry-by-count state: %+v", s)
 	}
 }
 
@@ -106,20 +106,20 @@ func TestRemainingTimeAndCountQueryable(t *testing.T) {
 	tr.Claim(o)
 	s := stateOf(t, tr, "o")
 	if s.TTLRemainingMs == nil || *s.TTLRemainingMs != 40000 {
-		t.Fatalf("esperados 40s restantes, estado %+v", s)
+		t.Fatalf("want 40s remaining, state %+v", s)
 	}
 	if s.Applications != 2 || s.MaxApplications == nil || *s.MaxApplications != 5 {
-		t.Fatalf("esperadas duas aplicações de um limite de cinco: %+v", s)
+		t.Fatalf("want two applications out of a limit of five: %+v", s)
 	}
 	if !s.Active || s.Expired != nil || !s.Enabled || !s.RegisteredAt.Equal(registered) {
-		t.Fatalf("o override deveria estar ativo desde o registro: %+v", s)
+		t.Fatalf("the override should be active since it was registered: %+v", s)
 	}
 	if s.LastAppliedAt == nil || !s.LastAppliedAt.Equal(c.now()) {
-		t.Fatalf("a última aplicação deveria ser a de agora: %+v", s.LastAppliedAt)
+		t.Fatalf("the last application should be the one from just now: %+v", s.LastAppliedAt)
 	}
 	all, now := tr.States()
 	if len(all) != 1 || all[0].Override != "o" || all[0].Route != "payments" || !now.Equal(c.now()) {
-		t.Fatalf("a consulta geral deveria trazer o override: %+v em %v", all, now)
+		t.Fatalf("the overall query should include the override: %+v at %v", all, now)
 	}
 }
 
@@ -128,21 +128,21 @@ func TestOverrideWithoutLimitsRemains(t *testing.T) {
 	o := live.Load().Routes[0].Overrides[0]
 	for range 1000 {
 		if !tr.Claim(o) {
-			t.Fatal("sem limites o override deveria valer sempre")
+			t.Fatal("with no limits the override should always hold")
 		}
 	}
 	c.advance(30 * 24 * time.Hour)
 	if !tr.Active(o) {
-		t.Fatal("sem tempo de vida o override deveria continuar ativo")
+		t.Fatal("with no time to live the override should stay active")
 	}
 	s := stateOf(t, tr, "o")
 	if s.TTLRemainingMs != nil || s.MaxApplications != nil || s.Expired != nil || s.Applications != 1000 {
-		t.Fatalf("sem limites o estado não deveria ter restante nem limite: %+v", s)
+		t.Fatalf("with no limits the state should have neither a remainder nor a limit: %+v", s)
 	}
 }
 
-// Sob requisições concorrentes, um override limitado a n aplicações é
-// aplicado exatamente n vezes.
+// Under concurrent requests, an override limited to n applications is applied
+// exactly n times.
 func TestCountLimitHoldsUnderConcurrency(t *testing.T) {
 	tr, live, _ := tracked(t, limited("o", 0, 10))
 	o := live.Load().Routes[0].Overrides[0]
@@ -157,32 +157,32 @@ func TestCountLimitHoldsUnderConcurrency(t *testing.T) {
 	}
 	wg.Wait()
 	if won.Load() != 10 {
-		t.Fatalf("esperadas exatamente 10 aplicações, houve %d", won.Load())
+		t.Fatalf("want exactly 10 applications, got %d", won.Load())
 	}
 }
 
-// O estado vivo fica fora do snapshot: uma recarga que não muda o override
-// preserva o relógio e a contagem.
+// The live state lives outside the snapshot: a reload that does not change
+// the override keeps its clock and its count.
 func TestStatePreservedAcrossReloadWhenUnchanged(t *testing.T) {
 	o := limited("o", time.Minute, 5)
-	tr, live, c := tracked(t, o, limited("outro", 0, 0))
+	tr, live, c := tracked(t, o, limited("other", 0, 0))
 	tr.Claim(live.Load().Routes[0].Override("o"))
 	c.advance(20 * time.Second)
-	// Outro override muda e este fica igual.
-	live.Swap(snapOf(t, o, limited("outro", 0, 3)))
+	// Another override changes and this one stays the same.
+	live.Swap(snapOf(t, o, limited("other", 0, 3)))
 	s := stateOf(t, tr, "o")
 	if s.Applications != 1 || *s.TTLRemainingMs != 40000 {
-		t.Fatalf("a recarga não deveria recomeçar o override inalterado: %+v", s)
+		t.Fatalf("the reload should not restart the unchanged override: %+v", s)
 	}
-	// Mudar a resposta declarada também não recomeça o relógio.
+	// Changing the declared response does not restart the clock either.
 	changed := o
-	changed.Respond = respond("outra resposta")
+	changed.Respond = respond("another response")
 	live.Swap(snapOf(t, changed))
 	if s := stateOf(t, tr, "o"); s.Applications != 1 || *s.TTLRemainingMs != 40000 {
-		t.Fatalf("mudar só a resposta não deveria recomeçar o estado: %+v", s)
+		t.Fatalf("changing only the response should not restart the state: %+v", s)
 	}
-	if _, ok := tr.State("payments", "outro"); ok {
-		t.Fatal("o override removido não deveria ter estado")
+	if _, ok := tr.State("payments", "other"); ok {
+		t.Fatal("the removed override should have no state")
 	}
 }
 
@@ -193,17 +193,17 @@ func TestStateRestartsWhenLimitsChange(t *testing.T) {
 	live.Swap(snapOf(t, limited("o", 2*time.Minute, 5)))
 	s := stateOf(t, tr, "o")
 	if s.Applications != 0 || *s.TTLRemainingMs != 120000 || !s.RegisteredAt.Equal(c.now()) {
-		t.Fatalf("mudar o tempo de vida deveria recomeçar relógio e contagem: %+v", s)
+		t.Fatalf("changing the time to live should restart clock and count: %+v", s)
 	}
 	tr.Claim(live.Load().Routes[0].Overrides[0])
 	live.Swap(snapOf(t, limited("o", 2*time.Minute, 6)))
 	if s := stateOf(t, tr, "o"); s.Applications != 0 {
-		t.Fatalf("mudar o limite de aplicações deveria zerar a contagem: %+v", s)
+		t.Fatalf("changing the application limit should zero the count: %+v", s)
 	}
 }
 
-// Religar um override recomeça o relógio: um override que expirou enquanto
-// estava ligado volta a valer.
+// Re-enabling an override restarts its clock: an override that expired while
+// it was enabled holds again.
 func TestReenablingRestartsState(t *testing.T) {
 	o := limited("o", 0, 1)
 	tr, live, _ := tracked(t, o)
@@ -212,12 +212,12 @@ func TestReenablingRestartsState(t *testing.T) {
 	off.On = new(bool)
 	live.Swap(snapOf(t, off))
 	if s := stateOf(t, tr, "o"); s.Enabled || s.Active || s.Applications != 1 {
-		t.Fatalf("desligado, o override deveria estar inativo e manter a contagem: %+v", s)
+		t.Fatalf("once disabled, the override should be inactive and keep its count: %+v", s)
 	}
 	live.Swap(snapOf(t, o))
 	s := stateOf(t, tr, "o")
 	if !s.Enabled || !s.Active || s.Applications != 0 {
-		t.Fatalf("religado, o override deveria voltar a valer: %+v", s)
+		t.Fatalf("once re-enabled, the override should hold again: %+v", s)
 	}
 }
 
@@ -225,15 +225,15 @@ func TestResetReactivatesExpired(t *testing.T) {
 	tr, live, c := tracked(t, limited("o", time.Second, 0))
 	c.advance(2 * time.Second)
 	if tr.Active(live.Load().Routes[0].Overrides[0]) {
-		t.Fatal("o override deveria ter expirado")
+		t.Fatal("the override should have expired")
 	}
 	if !tr.Reset("payments", "o") {
-		t.Fatal("o reset deveria encontrar o override")
+		t.Fatal("the reset should find the override")
 	}
 	if !tr.Active(live.Load().Routes[0].Overrides[0]) {
-		t.Fatal("depois do reset o override deveria voltar a valer")
+		t.Fatal("after the reset the override should hold again")
 	}
-	if tr.Reset("payments", "nao-existe") {
-		t.Fatal("o reset de override inexistente deveria falhar")
+	if tr.Reset("payments", "does-not-exist") {
+		t.Fatal("resetting an override that does not exist should fail")
 	}
 }

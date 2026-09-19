@@ -1,8 +1,8 @@
-# Rota do catálogo de brinquedo (examples/toys/catalog), só passthrough.
-# Nenhum override declarado: com learning.enabled em gateway.json, cada método
-# e path novo respondido pelo upstream é gravado aqui como override desligado,
-# com a resposta observada. A gravação reescreve o arquivo e descarta estes
-# comentários; por isso run.sh trabalha sobre uma cópia em examples/.run/.
+# Route for the toy catalog (examples/toys/catalog), passthrough only.
+# No overrides declared: with learning.enabled in gateway.json, every new
+# method and path answered by the upstream is written here as a disabled
+# override carrying the observed response. Writing rewrites the file and drops
+# these comments, which is why run.sh works on a copy in examples/.run/.
 schemaVersion: 1
 name: catalog
 upstream: http://127.0.0.1:9002

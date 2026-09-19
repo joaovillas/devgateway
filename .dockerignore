@@ -1,4 +1,4 @@
-# Contexto do docker build: só o que o Dockerfile precisa.
+# Docker build context: only what the Dockerfile needs.
 .git
 .github
 .claude

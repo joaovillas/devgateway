@@ -8,8 +8,9 @@ import (
 	"testing"
 )
 
-// Os instantes da API saem em UTC (docs/api.md, Convenções), qualquer que
-// seja o fuso do processo: o início das trocas e o estado vivo dos overrides.
+// The API's instants come out in UTC (docs/api.md, Conventions), whatever the
+// process's time zone: the start of the exchanges and the live state of the
+// overrides.
 
 var utcInstant = regexp.MustCompile(`^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$`)
 
@@ -22,7 +23,7 @@ func TestAPIInstantsAreUTC(t *testing.T) {
 	})
 	for _, p := range []string{"/payments/ok", "/payments/flaky"} {
 		if st, _ := getBody(t, e.traffic+p); st == 0 {
-			t.Fatalf("sem resposta em %s", p)
+			t.Fatalf("no response on %s", p)
 		}
 	}
 	e.Recorder.Wait(t.Context())
@@ -38,11 +39,11 @@ func TestAPIInstantsAreUTC(t *testing.T) {
 	}
 	res.decode(t, &page)
 	if len(page.Items) != 2 {
-		t.Fatalf("esperadas duas trocas: %s", res.body)
+		t.Fatalf("want two exchanges: %s", res.body)
 	}
 	for _, it := range page.Items {
 		if !utcInstant.MatchString(it.Start) {
-			t.Errorf("start fora de UTC: %q", it.Start)
+			t.Errorf("start is not UTC: %q", it.Start)
 		}
 	}
 
@@ -55,22 +56,22 @@ func TestAPIInstantsAreUTC(t *testing.T) {
 	}
 	e.call(t, "GET", "/overrides/state", "", "").decode(t, &state)
 	if !utcInstant.MatchString(state.Now) {
-		t.Errorf("now fora de UTC: %q", state.Now)
+		t.Errorf("now is not UTC: %q", state.Now)
 	}
 	if len(state.Items) != 1 || state.Items[0].LastAppliedAt == nil {
-		t.Fatalf("estado vivo inesperado: %+v", state)
+		t.Fatalf("unexpected live state: %+v", state)
 	}
 	for _, s := range []string{state.Items[0].RegisteredAt, *state.Items[0].LastAppliedAt} {
 		if !utcInstant.MatchString(s) {
-			t.Errorf("instante do estado vivo fora de UTC: %q", s)
+			t.Errorf("live-state instant is not UTC: %q", s)
 		}
 	}
 }
 
-// Uma resposta sintetizada sem corpo nem Content-Type declarado suprime o
-// Content-Type automático do net/http com uma lista vazia. O cabeçalho não
-// vai ao cliente e também não pode aparecer na troca como null: headers é
-// um http.Header, e cada nome aponta uma lista.
+// A synthesized response with neither a body nor a declared Content-Type
+// suppresses net/http's automatic Content-Type with an empty list. The header
+// does not reach the client, and it must not show up in the exchange as null
+// either: headers is an http.Header, and every name maps to a list.
 func TestSuppressedHeaderNotCapturedAsNull(t *testing.T) {
 	var hits atomic.Int64
 	up := countingUpstream(t, &hits)
@@ -84,14 +85,14 @@ func TestSuppressedHeaderNotCapturedAsNull(t *testing.T) {
 	}
 	res.Body.Close()
 	if ct, ok := res.Header["Content-Type"]; ok {
-		t.Fatalf("o cliente não deveria receber Content-Type: %q", ct)
+		t.Fatalf("the client should not receive a Content-Type: %q", ct)
 	}
 	e.Recorder.Wait(t.Context())
 
 	id := e.lastExchangeID(t)
 	raw := e.call(t, "GET", "/exchanges/"+id, "", "")
 	if strings.Contains(string(raw.body), "null") {
-		t.Fatalf("a troca não deveria ter valores null: %s", raw.body)
+		t.Fatalf("the exchange should have no null values: %s", raw.body)
 	}
 	var x struct {
 		Response struct {
@@ -100,9 +101,9 @@ func TestSuppressedHeaderNotCapturedAsNull(t *testing.T) {
 	}
 	raw.decode(t, &x)
 	if _, ok := x.Response.Headers["Content-Type"]; ok {
-		t.Fatalf("Content-Type suprimido não deveria constar da captura: %v", x.Response.Headers)
+		t.Fatalf("a suppressed Content-Type should not show up in the capture: %v", x.Response.Headers)
 	}
 	if len(x.Response.Headers["X-Gateway"]) != 1 {
-		t.Fatalf("os cabeçalhos enviados continuam capturados: %v", x.Response.Headers)
+		t.Fatalf("the headers that were sent are still captured: %v", x.Response.Headers)
 	}
 }

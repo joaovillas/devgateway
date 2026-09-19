@@ -3,13 +3,14 @@ package store
 import (
 	"fmt"
 
-	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config"
 )
 
-// Open inicializa o backend do histórico escolhido pela configuração, com
-// memória como padrão. Uma falha nunca cai para outro backend: o erro nomeia
-// o backend e a causa, para que o processo recuse iniciar (ou a troca a
-// quente seja recusada) em vez de seguir sem persistir nada.
+// Open initializes the history backend picked by the configuration, with
+// memory as the default. A failure never falls back to another backend: the
+// error names the backend and the cause, so that the process refuses to
+// start (or the hot swap is rejected) instead of carrying on without
+// persisting anything.
 func Open(s config.Settings) (Store, error) {
 	switch s.HistoryBackend {
 	case "", config.BackendMemory:
@@ -17,21 +18,22 @@ func Open(s config.Settings) (Store, error) {
 	case config.BackendNDJSON:
 		st, err := OpenNDJSON(s.HistoryPath)
 		if err != nil {
-			return nil, fmt.Errorf("backend do histórico %s em %s: %w", s.HistoryBackend, s.HistoryPath, err)
+			return nil, fmt.Errorf("history backend %s at %s: %w", s.HistoryBackend, s.HistoryPath, err)
 		}
 		return st, nil
 	case config.BackendSQLite:
 		st, err := OpenSQLite(s.HistoryPath)
 		if err != nil {
-			return nil, fmt.Errorf("backend do histórico %s em %s: %w", s.HistoryBackend, s.HistoryPath, err)
+			return nil, fmt.Errorf("history backend %s at %s: %w", s.HistoryBackend, s.HistoryPath, err)
 		}
 		return st, nil
 	}
-	return nil, fmt.Errorf("backend do histórico %q desconhecido; use %s, %s ou %s",
+	return nil, fmt.Errorf("unknown history backend %q; use %s, %s or %s",
 		s.HistoryBackend, config.BackendMemory, config.BackendNDJSON, config.BackendSQLite)
 }
 
-// BackendName devolve o nome efetivo do backend, com memória no lugar do vazio.
+// BackendName returns the effective backend name, with memory standing in
+// for the empty value.
 func BackendName(s config.Settings) string {
 	if s.HistoryBackend == "" {
 		return config.BackendMemory
@@ -39,9 +41,9 @@ func BackendName(s config.Settings) string {
 	return s.HistoryBackend
 }
 
-// Reopens informa se a passagem da configuração old para next exige abrir
-// outro backend do histórico: o backend mudou, a capacidade do backend em
-// memória mudou, ou o arquivo de um backend persistente mudou.
+// Reopens reports whether moving from configuration old to next requires
+// opening another history backend: the backend changed, the in-memory
+// backend's capacity changed, or a persistent backend's file changed.
 func Reopens(old, next config.Settings) bool {
 	if BackendName(old) != BackendName(next) {
 		return true

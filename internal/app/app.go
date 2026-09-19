@@ -1,5 +1,5 @@
-// Package app monta o processo: carrega a configuração e sobe as portas de
-// tráfego e de administração.
+// Package app wires up the process: it loads the configuration and brings up
+// the traffic and admin ports.
 package app
 
 import (
@@ -10,56 +10,56 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/admin"
-	"github.com/gamerjp64/gateway/internal/capture"
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/config/writer"
-	"github.com/gamerjp64/gateway/internal/learn"
-	"github.com/gamerjp64/gateway/internal/override"
-	"github.com/gamerjp64/gateway/internal/proxy"
-	"github.com/gamerjp64/gateway/internal/store"
-	"github.com/gamerjp64/gateway/internal/upstream"
+	"github.com/gamerjp64/devgateway/internal/admin"
+	"github.com/gamerjp64/devgateway/internal/capture"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config/writer"
+	"github.com/gamerjp64/devgateway/internal/learn"
+	"github.com/gamerjp64/devgateway/internal/override"
+	"github.com/gamerjp64/devgateway/internal/proxy"
+	"github.com/gamerjp64/devgateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/upstream"
 )
 
-// App é o processo em execução.
+// App is the running process.
 type App struct {
 	Live *config.Live
-	// History é o histórico de trocas, com backend trocável a quente.
+	// History is the exchange history, with a hot-swappable backend.
 	History *store.Switchable
-	// Recorder registra as trocas da porta de tráfego no histórico em uso e
-	// as publica no broker de tempo real.
+	// Recorder records the traffic port's exchanges into the history in use
+	// and publishes them on the real-time broker.
 	Recorder *capture.Recorder
-	// Writer serializa as escritas de documento de rota e aplica o resultado
-	// a quente; é compartilhado pelo aprendizado e pela API.
+	// Writer serializes route document writes and applies the result live;
+	// it is shared by learning and by the API.
 	Writer *writer.Writer
-	// Overrides guarda o estado vivo dos overrides: tempo de vida restante e
-	// contagem de aplicações.
+	// Overrides holds the live state of the overrides: remaining lifetime
+	// and application count.
 	Overrides *override.Tracker
-	// Upstreams é a disponibilidade recente dos upstreams, contada pela porta
-	// de tráfego e lida pela API.
+	// Upstreams is the recent availability of the upstreams, counted by the
+	// traffic port and read by the API.
 	Upstreams *upstream.Health
-	// Learner grava os endpoints aprendidos com o modo aprendizado ligado.
+	// Learner writes the endpoints learned while learning mode is on.
 	Learner *learn.Learner
 	Log     *slog.Logger
 
-	// traffic e admin são as duas portas, sob o supervisor de listeners.
+	// traffic and admin are the two ports, under the listener supervisor.
 	traffic, admin *port
 	serveErr       chan error
 }
 
-// Options reúne o que o processo recebe de fora.
+// Options gathers what the process receives from outside.
 type Options struct {
 	Loader config.Loader
 	Web    fs.FS
 	Log    *slog.Logger
-	// Heartbeat é o intervalo do heartbeat do fluxo de eventos da API; zero
-	// usa o padrão de 15 s.
+	// Heartbeat is the interval of the API event stream's heartbeat; zero
+	// uses the default of 15 s.
 	Heartbeat time.Duration
 }
 
-// Start carrega a configuração e abre as duas portas. Falha sem deixar
-// nenhuma porta aberta quando a configuração é inválida ou uma porta está
-// ocupada.
+// Start loads the configuration and opens the two ports. It fails without
+// leaving any port open when the configuration is invalid or a port is
+// already taken.
 func Start(opts Options) (*App, error) {
 	log := opts.Log
 	if log == nil {
@@ -74,8 +74,8 @@ func Start(opts Options) (*App, error) {
 	}
 	s := snap.Settings
 
-	// O backend do histórico abre antes das portas: se falhar, o processo recusa
-	// iniciar em vez de cair silenciosamente para outro backend.
+	// The history backend opens before the ports: if it fails, the process
+	// refuses to start instead of silently falling back to another backend.
 	hist, err := store.Open(s)
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func Start(opts Options) (*App, error) {
 	a.Upstreams = upstream.New()
 	a.Learner = learn.New(a.Writer, log)
 	a.traffic = &port{
-		name: "tráfego", key: "ports.traffic", fatal: a.fatal,
+		name: "traffic", key: "ports.traffic", fatal: a.fatal,
 		handler: proxy.NewHandlerWith(a.Live, a.Recorder, proxy.Options{
 			Tracker:   a.Overrides,
 			Learner:   a.Learner,
@@ -100,7 +100,7 @@ func Start(opts Options) (*App, error) {
 		}),
 	}
 	a.admin = &port{
-		name: "administração", key: "ports.admin", fatal: a.fatal,
+		name: "admin", key: "ports.admin", fatal: a.fatal,
 		handler: admin.New(admin.Deps{
 			Live:      a.Live,
 			Web:       opts.Web,
@@ -122,18 +122,18 @@ func Start(opts Options) (*App, error) {
 	tb, err := a.traffic.open(s.TrafficPort)
 	if err != nil {
 		a.closeWorkers()
-		return nil, fmt.Errorf("abrindo a porta de tráfego %d: %w", s.TrafficPort, err)
+		return nil, fmt.Errorf("opening traffic port %d: %w", s.TrafficPort, err)
 	}
 	ab, err := a.admin.open(s.AdminPort)
 	if err != nil {
 		tb.abort()
 		a.closeWorkers()
-		return nil, fmt.Errorf("abrindo a porta de administração %d: %w", s.AdminPort, err)
+		return nil, fmt.Errorf("opening admin port %d: %w", s.AdminPort, err)
 	}
 	a.traffic.commit(tb)
 	a.admin.commit(ab)
-	log.Info("gateway no ar",
-		"trafego", a.TrafficAddr(), "administracao", a.AdminAddr(), "rotas", len(snap.Routes), "historico", a.History.Backend())
+	log.Info("gateway is up",
+		"traffic", a.TrafficAddr(), "admin", a.AdminAddr(), "routes", len(snap.Routes), "history", a.History.Backend())
 	return a, nil
 }
 
@@ -143,22 +143,23 @@ func (a *App) closeWorkers() {
 	a.History.Close()
 }
 
-// ports informa as portas em que o processo atende agora.
+// ports reports the ports the process is serving on right now.
 func (a *App) ports() (traffic, adminPort int) { return a.traffic.number(), a.admin.number() }
 
-// applySettings aplica a quente o que a configuração do processo controla
-// fora do snapshot, antes de o snapshot novo ser publicado. Os demais
-// valores (seed, registro e exposição do histórico, limite de captura,
-// aprendizado, diretório de rotas) são lidos do snapshot a cada requisição e
-// passam a valer com a troca dele.
+// applySettings applies live whatever the process configuration controls
+// outside the snapshot, before the new snapshot is published. The remaining
+// values (seed, history recording and exposure, capture limit, learning,
+// routes directory) are read from the snapshot on every request and take
+// effect when it is swapped.
 //
-// Tudo é preparado antes de qualquer troca: os listeners das portas
-// alteradas são abertos e o backend novo do histórico é inicializado. Se algo
-// falha, o que foi preparado é descartado e nada muda. Depois persist grava
-// a configuração (gateway.json, numa alteração pela API); se falhar, também
-// nada muda. Só então o backend do histórico é trocado — sem migrar as
-// trocas anteriores — e as portas passam a atender nos listeners novos,
-// enquanto os servidores antigos concluem as requisições em curso.
+// Everything is prepared before anything is swapped: the listeners of the
+// changed ports are opened and the new history backend is initialized. If
+// anything fails, whatever was prepared is discarded and nothing changes.
+// Then persist writes the configuration (gateway.json, on a change made
+// through the API); if that fails, nothing changes either. Only then is the
+// history backend swapped — without migrating earlier exchanges — and the
+// ports start serving on the new listeners, while the old servers finish the
+// requests in flight.
 func (a *App) applySettings(old, next config.Settings, persist func() error) error {
 	type opened struct {
 		p *port
@@ -186,7 +187,7 @@ func (a *App) applySettings(old, next config.Settings, persist func() error) err
 			return &admin.ApplyError{
 				Code:  "port_unavailable",
 				Field: p.p.key,
-				Message: fmt.Sprintf("porta %d indisponível: %v; a porta de %s segue na %d",
+				Message: fmt.Sprintf("port %d unavailable: %v; the %s port stays on %d",
 					p.to, cause(err), p.p.name, p.p.number()),
 			}
 		}
@@ -200,7 +201,7 @@ func (a *App) applySettings(old, next config.Settings, persist func() error) err
 			return &admin.ApplyError{
 				Code:    "backend_unavailable",
 				Field:   "history.backend",
-				Message: fmt.Sprintf("%v; o histórico segue em %s", err, a.History.Backend()),
+				Message: fmt.Sprintf("%v; history stays on %s", err, a.History.Backend()),
 			}
 		}
 		hist = st
@@ -216,26 +217,26 @@ func (a *App) applySettings(old, next config.Settings, persist func() error) err
 	}
 	if hist != nil {
 		if err := a.History.Swap(context.Background(), store.BackendName(next), hist); err != nil {
-			a.Log.Warn("backend do histórico trocado, mas o anterior não fechou", "erro", err)
+			a.Log.Warn("history backend swapped, but the previous one did not close", "error", err)
 		}
-		a.Log.Info("backend do histórico trocado; as trocas anteriores não foram migradas",
-			"de", store.BackendName(old), "para", store.BackendName(next))
+		a.Log.Info("history backend swapped; earlier exchanges were not migrated",
+			"from", store.BackendName(old), "to", store.BackendName(next))
 	}
 	for _, o := range ready {
 		from := o.p.number()
 		if !o.p.commit(o.b) {
-			a.Log.Warn("troca de porta descartada: o processo está encerrando",
-				"porta", o.p.name, "segue na", from)
+			a.Log.Warn("port swap discarded: the process is shutting down",
+				"port", o.p.name, "stays on", from)
 			continue
 		}
-		a.Log.Info("porta trocada a quente; as requisições em curso terminam na anterior",
-			"porta", o.p.name, "de", from, "para", o.p.number())
+		a.Log.Info("port swapped live; requests in flight finish on the previous one",
+			"port", o.p.name, "from", from, "to", o.p.number())
 	}
 	return nil
 }
 
-// fatal entrega o erro de um servidor que parou de atender por conta própria.
-// Só o primeiro interessa a quem espera em Err.
+// fatal hands over the error of a server that stopped serving on its own.
+// Only the first one matters to whoever is waiting on Err.
 func (a *App) fatal(err error) {
 	select {
 	case a.serveErr <- err:
@@ -243,36 +244,36 @@ func (a *App) fatal(err error) {
 	}
 }
 
-// Err entrega o primeiro erro fatal de um dos servidores.
+// Err hands over the first fatal error from one of the servers.
 func (a *App) Err() <-chan error { return a.serveErr }
 
-// TrafficAddr e AdminAddr são os endereços em que as portas atendem agora,
-// que mudam com a troca a quente.
+// TrafficAddr and AdminAddr are the addresses the ports are serving on right
+// now, which change with a live swap.
 func (a *App) TrafficAddr() string { return a.traffic.addr().String() }
 func (a *App) AdminAddr() string   { return a.admin.addr().String() }
 
-// Shutdown encerra as duas portas, aguardando as requisições em curso —
-// inclusive as que ainda terminam numa porta substituída —, e depois fecha
-// o histórico.
+// Shutdown closes both ports, waiting for the requests in flight — including
+// those still finishing on a replaced port — and then closes the history.
 func (a *App) Shutdown(ctx context.Context) error {
 	err := errors.Join(a.traffic.shutdown(ctx), a.admin.shutdown(ctx))
-	// Com as portas fechadas nenhuma troca nova chega. O Shutdown do
-	// servidor não espera as conexões sequestradas (upgrades de protocolo):
-	// os registros delas são esperados aqui, até o prazo de ctx. Um que
-	// feche depois disso é descartado com aviso no log. O que está na fila é
-	// gravado antes de o histórico fechar.
+	// With the ports closed no new exchange arrives. The server's Shutdown
+	// does not wait for hijacked connections (protocol upgrades): their
+	// records are waited for here, up to ctx's deadline. One that closes
+	// after that is dropped with a warning in the log. Whatever is queued is
+	// written before the history closes.
 	if werr := a.Recorder.Wait(ctx); werr != nil && err == nil {
-		err = fmt.Errorf("aguardando as trocas em curso: %w", werr)
+		err = fmt.Errorf("waiting for the exchanges in flight: %w", werr)
 	}
 	a.Recorder.Close()
-	// Os endpoints já enfileirados pelo aprendizado são gravados antes de
-	// encerrar.
+	// The endpoints already queued by learning are written before shutting
+	// down.
 	a.Learner.Close()
 	return errors.Join(err, a.History.Close())
 }
 
-// cause devolve a causa de uma falha de rede sem a operação e o endereço, que
-// a mensagem já informa: "bind: address already in use".
+// cause returns the cause of a network failure without the operation and the
+// address, which the message already carries: "bind: address already in
+// use".
 func cause(err error) error {
 	if u := errors.Unwrap(err); u != nil {
 		return u

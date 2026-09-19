@@ -35,17 +35,17 @@ func loadDir(t *testing.T, dir string) ([]*CompiledRoute, []string, error) {
 	return routes, warnings, err
 }
 
-// singleError exige exatamente um erro localizado.
+// singleError requires exactly one located error.
 func singleError(t *testing.T, err error) *Error {
 	t.Helper()
 	var es Errors
 	if !errors.As(err, &es) || len(es) != 1 {
-		t.Fatalf("esperado exatamente um erro localizado, recebido: %v", err)
+		t.Fatalf("expected exactly one located error, got: %v", err)
 	}
 	return es[0]
 }
 
-// Requirement: Um documento por rota
+// Requirement: One document per route
 
 func TestRoutesMergedIntoSnapshot(t *testing.T) {
 	dir := t.TempDir()
@@ -59,14 +59,14 @@ func TestRoutesMergedIntoSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(routes) != 3 {
-		t.Fatalf("esperadas 3 rotas, recebidas %d", len(routes))
+		t.Fatalf("expected 3 routes, got %d", len(routes))
 	}
 }
 
 func TestRoutesDirEmptyOrMissing(t *testing.T) {
 	for name, dir := range map[string]string{
-		"vazio":   t.TempDir(),
-		"ausente": filepath.Join(t.TempDir(), "nao-existe"),
+		"empty":   t.TempDir(),
+		"missing": filepath.Join(t.TempDir(), "does-not-exist"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			routes, warnings, err := loadDir(t, dir)
@@ -74,10 +74,10 @@ func TestRoutesDirEmptyOrMissing(t *testing.T) {
 				t.Fatal(err)
 			}
 			if len(routes) != 0 {
-				t.Fatalf("esperado nenhuma rota, recebidas %d", len(routes))
+				t.Fatalf("expected no routes, got %d", len(routes))
 			}
 			if len(warnings) != 1 || !strings.Contains(warnings[0], dir) {
-				t.Fatalf("esperado um aviso nomeando %s, recebido %v", dir, warnings)
+				t.Fatalf("expected a single warning naming %s, got %v", dir, warnings)
 			}
 		})
 	}
@@ -87,12 +87,12 @@ func TestInvalidDocumentNamesFile(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{
 		"ok.yaml":  routeYAML("ok", "/ok/*"),
-		"bad.yaml": "schemaVersion: 1\nname: bad\nupstream: http://a\nmatch:\n  path: /bad/*\nstripPrefix: talvez\n",
+		"bad.yaml": "schemaVersion: 1\nname: bad\nupstream: http://a\nmatch:\n  path: /bad/*\nstripPrefix: maybe\n",
 	})
 	_, _, err := loadDir(t, dir)
 	e := singleError(t, err)
 	if filepath.Base(e.File) != "bad.yaml" || e.Field != "stripPrefix" || e.Line != 6 || e.Column == 0 {
-		t.Fatalf("erro deveria nomear bad.yaml, stripPrefix e a linha 6: %+v", e)
+		t.Fatalf("the error should name bad.yaml, stripPrefix and line 6: %+v", e)
 	}
 }
 
@@ -100,22 +100,22 @@ func TestUnrecognizedExtensionIgnored(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{
 		"a.yaml":       routeYAML("a", "/a/*"),
-		"README.md":    "# não é rota: {{{",
-		"notas.txt":    "texto qualquer",
-		"sub/x.yaml":   "inválido: [",
-		"a.yaml.bkp":   "lixo",
-		"sem-extensao": "lixo",
+		"README.md":    "# not a route: {{{",
+		"notes.txt":    "just some text",
+		"sub/x.yaml":   "invalid: [",
+		"a.yaml.bkp":   "junk",
+		"no-extension": "junk",
 	})
 	routes, _, err := loadDir(t, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(routes) != 1 {
-		t.Fatalf("esperada 1 rota, recebidas %d", len(routes))
+		t.Fatalf("expected 1 route, got %d", len(routes))
 	}
 }
 
-// Requirement: Detecção de colisão entre documentos
+// Requirement: Collision detection between documents
 
 func TestDuplicateRouteNames(t *testing.T) {
 	dir := t.TempDir()
@@ -128,7 +128,7 @@ func TestDuplicateRouteNames(t *testing.T) {
 	msg := e.Error()
 	for _, want := range []string{"one.yaml", "two.yaml", `"payments"`} {
 		if !strings.Contains(msg, want) {
-			t.Fatalf("mensagem deveria conter %s: %s", want, msg)
+			t.Fatalf("the message should contain %s: %s", want, msg)
 		}
 	}
 }
@@ -147,7 +147,7 @@ func TestIdenticalMatchPatterns(t *testing.T) {
 	msg := e.Error()
 	for _, want := range []string{"one.yaml", "two.yaml", "/v1/*"} {
 		if !strings.Contains(msg, want) {
-			t.Fatalf("mensagem deveria conter %s: %s", want, msg)
+			t.Fatalf("the message should contain %s: %s", want, msg)
 		}
 	}
 }
@@ -163,11 +163,11 @@ func TestOverlappingPatternsAllowed(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(routes) != 2 || routes[0].Name() != "payments" {
-		t.Fatalf("o curinga mais longo deveria vir primeiro: %v, %v", routes[0].Name(), routes[1].Name())
+		t.Fatalf("the longest wildcard should come first: %v, %v", routes[0].Name(), routes[1].Name())
 	}
 }
 
-// Requirement: Validação da configuração
+// Requirement: Configuration validation
 
 func TestProbabilityOutOfRange(t *testing.T) {
 	dir := t.TempDir()
@@ -187,22 +187,22 @@ overrides:
 	_, _, err := loadDir(t, dir)
 	e := singleError(t, err)
 	if filepath.Base(e.File) != "p.yaml" || e.Field != "overrides[0].probability" || e.Line != 12 || e.Column != 5 {
-		t.Fatalf("erro deveria apontar p.yaml, overrides[0].probability, linha 12 coluna 5: %+v", e)
+		t.Fatalf("the error should point at p.yaml, overrides[0].probability, line 12 column 5: %+v", e)
 	}
 	if !strings.Contains(e.Msg, "1.5") {
-		t.Fatalf("mensagem deveria citar o valor: %s", e.Msg)
+		t.Fatalf("the message should quote the value: %s", e.Msg)
 	}
 }
 
 func TestInvalidUpstream(t *testing.T) {
-	for _, up := range []string{"localhost:9000", "ftp://x", "http://", "::nada"} {
+	for _, up := range []string{"localhost:9000", "ftp://x", "http://", "::nothing"} {
 		t.Run(up, func(t *testing.T) {
 			dir := t.TempDir()
 			writeFiles(t, dir, map[string]string{"u.yaml": "schemaVersion: 1\nname: u\nupstream: \"" + up + "\"\nmatch:\n  path: /u/*\n"})
 			_, _, err := loadDir(t, dir)
 			e := singleError(t, err)
 			if filepath.Base(e.File) != "u.yaml" || e.Field != "upstream" || !strings.Contains(e.Msg, up) {
-				t.Fatalf("erro deveria nomear u.yaml e o valor %q: %+v", up, e)
+				t.Fatalf("the error should name u.yaml and the value %q: %+v", up, e)
 			}
 		})
 	}
@@ -210,12 +210,12 @@ func TestInvalidUpstream(t *testing.T) {
 
 func TestSchemaVersionAboveSupported(t *testing.T) {
 	dir := t.TempDir()
-	// Um documento futuro pode ter campos desconhecidos; o erro é o de versão.
-	writeFiles(t, dir, map[string]string{"f.yaml": "schemaVersion: 7\nname: f\nmatch:\n  path: /f/*\nnovidade: sim\n"})
+	// A future document may carry unknown fields; the error is the one about the version.
+	writeFiles(t, dir, map[string]string{"f.yaml": "schemaVersion: 7\nname: f\nmatch:\n  path: /f/*\nsomethingNew: yes\n"})
 	_, _, err := loadDir(t, dir)
 	e := singleError(t, err)
 	if e.Field != "schemaVersion" || !strings.Contains(e.Msg, "7") || !strings.Contains(e.Msg, "1") {
-		t.Fatalf("erro deveria nomear as duas versões: %+v", e)
+		t.Fatalf("the error should name both versions: %+v", e)
 	}
 }
 
@@ -236,7 +236,7 @@ overrides:
 	_, _, err := loadDir(t, dir)
 	e := singleError(t, err)
 	if e.Field != "overrides[0].latency.min" || e.Line != 10 {
-		t.Fatalf("erro deveria apontar latency.min na linha 10: %+v", e)
+		t.Fatalf("the error should point at latency.min on line 10: %+v", e)
 	}
 }
 
@@ -261,9 +261,9 @@ overrides:
 		source, field, msg string
 		line               int
 	}{
-		"desconhecida": {"      kind: guessed\n      exchange: 01J8ZK3Q4N6V7W8X9Y0Z1A2B3C\n", "overrides[0].source.kind", "guessed", 14},
-		"sem kind":     {"      exchange: 01J8ZK3Q4N6V7W8X9Y0Z1A2B3C\n", "overrides[0].source.kind", "obrigatório", 13},
-		"sem troca":    {"      kind: derived\n", "overrides[0].source.exchange", "troca", 13},
+		"unknown kind":     {"      kind: guessed\n      exchange: 01J8ZK3Q4N6V7W8X9Y0Z1A2B3C\n", "overrides[0].source.kind", "guessed", 14},
+		"missing kind":     {"      exchange: 01J8ZK3Q4N6V7W8X9Y0Z1A2B3C\n", "overrides[0].source.kind", "required", 13},
+		"missing exchange": {"      kind: derived\n", "overrides[0].source.exchange", "exchange", 13},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -271,7 +271,7 @@ overrides:
 			_, _, err := loadDir(t, dir)
 			e := singleError(t, err)
 			if e.Field != c.field || e.Line != c.line || !strings.Contains(e.Msg, c.msg) {
-				t.Fatalf("erro deveria apontar %s na linha %d citando %q: %+v", c.field, c.line, c.msg, e)
+				t.Fatalf("the error should point at %s on line %d quoting %q: %+v", c.field, c.line, c.msg, e)
 			}
 		})
 	}
@@ -279,13 +279,13 @@ overrides:
 		dir := t.TempDir()
 		writeFiles(t, dir, map[string]string{"s.yaml": doc("      kind: " + kind + "\n      exchange: 01J8ZK3Q4N6V7W8X9Y0Z1A2B3C\n")})
 		if _, _, err := loadDir(t, dir); err != nil {
-			t.Fatalf("origem %s deveria ser aceita: %v", kind, err)
+			t.Fatalf("source %s should be accepted: %v", kind, err)
 		}
 	}
 }
 
 func TestDisabledOverrideStillValidated(t *testing.T) {
-	// Desligado não isenta: o override precisa valer quando for religado.
+	// Being off is no excuse: the override has to hold up when it is turned back on.
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"d.yaml": `schemaVersion: 1
 name: d
@@ -308,53 +308,53 @@ overrides:
 	_, _, err := loadDir(t, dir)
 	var es Errors
 	if !errors.As(err, &es) || len(es) != 2 {
-		t.Fatalf("esperados dois erros localizados, recebido: %v", err)
+		t.Fatalf("expected two located errors, got: %v", err)
 	}
 	if es[0].Field != "overrides[0].probability" || es[0].Line != 13 {
-		t.Errorf("override desligado deveria ter a probabilidade validada: %+v", es[0])
+		t.Errorf("a disabled override should still have its probability validated: %+v", es[0])
 	}
 	if es[1].Field != "overrides[1]" || !strings.Contains(es[1].Msg, "respond") {
-		t.Errorf("override desligado sem efeito deveria ser recusado: %+v", es[1])
+		t.Errorf("a disabled override with no effect should be rejected: %+v", es[1])
 	}
 }
 
-// Requirement: Critérios de seleção do override — parâmetros de segmento
+// Requirement: Override selection criteria — segment parameters
 
 func TestSegmentParamPathValidated(t *testing.T) {
 	doc := func(path string) string {
-		return "schemaVersion: 1\nname: v\nmatch:\n  path: /viacep/*\noverrides:\n  - name: o\n    match:\n      path: " + path + "\n    respond:\n      status: 200\n"
+		return "schemaVersion: 1\nname: v\nmatch:\n  path: /zip/*\noverrides:\n  - name: o\n    match:\n      path: " + path + "\n    respond:\n      status: 200\n"
 	}
-	for _, ok := range []string{"/viacep/:id/json", "/viacep/:cep_1/:_x", "/viacep/:id/*", "/v1/projects:batch"} {
+	for _, ok := range []string{"/zip/:id/json", "/zip/:cep_1/:_x", "/zip/:id/*", "/v1/projects:batch"} {
 		dir := t.TempDir()
 		writeFiles(t, dir, map[string]string{"v.yaml": doc(ok)})
 		if _, _, err := loadDir(t, dir); err != nil {
-			t.Errorf("%s deveria ser aceito: %v", ok, err)
+			t.Errorf("%s should be accepted: %v", ok, err)
 		}
 	}
 	for path, want := range map[string]string{
-		"/viacep/:/json":       "inválido",
-		"/viacep/:1d/json":     "inválido",
-		"/viacep/:i-d/json":    "inválido",
-		"/viacep/:id/:id/json": "repetido",
-		"/viacep/:id*":         "parâmetro e curinga",
+		"/zip/:/json":       "invalid",
+		"/zip/:1d/json":     "invalid",
+		"/zip/:i-d/json":    "invalid",
+		"/zip/:id/:id/json": "duplicate",
+		"/zip/:id*":         "parameter and a wildcard",
 	} {
 		dir := t.TempDir()
 		writeFiles(t, dir, map[string]string{"v.yaml": doc(path)})
 		_, _, err := loadDir(t, dir)
 		e := singleError(t, err)
 		if e.Field != "overrides[0].match.path" || !strings.Contains(e.Msg, want) {
-			t.Errorf("%s: erro inesperado %+v", path, e)
+			t.Errorf("%s: unexpected error %+v", path, e)
 		}
 	}
 }
 
-// O path da rota continua sem parâmetros: só o de um override os aceita.
+// A route path still takes no parameters: only an override path accepts them.
 func TestRoutePathRejectsSegmentParams(t *testing.T) {
 	dir := t.TempDir()
-	writeFiles(t, dir, map[string]string{"v.yaml": routeYAML("v", "/viacep/:id/*")})
+	writeFiles(t, dir, map[string]string{"v.yaml": routeYAML("v", "/zip/:id/*")})
 	_, _, err := loadDir(t, dir)
 	e := singleError(t, err)
-	if e.Field != "match.path" || !strings.Contains(e.Msg, "só são aceitos no path de um override") {
-		t.Fatalf("erro inesperado: %+v", e)
+	if e.Field != "match.path" || !strings.Contains(e.Msg, "only accepted in an override path") {
+		t.Fatalf("unexpected error: %+v", e)
 	}
 }

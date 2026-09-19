@@ -20,7 +20,7 @@ func writeGateway(t *testing.T, content string) string {
 	return filepath.Join(dir, "gateway.json")
 }
 
-// Requirement: Configuração do processo em gateway.json
+// Requirement: Process configuration in gateway.json
 
 func TestGatewayFileLoaded(t *testing.T) {
 	path := writeGateway(t, `{"schemaVersion":1,"ports":{"traffic":9000,"admin":9001},"seed":7}`)
@@ -29,10 +29,10 @@ func TestGatewayFileLoaded(t *testing.T) {
 		t.Fatal(err)
 	}
 	if s.TrafficPort != 9000 || s.AdminPort != 9001 || s.Seed == nil || *s.Seed != 7 {
-		t.Fatalf("valores do arquivo não aplicados: %+v", s)
+		t.Fatalf("the values from the file were not applied: %+v", s)
 	}
 	if len(warnings) != 0 {
-		t.Fatalf("avisos inesperados: %v", warnings)
+		t.Fatalf("unexpected warnings: %v", warnings)
 	}
 }
 
@@ -43,14 +43,14 @@ func TestGatewayFileMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 	if s.TrafficPort != 8080 || s.AdminPort != 8081 || s.HistoryBackend != BackendMemory {
-		t.Fatalf("padrões não aplicados: %+v", s)
+		t.Fatalf("the defaults were not applied: %+v", s)
 	}
 	if len(warnings) != 1 || !strings.Contains(warnings[0], path) {
-		t.Fatalf("esperado aviso nomeando %s, recebido %v", path, warnings)
+		t.Fatalf("expected a warning naming %s, got %v", path, warnings)
 	}
 }
 
-// Requirement: Variáveis de ambiente sobrepõem os arquivos
+// Requirement: Environment variables win over the files
 
 func TestEnvOverridesFile(t *testing.T) {
 	path := writeGateway(t, `{"history":{"backend":"memory"}}`)
@@ -59,7 +59,7 @@ func TestEnvOverridesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if s.HistoryBackend != BackendSQLite {
-		t.Fatalf("ambiente deveria vencer o arquivo: %q", s.HistoryBackend)
+		t.Fatalf("the environment should win over the file: %q", s.HistoryBackend)
 	}
 }
 
@@ -70,7 +70,7 @@ func TestFileOverridesDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	if s.TrafficPort != 9999 {
-		t.Fatalf("arquivo deveria vencer o padrão: %d", s.TrafficPort)
+		t.Fatalf("the file should win over the default: %d", s.TrafficPort)
 	}
 }
 
@@ -91,14 +91,14 @@ func TestEffectiveOrigin(t *testing.T) {
 	}
 	for key, src := range want {
 		if got[key].Source != src {
-			t.Errorf("%s: origem %+v, esperada %+v", key, got[key].Source, src)
+			t.Errorf("%s: source %+v, expected %+v", key, got[key].Source, src)
 		}
 	}
 	if got["ports.traffic"].Value != 7000 || got["seed"].Value != uint64(42) {
-		t.Errorf("valores efetivos errados: %v, %v", got["ports.traffic"].Value, got["seed"].Value)
+		t.Errorf("wrong effective values: %v, %v", got["ports.traffic"].Value, got["seed"].Value)
 	}
 	if len(got) != len(settingFields) {
-		t.Errorf("a consulta deveria listar todos os %d valores, listou %d", len(settingFields), len(got))
+		t.Errorf("the query should list all %d values, it listed %d", len(settingFields), len(got))
 	}
 }
 
@@ -106,18 +106,18 @@ func TestInvalidEnvNamesVariable(t *testing.T) {
 	_, _, err := LoadSettings(filepath.Join(t.TempDir(), "x.json"), envMap(map[string]string{"GATEWAY_ADMIN_PORT": "abc"}))
 	e := singleError(t, err)
 	if !strings.Contains(e.Error(), "GATEWAY_ADMIN_PORT") {
-		t.Fatalf("erro deveria nomear a variável: %v", e)
+		t.Fatalf("the error should name the variable: %v", e)
 	}
 }
 
-// Requirement: Validação da configuração — Portas iguais
+// Requirement: Configuration validation — Equal ports
 
 func TestEqualPortsRefused(t *testing.T) {
 	path := writeGateway(t, "{\n  \"ports\": {\n    \"traffic\": 9000,\n    \"admin\": 9000\n  }\n}\n")
 	_, _, err := LoadSettings(path, envMap(nil))
 	e := singleError(t, err)
 	if e.File != path || e.Field != "ports.admin" || e.Line != 4 || !strings.Contains(e.Msg, "9000") {
-		t.Fatalf("erro deveria apontar ports.admin na linha 4 de %s: %+v", path, e)
+		t.Fatalf("the error should point at ports.admin on line 4 of %s: %+v", path, e)
 	}
 }
 
@@ -126,7 +126,7 @@ func TestEqualPortsFromEnvNamesVariable(t *testing.T) {
 	_, _, err := LoadSettings(path, envMap(map[string]string{"GATEWAY_ADMIN_PORT": "9000"}))
 	e := singleError(t, err)
 	if !strings.Contains(e.Error(), "GATEWAY_ADMIN_PORT") {
-		t.Fatalf("erro deveria nomear a variável de ambiente: %v", e)
+		t.Fatalf("the error should name the environment variable: %v", e)
 	}
 }
 
@@ -135,19 +135,19 @@ func TestGatewayFileSchemaAboveSupported(t *testing.T) {
 	_, _, err := LoadSettings(path, envMap(nil))
 	e := singleError(t, err)
 	if e.Field != "schemaVersion" || !strings.Contains(e.Msg, "3") {
-		t.Fatalf("erro de versão esperado: %+v", e)
+		t.Fatalf("expected a version error: %+v", e)
 	}
 }
 
 func TestRelativePathsResolveFromConfigDir(t *testing.T) {
-	path := writeGateway(t, `{"routesDir":"rotas","history":{"backend":"ndjson","path":"h.ndjson"}}`)
+	path := writeGateway(t, `{"routesDir":"my-routes","history":{"backend":"ndjson","path":"h.ndjson"}}`)
 	s, _, err := LoadSettings(path, envMap(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
 	dir := filepath.Dir(path)
-	if s.RoutesDir != filepath.Join(dir, "rotas") || s.HistoryPath != filepath.Join(dir, "h.ndjson") {
-		t.Fatalf("caminhos deveriam partir de %s: %q, %q", dir, s.RoutesDir, s.HistoryPath)
+	if s.RoutesDir != filepath.Join(dir, "my-routes") || s.HistoryPath != filepath.Join(dir, "h.ndjson") {
+		t.Fatalf("the paths should start from %s: %q, %q", dir, s.RoutesDir, s.HistoryPath)
 	}
 }
 
@@ -159,18 +159,18 @@ func TestDefaultPathsSitNextToGatewayFile(t *testing.T) {
 	}
 	dir := filepath.Dir(path)
 	if s.RoutesDir != filepath.Join(dir, "routes") || s.HistoryPath != filepath.Join(dir, "gateway-history.db") {
-		t.Fatalf("padrões deveriam ficar ao lado de gateway.json: %q, %q", s.RoutesDir, s.HistoryPath)
+		t.Fatalf("the defaults should sit next to gateway.json: %q, %q", s.RoutesDir, s.HistoryPath)
 	}
 	s, _, err = LoadSettings(path, envMap(map[string]string{"GATEWAY_ROUTES_DIR": "rel"}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if s.RoutesDir != "rel" {
-		t.Fatalf("caminho do ambiente parte do diretório de trabalho: %q", s.RoutesDir)
+		t.Fatalf("a path from the environment starts at the working directory: %q", s.RoutesDir)
 	}
 }
 
-// Requirement: Configuração do processo em gateway.json — modo aprendizado
+// Requirement: Process configuration in gateway.json — learning mode
 
 func TestLearningSetting(t *testing.T) {
 	s, _, err := LoadSettings(filepath.Join(t.TempDir(), "gateway.json"), envMap(nil))
@@ -178,7 +178,7 @@ func TestLearningSetting(t *testing.T) {
 		t.Fatal(err)
 	}
 	if s.LearningEnabled || s.Sources["learning.enabled"].Origin != OriginDefault {
-		t.Fatalf("aprendizado deveria vir desligado do padrão: %v %+v", s.LearningEnabled, s.Sources["learning.enabled"])
+		t.Fatalf("learning should come off by default: %v %+v", s.LearningEnabled, s.Sources["learning.enabled"])
 	}
 
 	path := writeGateway(t, `{"learning":{"enabled":true}}`)
@@ -187,7 +187,7 @@ func TestLearningSetting(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !s.LearningEnabled || s.Sources["learning.enabled"] != (Source{Origin: OriginFile, Name: path}) {
-		t.Fatalf("aprendizado deveria vir ligado do arquivo: %v %+v", s.LearningEnabled, s.Sources["learning.enabled"])
+		t.Fatalf("learning should come on from the file: %v %+v", s.LearningEnabled, s.Sources["learning.enabled"])
 	}
 
 	s, _, err = LoadSettings(path, envMap(map[string]string{"GATEWAY_LEARNING": "false"}))
@@ -195,7 +195,7 @@ func TestLearningSetting(t *testing.T) {
 		t.Fatal(err)
 	}
 	if s.LearningEnabled || s.Sources["learning.enabled"] != (Source{Origin: OriginEnv, Name: "GATEWAY_LEARNING"}) {
-		t.Fatalf("GATEWAY_LEARNING deveria vencer o arquivo: %v %+v", s.LearningEnabled, s.Sources["learning.enabled"])
+		t.Fatalf("GATEWAY_LEARNING should win over the file: %v %+v", s.LearningEnabled, s.Sources["learning.enabled"])
 	}
 	var found bool
 	for _, v := range s.Effective() {
@@ -204,11 +204,11 @@ func TestLearningSetting(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatal("learning.enabled deveria constar da configuração efetiva com sua origem")
+		t.Fatal("learning.enabled should show up in the effective configuration with its source")
 	}
 
-	_, _, err = LoadSettings(path, envMap(map[string]string{"GATEWAY_LEARNING": "talvez"}))
+	_, _, err = LoadSettings(path, envMap(map[string]string{"GATEWAY_LEARNING": "maybe"}))
 	if e := singleError(t, err); !strings.Contains(e.Error(), "GATEWAY_LEARNING") || e.Field != "learning.enabled" {
-		t.Fatalf("erro deveria nomear a variável e a chave: %+v", e)
+		t.Fatalf("the error should name the variable and the key: %+v", e)
 	}
 }

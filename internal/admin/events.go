@@ -9,32 +9,32 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/config/writer"
-	"github.com/gamerjp64/gateway/internal/exchange"
-	"github.com/gamerjp64/gateway/internal/override"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config/writer"
+	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/override"
 )
 
 const (
-	// DefaultHeartbeat é o intervalo padrão do heartbeat do fluxo de eventos.
-	// O cliente considera a conexão perdida depois de três intervalos sem
-	// nenhum evento.
+	// DefaultHeartbeat is the default heartbeat interval of the event
+	// stream. The client takes the connection for lost after three
+	// intervals without a single event.
 	DefaultHeartbeat = 15 * time.Second
-	// aggregateEvery é o intervalo de agregação das trocas novas e do estado
-	// vivo dos overrides: no máximo uma atualização de cada por intervalo.
+	// aggregateEvery is the aggregation interval for the new exchanges and
+	// the live override state: at most one update of each per interval.
 	aggregateEvery = time.Second
-	// maxPerEvent limita as trocas de um evento exchanges; as demais do
-	// intervalo são contadas em dropped.
+	// maxPerEvent caps the exchanges of one exchanges event; the rest of
+	// the interval is counted in dropped.
 	maxPerEvent = 200
-	// streamBuffer é quantas trocas uma conexão acumula entre duas leituras
-	// do broker. Com o buffer cheio a troca é contada como perdida: a
-	// publicação nunca espera por uma conexão.
+	// streamBuffer is how many exchanges a connection buffers between two
+	// reads from the broker. With the buffer full the exchange is counted
+	// as dropped: publishing never waits on a connection.
 	streamBuffer = 1024
-	// hubBuffer é quantos eventos de configuração e histórico uma conexão
-	// acumula enquanto escreve.
+	// hubBuffer is how many configuration and history events a connection
+	// buffers while it writes.
 	hubBuffer = 64
-	// writeTimeout limita cada escrita no fluxo. Um cliente que não lê nesse
-	// prazo é desconectado e reconecta quando puder.
+	// writeTimeout caps each write to the stream. A client that does not
+	// read within that deadline is disconnected and reconnects when it can.
 	writeTimeout = 10 * time.Second
 )
 
@@ -47,33 +47,33 @@ func (h *Handler) eventRoutes() {
 	})
 }
 
-// streamKey guarda no contexto das requisições o sinal de que o servidor
-// saiu de serviço.
+// streamKey holds, in the request context, the signal that the server has
+// gone out of service.
 type streamKey struct{}
 
-// StreamContext acrescenta a ctx o sinal stop, fechado quando o servidor que
-// atende a requisição sai de serviço (encerramento ou troca de porta). O
-// fluxo de eventos termina ao recebê-lo, em vez de segurar o Shutdown
-// gracioso do servidor indefinidamente; o cliente reconecta.
+// StreamContext adds to ctx the stop signal, closed when the server that
+// serves the request goes out of service (shutdown or port change). The
+// event stream ends when it arrives, instead of holding the server's
+// graceful Shutdown indefinitely; the client reconnects.
 func StreamContext(ctx context.Context, stop <-chan struct{}) context.Context {
 	return context.WithValue(ctx, streamKey{}, stop)
 }
 
 func streamStop(ctx context.Context) <-chan struct{} {
 	stop, _ := ctx.Value(streamKey{}).(<-chan struct{})
-	return stop // nil: nunca é sinalizado
+	return stop // nil: never signaled
 }
 
-// event é um evento pronto para o fluxo, com os dados já serializados.
+// event is an event ready for the stream, with its data already serialized.
 type event struct {
 	name string
 	data []byte
 }
 
-// hub distribui os eventos de configuração e de histórico às conexões
-// abertas. A publicação nunca espera: uma conexão com o buffer cheio perde o
-// evento, como qualquer evento perdido numa desconexão, e o cliente recarrega
-// por REST o que exibe.
+// hub fans the configuration and history events out to the open
+// connections. Publishing never waits: a connection with a full buffer
+// loses the event, like any event lost on a disconnect, and the client
+// reloads over REST whatever it shows.
 type hub struct {
 	mu   sync.Mutex
 	subs map[chan event]struct{}
@@ -111,23 +111,24 @@ func (h *hub) publish(name string, v any) {
 	}
 }
 
-// configEvent é o evento de uma alteração de configuração aplicada.
+// configEvent is the event of an applied configuration change.
 type configEvent struct {
-	// Cause é api, reload ou learning.
+	// Cause is api, reload or learning.
 	Cause    string   `json:"cause"`
 	Routes   []string `json:"routes"`
 	Settings []string `json:"settings"`
 }
 
-// historyEvent é o evento de limpeza do histórico ou de troca de backend.
+// historyEvent is the event of the history being cleared or the backend
+// being switched.
 type historyEvent struct {
-	// Cause é cleared ou backend.
+	// Cause is cleared or backend.
 	Cause   string `json:"cause"`
 	Backend string `json:"backend"`
 }
 
-// configChanged publica toda alteração aplicada pelo Writer — da API, da
-// recarga ou do aprendizado.
+// configChanged publishes every change the Writer applies, be it from the
+// API, a reload or learning.
 func (h *Handler) configChanged(c writer.Change) {
 	routes, settings := c.Routes, c.Settings
 	if routes == nil {
@@ -139,7 +140,7 @@ func (h *Handler) configChanged(c writer.Change) {
 	h.events.publish("config", configEvent{Cause: c.Cause, Routes: routes, Settings: settings})
 }
 
-// exchangesEvent agrega as trocas registradas num intervalo.
+// exchangesEvent aggregates the exchanges recorded in one interval.
 type exchangesEvent struct {
 	Items   []exchange.Exchange `json:"items"`
 	Dropped uint64              `json:"dropped"`
@@ -154,21 +155,23 @@ type heartbeatEvent struct {
 	Now time.Time `json:"now"`
 }
 
-// stream atende o fluxo text/event-stream do painel: hello ao conectar; as
-// trocas novas agregadas a no máximo uma atualização por segundo; as
-// alterações de configuração e do histórico; o estado vivo dos overrides
-// quando muda de forma não contínua, também agregado por segundo; a
-// disponibilidade dos upstreams quando o status de algum muda, conferida no
-// mesmo intervalo; e um
-// heartbeat periódico, que mantém a conexão viva sem tráfego.
+// stream serves the panel's text/event-stream: hello on connect; the new
+// exchanges aggregated into at most one update per second; the
+// configuration and history changes; the live override state when it
+// changes in a non-continuous way, also aggregated per second; the
+// upstream availability when the status of one of them changes, checked
+// on the same interval; and a periodic heartbeat, which keeps the
+// connection alive with no traffic.
 //
-// Nada aqui bloqueia o proxy: as trocas chegam pelo broker, que nunca espera
-// por um assinante, e cada escrita tem prazo, de modo que um cliente lento
-// perde eventos (contados em dropped) e, parado, é desconectado.
+// Nothing here blocks the proxy: the exchanges arrive over the broker,
+// which never waits on a subscriber, and every write has a deadline, so a
+// slow client loses events (counted in dropped) and, once stalled, is
+// disconnected.
 func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	rc := http.NewResponseController(w)
-	// O prazo de escrita vale para a conexão: sem zerá-lo na saída, uma
-	// requisição seguinte na mesma conexão herdaria o prazo vencido.
+	// The write deadline applies to the connection: without clearing it on
+	// the way out, a later request on the same connection would inherit the
+	// expired deadline.
 	defer rc.SetWriteDeadline(time.Time{})
 	hdr := w.Header()
 	hdr.Set("Content-Type", "text/event-stream; charset=utf-8")
@@ -220,8 +223,8 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if len(pending) == maxPerEvent {
-				// Ficam as mais novas; as mais antigas do intervalo são
-				// contadas como perdidas.
+				// The newest ones stay; the oldest of the interval are
+				// counted as dropped.
 				pending = append(pending[:0], pending[1:]...)
 				dropped++
 			}
@@ -233,8 +236,8 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		case <-tick.C:
 			dropped += sub.TakeDropped()
 			if len(pending) > 0 || dropped > 0 {
-				// Com a exposição do histórico desligada, as trocas não
-				// saem pelo fluxo.
+				// With history exposure off, the exchanges do not go
+				// out over the stream.
 				if h.live.Load().Settings.HistoryExpose {
 					if !sendJSON("exchanges", exchangesEvent{Items: pending, Dropped: dropped}) {
 						return
@@ -263,10 +266,11 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// statesKey resume o estado vivo dos overrides sem o restante do tempo de
-// vida, que muda continuamente e o painel decrementa por conta própria: o
-// evento overrides só sai quando algo muda de forma não contínua — um
-// override surge, some, expira, é reativado, liga, desliga ou é aplicado.
+// statesKey summarizes the live override state without the remaining
+// lifetime, which changes continuously and the panel counts down on its
+// own: the overrides event only goes out when something changes in a
+// non-continuous way, that is, an override appears, disappears, expires,
+// is reset, is turned on or off, or is applied.
 func statesKey(states []override.LiveState, _ time.Time) string {
 	var b bytes.Buffer
 	for _, s := range states {
@@ -290,7 +294,7 @@ func ptrVal(p *int) int {
 	return *p
 }
 
-// statusBody é o estado resumido do processo, também enviado no hello.
+// statusBody is the summarized process state, also sent in the hello.
 type statusBody struct {
 	Version       string        `json:"version"`
 	SchemaVersion int           `json:"schemaVersion"`
@@ -338,7 +342,7 @@ func (h *Handler) status() statusBody {
 	return b
 }
 
-// getStatus devolve o estado resumido do processo.
+// getStatus returns the summarized process state.
 func (h *Handler) getStatus(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, h.status())
 }

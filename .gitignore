@@ -1,6 +1,6 @@
-# Binários
-/gateway
-/gateway.exe
+# Binaries
+/devgateway
+/devgateway.exe
 *.exe
 *.test
 *.out
@@ -8,35 +8,35 @@
 # Node
 node_modules/
 
-# Build do frontend — o placeholder é versionado de propósito (ver design.md)
+# Frontend build - the placeholder is committed on purpose (see design.md)
 web/dist/*
 !web/dist/index.html
 
-# Dados locais de execução
+# Local runtime data
 *.db
 *.sqlite
 *.sqlite3
 *.ndjson
 
-# Sistema operacional
+# Operating system
 .DS_Store
 Thumbs.db
 
-# Build local
+# Local build
 /bin/
 
-# Impeccable: preferências locais e referências baixadas
+# Impeccable: local preferences and downloaded references
 .impeccable/config.local.json
 .impeccable/ref/
 
-# Worktrees dos workflows
+# Workflow worktrees
 .claude/worktrees/
 
-# Impeccable: relatórios de revisão locais
+# Impeccable: local review reports
 .impeccable/review/
 
-# Cópia de trabalho do ambiente de exemplo (examples/run.sh)
+# Working copy of the example environment (examples/run.sh)
 /examples/.run/
 
-# Binários de release (make release)
+# Release binaries (make release)
 /dist/

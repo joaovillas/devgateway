@@ -12,13 +12,13 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config"
 )
 
-// Requirement: Derivação de override a partir de troca capturada
+// Requirement: Deriving an override from a captured exchange
 
-// chargeUpstream responde como um serviço de pagamentos, com cabeçalhos
-// próprios, um cabeçalho repetido e corpo JSON compacto.
+// chargeUpstream answers like a payments service, with headers of its own, a
+// repeated header and a compact JSON body.
 func chargeUpstream(t *testing.T, hits *atomic.Int64) *httptest.Server {
 	t.Helper()
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +34,7 @@ func chargeUpstream(t *testing.T, hits *atomic.Int64) *httptest.Server {
 			io.WriteString(w, `{"amount":100,"id":"ch_1","status":"paid"}`)
 		case "/payments/receipt":
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			io.WriteString(w, "recibo 42\nobrigado")
+			io.WriteString(w, "receipt 42\nthank you")
 		default:
 			w.Header().Set("Content-Type", "text/plain")
 			io.WriteString(w, strings.Repeat("abcdefghij", 10))
@@ -50,17 +50,18 @@ type deriveDraft struct {
 	Warnings []string        `json:"warnings"`
 }
 
-// lastExchangeID devolve o identificador da troca mais nova do histórico.
+// lastExchangeID returns the identifier of the newest exchange in the
+// history.
 func (e *adminEnv) lastExchangeID(t *testing.T) string {
 	t.Helper()
 	var l listBody
 	if r := e.call(t, "GET", "/exchanges?limit=1", "", ""); r.status != 200 {
-		t.Fatalf("listagem: %d %s", r.status, r.body)
+		t.Fatalf("listing: %d %s", r.status, r.body)
 	} else {
 		r.decode(t, &l)
 	}
 	if len(l.Items) == 0 {
-		t.Fatal("o histórico deveria ter a troca")
+		t.Fatal("the history should hold the exchange")
 	}
 	return l.Items[0].ID
 }
@@ -82,9 +83,9 @@ func post(t *testing.T, url, body string) observed {
 	return observed{res.StatusCode, res.Header, string(b)}
 }
 
-// Scenario: Override derivado reproduz a troca observada — com revisão antes
-// de valer: o rascunho não grava nada, e o override criado a partir dele
-// passa a responder como o upstream respondeu.
+// Scenario: A derived override replays the observed exchange — with a review
+// before it takes effect: the draft writes nothing, and the override created
+// from it goes on to answer exactly as the upstream did.
 
 func TestDerivedOverrideReproducesExchange(t *testing.T) {
 	var hits atomic.Int64
@@ -101,55 +102,56 @@ func TestDerivedOverrideReproducesExchange(t *testing.T) {
 	r.decode(t, &d)
 	o := d.Override
 	if r.status != 200 || d.Route != "payments" || len(d.Warnings) != 0 {
-		t.Fatalf("rascunho: %d %s", r.status, r.body)
+		t.Fatalf("draft: %d %s", r.status, r.body)
 	}
 	if o.Name != "post-payments-charge" || o.Match.Path != "/payments/charge" || o.Match.Method != "POST" ||
 		o.Respond == nil || o.Respond.Status != 201 || o.Enabled() != true {
-		t.Fatalf("critérios e resposta do rascunho: %+v", o)
+		t.Fatalf("criteria and response of the draft: %+v", o)
 	}
 	if o.Source == nil || o.Source.Kind != config.SourceDerived || o.Source.Exchange != id || o.Source.At.IsZero() || o.Source.BodyIncomplete {
-		t.Fatalf("origem do rascunho: %+v", o.Source)
+		t.Fatalf("origin of the draft: %+v", o.Source)
 	}
 	if !slices.Equal(o.Respond.Headers["Set-Cookie"], []string{"a=1", "b=2"}) || o.Respond.Headers["X-Request-Cost"][0] != "7" {
-		t.Fatalf("cabeçalhos do rascunho: %v", o.Respond.Headers)
+		t.Fatalf("headers of the draft: %v", o.Respond.Headers)
 	}
 	for _, k := range []string{"Date", "Content-Length", "X-Gateway"} {
 		if _, ok := o.Respond.Headers[k]; ok {
-			t.Fatalf("%s não deveria ir para a resposta declarada", k)
+			t.Fatalf("%s should not make it into the declared response", k)
 		}
 	}
 	if stateOf(t, doc) != before {
-		t.Fatal("o rascunho não deveria gravar nada")
+		t.Fatal("the draft should write nothing")
 	}
-	// Até ser criado, o rascunho não vale: o upstream segue respondendo.
+	// Until it is created, the draft does not apply: the upstream keeps
+	// answering.
 	if post(t, e.traffic+"/payments/charge", `{}`); hits.Load() != 2 {
-		t.Fatalf("o rascunho não deveria interceptar: %d chamadas ao upstream", hits.Load())
+		t.Fatalf("the draft should not intercept: %d calls to the upstream", hits.Load())
 	}
 
-	// Revisão: o nome é trocado e o override é criado.
+	// Review: the name is changed and the override is created.
 	o.Name = "charge-ok"
 	body, _ := json.Marshal(o)
 	if r := e.call(t, "POST", "/routes/payments/overrides", "", string(body)); r.status != 201 {
-		t.Fatalf("criação do override revisado: %d %s", r.status, r.body)
+		t.Fatalf("creating the reviewed override: %d %s", r.status, r.body)
 	}
 	got := post(t, e.traffic+"/payments/charge", `{"amount":100}`)
 	if hits.Load() != 2 {
-		t.Fatalf("o override deveria responder sem o upstream: %d chamadas", hits.Load())
+		t.Fatalf("the override should answer without the upstream: %d calls", hits.Load())
 	}
 	if got.status != real.status || got.body != real.body {
-		t.Fatalf("a resposta deveria reproduzir a observada:\nreal: %d %s\nderivada: %d %s", real.status, real.body, got.status, got.body)
+		t.Fatalf("the response should replay the observed one:\nreal:    %d %s\nderived: %d %s", real.status, real.body, got.status, got.body)
 	}
 	for _, k := range []string{"Content-Type", "X-Request-Cost", "Set-Cookie", "Content-Length"} {
 		if !slices.Equal(got.header.Values(k), real.header.Values(k)) {
-			t.Fatalf("cabeçalho %s: real %q, derivado %q", k, real.header.Values(k), got.header.Values(k))
+			t.Fatalf("header %s: real %q, derived %q", k, real.header.Values(k), got.header.Values(k))
 		}
 	}
 	if gw := got.header.Get("X-Gateway"); !strings.Contains(gw, "override=payments/charge-ok") || !strings.Contains(gw, "intervention=synthesized") {
-		t.Fatalf("a resposta deveria identificar a intervenção: %q", gw)
+		t.Fatalf("the response should identify the intervention: %q", gw)
 	}
 }
 
-// save grava direto; corpo de texto é reproduzido byte a byte.
+// save writes straight away; a text body is replayed byte for byte.
 func TestDeriveAndSave(t *testing.T) {
 	var hits atomic.Int64
 	up := chargeUpstream(t, &hits)
@@ -157,49 +159,49 @@ func TestDeriveAndSave(t *testing.T) {
 
 	real := fetch(e.traffic + "/payments/receipt")
 	id := e.lastExchangeID(t)
-	r := e.call(t, "POST", "/routes/payments/overrides/derive", "", `{"exchange":"`+id+`","name":"recibo","save":true}`)
+	r := e.call(t, "POST", "/routes/payments/overrides/derive", "", `{"exchange":"`+id+`","name":"receipt","save":true}`)
 	var res struct {
 		overrideRes
 		Warnings []string `json:"warnings"`
 	}
 	r.decode(t, &res)
-	if r.status != 201 || r.header.Get("Location") != "/api/routes/payments/overrides/recibo" || res.Override.Name != "recibo" ||
+	if r.status != 201 || r.header.Get("Location") != "/api/routes/payments/overrides/receipt" || res.Override.Name != "receipt" ||
 		res.Override.Source == nil || res.Override.Source.Kind != config.SourceDerived || res.Warnings == nil {
-		t.Fatalf("derivação gravada: %d %s", r.status, r.body)
+		t.Fatalf("derivation written: %d %s", r.status, r.body)
 	}
 	data, _ := os.ReadFile(filepath.Join(e.routes, "payments.yaml"))
 	if !strings.Contains(string(data), "kind: derived") || !strings.Contains(string(data), "exchange: "+id) {
-		t.Fatalf("o documento deveria registrar a origem:\n%s", data)
+		t.Fatalf("the document should record the origin:\n%s", data)
 	}
 	got := fetch(e.traffic + "/payments/receipt")
 	if hits.Load() != 1 || got.status != real.status || got.body != real.body {
-		t.Fatalf("o override gravado deveria reproduzir a troca: %+v, real %+v", got, real)
+		t.Fatalf("the written override should replay the exchange: %+v, real %+v", got, real)
 	}
-	// O nome já usado é conflito.
-	r = e.call(t, "POST", "/routes/payments/overrides/derive", "", `{"exchange":"`+id+`","name":"recibo","save":true}`)
+	// A name already in use is a conflict.
+	r = e.call(t, "POST", "/routes/payments/overrides/derive", "", `{"exchange":"`+id+`","name":"receipt","save":true}`)
 	if r.status != 409 || r.err(t).Error != "conflict" {
-		t.Fatalf("nome repetido: %d %s", r.status, r.body)
+		t.Fatalf("repeated name: %d %s", r.status, r.body)
 	}
 }
 
-// Scenario: Troca inexistente
+// Scenario: Unknown exchange
 
 func TestDeriveUnknownExchange(t *testing.T) {
 	e := startAdmin(t, freePorts, adminRoutes(t))
 	before := snapshotDir(t, e.routes)
 	r := e.call(t, "POST", "/routes/payments/overrides/derive", "", `{"exchange":"01K5E3V3C8Q2M4Z8N6P0R2T4W6","save":true}`)
 	if ae := r.err(t); r.status != 404 || ae.Error != "not_found" || !strings.Contains(ae.Message, "01K5E3V3C8Q2M4Z8N6P0R2T4W6") ||
-		!strings.Contains(ae.Message, "não encontrada") {
-		t.Fatalf("troca inexistente: %d %s", r.status, r.body)
+		!strings.Contains(ae.Message, "not found") {
+		t.Fatalf("unknown exchange: %d %s", r.status, r.body)
 	}
-	if r := e.call(t, "POST", "/routes/nenhuma/overrides/derive", "", `{"exchange":"x"}`); r.status != 404 {
-		t.Fatalf("rota inexistente: %d %s", r.status, r.body)
+	if r := e.call(t, "POST", "/routes/none/overrides/derive", "", `{"exchange":"x"}`); r.status != 404 {
+		t.Fatalf("unknown route: %d %s", r.status, r.body)
 	}
 	if r := e.call(t, "POST", "/routes/payments/overrides/derive", "", `{}`); r.status != 422 || r.err(t).Field != "exchange" {
-		t.Fatalf("sem troca: %d %s", r.status, r.body)
+		t.Fatalf("no exchange given: %d %s", r.status, r.body)
 	}
 	if after := snapshotDir(t, e.routes); !mapsEqual(before, after) {
-		t.Fatal("nenhum documento deveria mudar")
+		t.Fatal("no document should change")
 	}
 }
 
@@ -215,44 +217,44 @@ func mapsEqual(a, b map[string]string) bool {
 	return true
 }
 
-// Scenario: Derivação a partir de troca truncada — o override é criado
-// sinalizando explicitamente que o corpo está incompleto.
+// Scenario: Deriving from a truncated exchange — the override is created
+// flagging explicitly that the body is incomplete.
 
 func TestDeriveTruncatedExchange(t *testing.T) {
 	var hits atomic.Int64
 	up := chargeUpstream(t, &hits)
 	e := startAdmin(t, `{"ports":{"traffic":0,"admin":0},"capture":{"maxBodyBytes":16}}`,
 		map[string]string{"payments.yaml": routeDoc("payments", up.URL, "/payments/*")})
-	getBody(t, e.traffic+"/payments/longo")
+	getBody(t, e.traffic+"/payments/long")
 	id := e.lastExchangeID(t)
 
 	r := e.call(t, "POST", "/routes/payments/overrides/derive", "", `{"exchange":"`+id+`"}`)
 	var d deriveDraft
 	r.decode(t, &d)
 	if r.status != 200 || d.Override.Source == nil || !d.Override.Source.BodyIncomplete || len(d.Warnings) != 1 ||
-		!strings.Contains(d.Warnings[0], "truncado") || !strings.Contains(d.Warnings[0], "16 de 100") {
-		t.Fatalf("rascunho de troca truncada: %d %s", r.status, r.body)
+		!strings.Contains(d.Warnings[0], "truncated") || !strings.Contains(d.Warnings[0], "16 of 100") {
+		t.Fatalf("draft of a truncated exchange: %d %s", r.status, r.body)
 	}
 	r = e.call(t, "POST", "/routes/payments/overrides/derive", "", `{"exchange":"`+id+`","save":true}`)
 	if r.status != 201 {
-		t.Fatalf("gravação de troca truncada: %d %s", r.status, r.body)
+		t.Fatalf("writing a truncated exchange: %d %s", r.status, r.body)
 	}
 	data, _ := os.ReadFile(filepath.Join(e.routes, "payments.yaml"))
 	if !strings.Contains(string(data), "bodyIncomplete: true") {
-		t.Fatalf("o documento deveria sinalizar o corpo incompleto:\n%s", data)
+		t.Fatalf("the document should flag the incomplete body:\n%s", data)
 	}
 }
 
-// Só uma resposta do upstream é reproduzível; e sem exposição do histórico a
-// troca não é lida.
+// Only an upstream response can be replayed; and without history exposure the
+// exchange is not read at all.
 
 func TestDeriveRefusesExchangeWithoutUpstreamResponse(t *testing.T) {
 	e := startAdmin(t, freePorts, adminRoutes(t))
-	getBody(t, e.traffic+"/sem-rota")
+	getBody(t, e.traffic+"/no-route")
 	id := e.lastExchangeID(t)
 	r := e.call(t, "POST", "/routes/payments/overrides/derive", "", `{"exchange":"`+id+`"}`)
 	if ae := r.err(t); r.status != 422 || ae.Field != "exchange" || !strings.Contains(ae.Message, "gateway") {
-		t.Fatalf("troca respondida pelo gateway: %d %s", r.status, r.body)
+		t.Fatalf("exchange answered by the gateway: %d %s", r.status, r.body)
 	}
 }
 
@@ -261,6 +263,6 @@ func TestDeriveWithHistoryHidden(t *testing.T) {
 	getBody(t, e.traffic+"/payments/x")
 	r := e.call(t, "POST", "/routes/payments/overrides/derive", "", `{"exchange":"01K5E3V3C8Q2M4Z8N6P0R2T4W6"}`)
 	if r.status != 403 || r.err(t).Error != "history_disabled" {
-		t.Fatalf("derivação sem exposição: %d %s", r.status, r.body)
+		t.Fatalf("derivation without exposure: %d %s", r.status, r.body)
 	}
 }

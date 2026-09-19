@@ -1,6 +1,6 @@
-// Comando catalog: catálogo de produtos de brinquedo para o ambiente de
-// exemplo. Responde JSON; a consulta de estoque às vezes falha (fração
-// ajustável por -fail) e a busca é um pouco lenta.
+// Command catalog is a toy product catalog for the example environment.
+// It answers JSON; the stock lookup fails now and then (the fraction is
+// tunable with -fail) and search is a little slow.
 package main
 
 import (
@@ -20,15 +20,15 @@ type product struct {
 }
 
 var products = []product{
-	{ID: "p1", Name: "Caneca esmaltada", Price: 4990},
-	{ID: "p2", Name: "Caderno pontilhado", Price: 3200},
-	{ID: "p3", Name: "Lapiseira 0,5 mm", Price: 2750},
-	{ID: "p4", Name: "Garrafa térmica", Price: 8900},
+	{ID: "p1", Name: "Enamel mug", Price: 4990},
+	{ID: "p2", Name: "Dotted notebook", Price: 3200},
+	{ID: "p3", Name: "Mechanical pencil 0.5 mm", Price: 2750},
+	{ID: "p4", Name: "Vacuum flask", Price: 8900},
 }
 
 func main() {
-	addr := flag.String("addr", "127.0.0.1:9002", "endereço em que o serviço atende")
-	fail := flag.Float64("fail", 0.25, "fração das consultas de estoque que falham com 503")
+	addr := flag.String("addr", "127.0.0.1:9002", "address the service listens on")
+	fail := flag.Float64("fail", 0.25, "fraction of stock lookups that fail with 503")
 	flag.Parse()
 
 	mux := http.NewServeMux()
@@ -45,7 +45,7 @@ func main() {
 		}
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": "product_not_found"})
 	})
-	// O estoque é o endpoint instável: uma fração das consultas falha.
+	// Stock is the flaky endpoint: a fraction of the lookups fail.
 	mux.HandleFunc("GET /stock/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := find(r.PathValue("id")); !ok {
 			writeJSON(w, http.StatusNotFound, map[string]any{"error": "product_not_found"})
@@ -57,7 +57,7 @@ func main() {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"id": r.PathValue("id"), "available": rand.N(40)})
 	})
-	// A busca demora entre 150 e 450 ms.
+	// Search takes between 150 and 450 ms.
 	mux.HandleFunc("GET /search", func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-time.After(150*time.Millisecond + rand.N(300*time.Millisecond)):
@@ -74,7 +74,7 @@ func main() {
 		writeJSON(w, http.StatusOK, map[string]any{"query": q, "data": out})
 	})
 
-	log.Printf("catalog atendendo em http://%s", *addr)
+	log.Printf("catalog listening on http://%s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, mux))
 }
 

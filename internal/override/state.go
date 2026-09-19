@@ -5,21 +5,21 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config"
 )
 
-// Motivos de expiração informados no estado vivo.
+// Expiry reasons reported in the live state.
 const (
 	ExpiredTTL          = "ttl"
 	ExpiredApplications = "applications"
 )
 
-// Tracker guarda o estado vivo dos overrides — início do relógio do tempo de
-// vida, contagem de aplicações e última aplicação — fora do snapshot, que é
-// imutável. O estado de um override é identificado por rota e nome e
-// sobrevive às trocas de snapshot enquanto o override continua existindo; o
-// relógio e a contagem recomeçam quando o override surge, quando ttl ou
-// maxApplications mudam, quando ele é religado e sob Reset.
+// Tracker holds the overrides' live state — start of the time-to-live clock,
+// application count and last application — outside the snapshot, which is
+// immutable. An override's state is identified by route and name and survives
+// snapshot swaps for as long as the override still exists; the clock and the
+// count restart when the override appears, when ttl or maxApplications
+// change, when it is re-enabled and under Reset.
 type Tracker struct {
 	live *config.Live
 	now  func() time.Time
@@ -40,8 +40,8 @@ type entry struct {
 	lastAppliedAt time.Time
 }
 
-// NewTracker acompanha os overrides da configuração em vigor em live. O
-// relógio de cada override presente começa agora.
+// NewTracker tracks the overrides of the configuration in effect in live. The
+// clock of every override present starts now.
 func NewTracker(live *config.Live) *Tracker {
 	return newTracker(live, time.Now)
 }
@@ -51,8 +51,8 @@ func newTracker(live *config.Live, now func() time.Time) *Tracker {
 	t.mu.Lock()
 	t.refreshLocked()
 	t.mu.Unlock()
-	// A reconciliação acontece na própria troca, para que o relógio de um
-	// override novo comece na carga e não na primeira requisição depois dela.
+	// Reconciliation happens on the swap itself, so that a new override's
+	// clock starts at load time and not on the first request after it.
 	live.Subscribe(func(*config.Snapshot) {
 		t.mu.Lock()
 		t.refreshLocked()
@@ -61,10 +61,9 @@ func newTracker(live *config.Live, now func() time.Time) *Tracker {
 	return t
 }
 
-// refreshLocked reconcilia o estado com o snapshot em vigor, se ele mudou
-// desde a última reconciliação. Só o snapshot em vigor é considerado: uma
-// requisição que ainda segue com um snapshot anterior não faz o estado
-// voltar atrás.
+// refreshLocked reconciles the state with the snapshot in effect, if it has
+// changed since the last reconciliation. Only the snapshot in effect counts: a
+// request still running with an earlier snapshot does not roll the state back.
 func (t *Tracker) refreshLocked() {
 	snap := t.live.Load()
 	if snap == t.synced {
@@ -109,7 +108,7 @@ func equalPtr[T comparable](a, b *T) bool {
 	return *a == *b
 }
 
-// expired devolve o motivo de expiração, ou vazio.
+// expired returns the expiry reason, or an empty string.
 func (e *entry) expired(now time.Time) string {
 	switch {
 	case e.ttl != nil && !now.Before(e.registeredAt.Add(*e.ttl)):
@@ -120,9 +119,9 @@ func (e *entry) expired(now time.Time) string {
 	return ""
 }
 
-// lookupLocked devolve o estado do override. Um override que não consta do
-// snapshot em vigor (removido enquanto uma requisição ainda o usava) não tem
-// estado: vale sem limites só se não declara nenhum.
+// lookupLocked returns the override's state. An override that is not in the
+// snapshot in effect (removed while a request was still using it) has no
+// state: it holds without limits only if it declares none.
 func (t *Tracker) lookupLocked(o *config.CompiledOverride) (*entry, bool) {
 	t.refreshLocked()
 	if e := t.entries[stateKey{o.Route, o.Doc.Name}]; e != nil {
@@ -131,9 +130,9 @@ func (t *Tracker) lookupLocked(o *config.CompiledOverride) (*entry, bool) {
 	return nil, o.Doc.TTL == nil && o.Doc.MaxApplications == nil
 }
 
-// Active informa se o override pode participar da seleção agora: não
-// expirou pelo tempo nem pela contagem. Que ele esteja ligado é verificado à
-// parte, pelo documento.
+// Active reports whether the override can take part in the selection right
+// now: it has expired neither by time nor by count. Whether it is enabled is
+// checked separately, from the document.
 func (t *Tracker) Active(o *config.CompiledOverride) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -144,10 +143,10 @@ func (t *Tracker) Active(o *config.CompiledOverride) bool {
 	return e.expired(t.now()) == ""
 }
 
-// Claim conta uma aplicação do override, se ele ainda não expirou, e informa
-// se a aplicação vale. Verificar e contar acontecem juntos: sob requisições
-// concorrentes, um override com limite de n aplicações é aplicado no máximo
-// n vezes.
+// Claim counts one application of the override, if it has not expired yet,
+// and reports whether the application holds. Checking and counting happen
+// together: under concurrent requests, an override limited to n applications
+// is applied at most n times.
 func (t *Tracker) Claim(o *config.CompiledOverride) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -164,9 +163,9 @@ func (t *Tracker) Claim(o *config.CompiledOverride) bool {
 	return true
 }
 
-// Reset recomeça o relógio do tempo de vida e zera a contagem de aplicações
-// do override, reativando-o se expirou. Não altera o documento. Informa se o
-// override existe na configuração em vigor.
+// Reset restarts the override's time-to-live clock and zeroes its application
+// count, reactivating it if it had expired. It does not change the document.
+// Reports whether the override exists in the configuration in effect.
 func (t *Tracker) Reset(route, name string) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -179,25 +178,25 @@ func (t *Tracker) Reset(route, name string) bool {
 	return true
 }
 
-// LiveState é o estado vivo de um override, como a API o expõe.
+// LiveState is an override's live state, as the API exposes it.
 type LiveState struct {
 	Route    string `json:"route"`
 	Override string `json:"override"`
-	// Enabled é o valor do documento.
+	// Enabled is the document's value.
 	Enabled bool `json:"enabled"`
-	// Active informa que o override participa da seleção agora: ligado e não
-	// expirado.
+	// Active reports that the override takes part in the selection right now:
+	// enabled and not expired.
 	Active bool `json:"active"`
-	// Expired é nil, "ttl" ou "applications".
+	// Expired is nil, "ttl" or "applications".
 	Expired *string `json:"expired"`
-	// RegisteredAt é o início do relógio do tempo de vida.
+	// RegisteredAt is the start of the time-to-live clock.
 	RegisteredAt time.Time `json:"registeredAt"`
-	// TTLRemainingMs é o restante do tempo de vida: nil sem tempo de vida, 0
-	// quando expirado.
+	// TTLRemainingMs is what is left of the time to live: nil with no time to
+	// live, 0 once expired.
 	TTLRemainingMs *int64 `json:"ttlRemainingMs"`
-	// Applications conta as aplicações desde RegisteredAt.
+	// Applications counts the applications since RegisteredAt.
 	Applications int64 `json:"applications"`
-	// MaxApplications é o limite declarado, nil sem limite.
+	// MaxApplications is the declared limit, nil with no limit.
 	MaxApplications *int       `json:"maxApplications"`
 	LastAppliedAt   *time.Time `json:"lastAppliedAt"`
 }
@@ -229,7 +228,8 @@ func (e *entry) status(route, name string, now time.Time) LiveState {
 	return s
 }
 
-// State devolve o estado vivo do override de nome dado na rota.
+// State returns the live state of the override with the given name in the
+// route.
 func (t *Tracker) State(route, name string) (LiveState, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -241,8 +241,8 @@ func (t *Tracker) State(route, name string) (LiveState, bool) {
 	return e.status(route, name, t.now()), true
 }
 
-// States devolve o estado vivo de todos os overrides da configuração em
-// vigor, rota a rota na ordem de precedência, e o instante da consulta.
+// States returns the live state of every override in the configuration in
+// effect, route by route in precedence order, and the instant of the query.
 func (t *Tracker) States() ([]LiveState, time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

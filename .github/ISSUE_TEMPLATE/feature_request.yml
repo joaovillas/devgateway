@@ -1,0 +1,64 @@
+name: Feature request
+description: Propose a change in behavior, a new option, or something the gateway cannot do yet
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Behavior in this project is described by the specs in `openspec/`, and a
+        change in behavior starts there. Opening this issue is the first step:
+        it is where we agree on the problem before anyone writes a spec delta.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: >
+        The situation you are in, not the feature you have in mind. What are you
+        testing, and where does the gateway get in the way?
+      placeholder: |
+        I need the checkout service to time out for one client only, while the
+        other clients keep getting normal responses.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: How you handle it today
+      description: >
+        What you do now, with the gateway or around it, and why it is not good
+        enough.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: >
+        If you have a shape for it, sketch it: the field in the route document,
+        the API call, or what the panel would show. Rough is fine.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Who else it affects
+      description: >
+        Does this change existing behavior, the config format or the API
+        responses? Would an existing setup keep working unchanged?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you file
+      options:
+        - label: I looked in the README for an existing way to do this
+          required: true
+        - label: I searched the open issues
+          required: true

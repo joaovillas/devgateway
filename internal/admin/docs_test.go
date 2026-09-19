@@ -7,16 +7,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gamerjp64/gateway/internal/capture"
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/config/writer"
-	"github.com/gamerjp64/gateway/internal/override"
-	"github.com/gamerjp64/gateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/capture"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config/writer"
+	"github.com/gamerjp64/devgateway/internal/override"
+	"github.com/gamerjp64/devgateway/internal/store"
 )
 
-// A referência da API (docs/api.md) é conferida contra o código: cada
-// operação do sumário tem um exemplo executável por curl e está registrada
-// no handler com esse método e path.
+// The API reference (docs/api.md) is checked against the code: every
+// operation in the summary has a runnable curl example and is registered
+// on the handler with that method and path.
 
 var (
 	summaryOp = regexp.MustCompile("^\\|[^|]*\\| `(GET|POST|PUT|PATCH|DELETE) (/api/[^`]+)` \\|(.*)\\|$")
@@ -27,7 +27,7 @@ var (
 
 type docOp struct {
 	method, path string
-	pending      bool // marcada no sumário como ainda não implementada
+	pending      bool // marked in the summary as not implemented yet
 }
 
 func readAPIDoc(t *testing.T) string {
@@ -44,17 +44,17 @@ func summaryOps(t *testing.T, doc string) []docOp {
 	var ops []docOp
 	for line := range strings.SplitSeq(doc, "\n") {
 		if m := summaryOp.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
-			ops = append(ops, docOp{m[1], m[2], strings.Contains(m[3], "ainda não implementado")})
+			ops = append(ops, docOp{m[1], m[2], strings.Contains(m[3], "not implemented yet")})
 		}
 	}
 	if len(ops) < 30 {
-		t.Fatalf("o sumário deveria listar todas as operações; achei %d", len(ops))
+		t.Fatalf("the summary should list every operation; found %d", len(ops))
 	}
 	return ops
 }
 
-// curlCalls extrai método e path de cada curl dos blocos sh, juntando as
-// linhas continuadas com barra invertida.
+// curlCalls extracts the method and path of every curl in the sh blocks,
+// joining the lines continued with a backslash.
 func curlCalls(doc string) [][2]string {
 	var out [][2]string
 	inSh := false
@@ -95,7 +95,7 @@ func TestAPIDocHasCurlForEveryOperation(t *testing.T) {
 	doc := readAPIDoc(t)
 	calls := curlCalls(doc)
 	for _, op := range summaryOps(t, doc) {
-		// Cada parâmetro do path casa com um segmento qualquer.
+		// Every path parameter matches any one segment.
 		re := regexp.MustCompile("^" + pathParam.ReplaceAllString(op.path, `[^/]+`) + "$")
 		found := false
 		for _, c := range calls {
@@ -105,7 +105,7 @@ func TestAPIDocHasCurlForEveryOperation(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("%s %s não tem exemplo curl em docs/api.md", op.method, op.path)
+			t.Errorf("%s %s has no curl example in docs/api.md", op.method, op.path)
 		}
 	}
 }
@@ -135,9 +135,9 @@ func TestAPIDocMatchesHandler(t *testing.T) {
 		registered := strings.HasPrefix(pattern, op.method+" ")
 		switch {
 		case op.pending && registered:
-			t.Errorf("%s %s está implementado, mas o sumário o marca como ainda não implementado", op.method, op.path)
+			t.Errorf("%s %s is implemented, but the summary marks it as not implemented yet", op.method, op.path)
 		case !op.pending && !registered:
-			t.Errorf("%s %s está no sumário, mas o handler não o atende (padrão %q)", op.method, op.path, pattern)
+			t.Errorf("%s %s is in the summary, but the handler does not serve it (pattern %q)", op.method, op.path, pattern)
 		}
 	}
 }

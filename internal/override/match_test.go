@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config"
 )
 
 func str(s string) *string { return &s }
@@ -20,8 +20,8 @@ func jsonEq(v any) config.Matcher      { return config.Matcher{JSON: v} }
 
 func respond(body any) *config.Respond { return &config.Respond{Body: body} }
 
-// compiled valida e compila uma rota com os overrides dados, na ordem de
-// declaração.
+// compiled validates and compiles a route with the given overrides, in
+// declaration order.
 func compiled(t *testing.T, overrides ...config.Override) *config.CompiledRoute {
 	t.Helper()
 	r := config.Route{
@@ -51,7 +51,7 @@ func request(method, target, body string, hdr ...string) *http.Request {
 	return r
 }
 
-// selected devolve o nome do override escolhido para a requisição, ou "".
+// selected returns the name of the override chosen for the request, or "".
 func selected(t *testing.T, rt *config.CompiledRoute, r *http.Request) string {
 	t.Helper()
 	if o := Select(rt, NewRequest(r)); o != nil {
@@ -60,75 +60,75 @@ func selected(t *testing.T, rt *config.CompiledRoute, r *http.Request) string {
 	return ""
 }
 
-// Requirement: Critérios de seleção do override
+// Requirement: Override selection criteria
 
 func TestExactPath(t *testing.T) {
 	rt := compiled(t, ov("bilulu", config.OverrideMatch{Path: "/api/payments/bilulu"}))
 	if got := selected(t, rt, request("GET", "/api/payments/bilulu", "")); got != "bilulu" {
-		t.Fatalf("o path exato deveria casar, escolhido %q", got)
+		t.Fatalf("the exact path should match, chosen %q", got)
 	}
 	for _, p := range []string{"/api/payments/bilulu/x", "/api/payments/bilul", "/api/payments"} {
 		if got := selected(t, rt, request("GET", p, "")); got != "" {
-			t.Errorf("o path exato não deveria casar com %s, escolhido %q", p, got)
+			t.Errorf("the exact path should not match %s, chosen %q", p, got)
 		}
 	}
 }
 
 func TestWildcardPath(t *testing.T) {
-	rt := compiled(t, ov("todos", config.OverrideMatch{Path: "/api/payments/*"}))
-	if got := selected(t, rt, request("GET", "/api/payments/charge/42", "")); got != "todos" {
-		t.Fatalf("o curinga deveria casar com um path mais fundo, escolhido %q", got)
+	rt := compiled(t, ov("all", config.OverrideMatch{Path: "/api/payments/*"}))
+	if got := selected(t, rt, request("GET", "/api/payments/charge/42", "")); got != "all" {
+		t.Fatalf("the wildcard should match a deeper path, chosen %q", got)
 	}
 	if got := selected(t, rt, request("GET", "/api/paymentsx", "")); got != "" {
-		t.Fatalf("o curinga não deveria casar com um prefixo parcial de segmento, escolhido %q", got)
+		t.Fatalf("the wildcard should not match a partial segment prefix, chosen %q", got)
 	}
 }
 
 func TestSegmentParamPath(t *testing.T) {
-	rt := compiled(t, ov("cep", config.OverrideMatch{Path: "/viacep/:id/json"}))
-	if got := selected(t, rt, request("GET", "/viacep/40415345/json", "")); got != "cep" {
-		t.Fatalf("o parâmetro de segmento deveria casar com um segmento, escolhido %q", got)
+	rt := compiled(t, ov("zipcode", config.OverrideMatch{Path: "/zip/:id/json"}))
+	if got := selected(t, rt, request("GET", "/zip/40415345/json", "")); got != "zipcode" {
+		t.Fatalf("the segment parameter should match one segment, chosen %q", got)
 	}
-	for _, p := range []string{"/viacep/40415345/extra/json", "/viacep//json", "/viacep/40415345", "/viacep/40415345/json/", "/viacep/40415345/xml"} {
+	for _, p := range []string{"/zip/40415345/extra/json", "/zip//json", "/zip/40415345", "/zip/40415345/json/", "/zip/40415345/xml"} {
 		if got := selected(t, rt, request("GET", p, "")); got != "" {
-			t.Errorf("o parâmetro de segmento não deveria casar com %s, escolhido %q", p, got)
+			t.Errorf("the segment parameter should not match %s, chosen %q", p, got)
 		}
 	}
 }
 
-// Parâmetros de segmento na parte fixa de um curinga: o parâmetro casa com
-// um segmento e o curinga, com o que vier depois.
+// Segment parameters in the fixed part of a wildcard: the parameter matches
+// one segment and the wildcard matches whatever comes after it.
 func TestSegmentParamBeforeWildcard(t *testing.T) {
-	rt := compiled(t, ov("usuario", config.OverrideMatch{Path: "/api/users/:id/*"}))
+	rt := compiled(t, ov("user", config.OverrideMatch{Path: "/api/users/:id/*"}))
 	for p, want := range map[string]string{
-		"/api/users/42":          "usuario",
-		"/api/users/42/orders/1": "usuario",
+		"/api/users/42":          "user",
+		"/api/users/42/orders/1": "user",
 		"/api/users//orders":     "",
 		"/api/users":             "",
 	} {
 		if got := selected(t, rt, request("GET", p, "")); got != want {
-			t.Errorf("%s: escolhido %q, esperado %q", p, got, want)
+			t.Errorf("%s: chosen %q, want %q", p, got, want)
 		}
 	}
 }
 
 func TestRegexPath(t *testing.T) {
-	rt := compiled(t, ov("cobranca", config.OverrideMatch{PathRegex: `^/api/payments/charge/\d+$`}))
-	if got := selected(t, rt, request("GET", "/api/payments/charge/42", "")); got != "cobranca" {
-		t.Fatalf("a expressão regular deveria casar, escolhido %q", got)
+	rt := compiled(t, ov("charge", config.OverrideMatch{PathRegex: `^/api/payments/charge/\d+$`}))
+	if got := selected(t, rt, request("GET", "/api/payments/charge/42", "")); got != "charge" {
+		t.Fatalf("the regular expression should match, chosen %q", got)
 	}
 	if got := selected(t, rt, request("GET", "/api/payments/charge/abc", "")); got != "" {
-		t.Fatalf("a expressão regular não deveria casar, escolhido %q", got)
+		t.Fatalf("the regular expression should not match, chosen %q", got)
 	}
 }
 
 func TestMethodRestriction(t *testing.T) {
 	rt := compiled(t, ov("post", config.OverrideMatch{Path: "/api/payments/charge", Method: "POST"}))
 	if got := selected(t, rt, request("GET", "/api/payments/charge", "")); got != "" {
-		t.Fatalf("um GET não deveria casar com override restrito a POST, escolhido %q", got)
+		t.Fatalf("a GET should not match an override restricted to POST, chosen %q", got)
 	}
 	if got := selected(t, rt, request("POST", "/api/payments/charge", "")); got != "post" {
-		t.Fatalf("um POST deveria casar, escolhido %q", got)
+		t.Fatalf("a POST should match, chosen %q", got)
 	}
 }
 
@@ -138,13 +138,13 @@ func TestHeaderCriteria(t *testing.T) {
 		Headers: map[string]config.Matcher{"x-tenant": eq("acme")},
 	}))
 	if got := selected(t, rt, request("GET", "/api/x", "")); got != "" {
-		t.Fatalf("sem o cabeçalho exigido o override não deveria casar, escolhido %q", got)
+		t.Fatalf("without the required header the override should not match, chosen %q", got)
 	}
-	if got := selected(t, rt, request("GET", "/api/x", "", "X-Tenant", "outra")); got != "" {
-		t.Fatalf("com outro valor o override não deveria casar, escolhido %q", got)
+	if got := selected(t, rt, request("GET", "/api/x", "", "X-Tenant", "other")); got != "" {
+		t.Fatalf("with another value the override should not match, chosen %q", got)
 	}
-	if got := selected(t, rt, request("GET", "/api/x", "", "X-Tenant", "outra", "X-Tenant", "acme")); got != "acme" {
-		t.Fatalf("um dos valores repetidos casando deveria bastar, escolhido %q", got)
+	if got := selected(t, rt, request("GET", "/api/x", "", "X-Tenant", "other", "X-Tenant", "acme")); got != "acme" {
+		t.Fatalf("one of the repeated values matching should be enough, chosen %q", got)
 	}
 }
 
@@ -155,15 +155,15 @@ func TestHeaderOperators(t *testing.T) {
 		value string
 		want  bool
 	}{
-		{"igualdade casa", eq("Bearer abc"), "Bearer abc", true},
-		{"igualdade é exata", eq("Bearer abc"), "Bearer abcd", false},
-		{"regex casa", re(`^Bearer [a-z]+$`), "Bearer abc", true},
-		{"regex não casa", re(`^Bearer [a-z]+$`), "Bearer 123", false},
-		{"substring casa", contains("abc"), "Bearer xabcx", true},
-		{"substring não casa", contains("abc"), "Bearer xyz", false},
-		{"JSON casa ignorando espaços e ordem", jsonEq(map[string]any{"a": 1, "b": "x"}), `{ "b": "x", "a": 1 }`, true},
-		{"JSON distinto não casa", jsonEq(map[string]any{"a": 1}), `{"a":2}`, false},
-		{"valor que não é JSON não casa", jsonEq(map[string]any{"a": 1}), `a=1`, false},
+		{"equality matches", eq("Bearer abc"), "Bearer abc", true},
+		{"equality is exact", eq("Bearer abc"), "Bearer abcd", false},
+		{"regex matches", re(`^Bearer [a-z]+$`), "Bearer abc", true},
+		{"regex does not match", re(`^Bearer [a-z]+$`), "Bearer 123", false},
+		{"substring matches", contains("abc"), "Bearer xabcx", true},
+		{"substring does not match", contains("abc"), "Bearer xyz", false},
+		{"JSON matches ignoring whitespace and order", jsonEq(map[string]any{"a": 1, "b": "x"}), `{ "b": "x", "a": 1 }`, true},
+		{"different JSON does not match", jsonEq(map[string]any{"a": 1}), `{"a":2}`, false},
+		{"a value that is not JSON does not match", jsonEq(map[string]any{"a": 1}), `a=1`, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			rt := compiled(t, ov("o", config.OverrideMatch{
@@ -171,7 +171,7 @@ func TestHeaderOperators(t *testing.T) {
 			}))
 			got := selected(t, rt, request("GET", "/api/x", "", "Authorization", c.value)) == "o"
 			if got != c.want {
-				t.Fatalf("casou = %v, esperado %v", got, c.want)
+				t.Fatalf("matched = %v, want %v", got, c.want)
 			}
 		})
 	}
@@ -184,7 +184,7 @@ func TestHostHeaderCriterion(t *testing.T) {
 	r := request("GET", "/api/x", "")
 	r.Host = "payments.local"
 	if got := selected(t, rt, r); got != "host" {
-		t.Fatalf("o critério de Host deveria usar o host da requisição, escolhido %q", got)
+		t.Fatalf("the Host criterion should use the request's host, chosen %q", got)
 	}
 }
 
@@ -198,16 +198,16 @@ func TestQueryCriteria(t *testing.T) {
 		},
 	}))
 	for target, want := range map[string]string{
-		"/api/x?status=failed&id=42&tag=cliente-vip":      "q",
-		"/api/x?status=failed&id=42&tag=a&tag=vip":        "q",
-		"/api/x?status=failed&id=abc&tag=vip":             "",
-		"/api/x?status=ok&id=42&tag=vip":                  "",
-		"/api/x?status=failed&id=42":                      "",
-		"/api/x?STATUS=failed&id=42&tag=vip":              "",
-		"/api/x?status=failed&id=42&tag=vip&outro=ignora": "q",
+		"/api/x?status=failed&id=42&tag=customer-vip":      "q",
+		"/api/x?status=failed&id=42&tag=a&tag=vip":         "q",
+		"/api/x?status=failed&id=abc&tag=vip":              "",
+		"/api/x?status=ok&id=42&tag=vip":                   "",
+		"/api/x?status=failed&id=42":                       "",
+		"/api/x?STATUS=failed&id=42&tag=vip":               "",
+		"/api/x?status=failed&id=42&tag=vip&other=ignored": "q",
 	} {
 		if got := selected(t, rt, request("GET", target, "")); got != want {
-			t.Errorf("%s: escolhido %q, esperado %q", target, got, want)
+			t.Errorf("%s: chosen %q, want %q", target, got, want)
 		}
 	}
 }
@@ -219,40 +219,40 @@ func TestBodyOperators(t *testing.T) {
 		body string
 		want bool
 	}{
-		{"igualdade casa", eq(`amount=10`), `amount=10`, true},
-		{"igualdade é exata", eq(`amount=10`), `amount=100`, false},
-		{"regex casa", re(`"amount":\s*\d{3,}`), `{"amount": 1500}`, true},
-		{"regex não casa", re(`"amount":\s*\d{3,}`), `{"amount": 15}`, false},
-		{"substring casa", contains(`"currency":"BRL"`), `{"amount":1,"currency":"BRL"}`, true},
-		{"substring não casa", contains(`"currency":"BRL"`), `{"currency":"USD"}`, false},
-		{"JSON ignora a ordem das chaves", jsonEq(map[string]any{"a": 1, "b": 2}), `{"b":2,"a":1}`, true},
-		{"JSON aninhado", jsonEq(map[string]any{"a": []any{1, map[string]any{"c": true}}}), `{"a":[1,{"c":true}]}`, true},
-		{"JSON distinto não casa", jsonEq(map[string]any{"a": 1, "b": 2}), `{"a":1,"b":3}`, false},
-		{"JSON com chave a mais não casa", jsonEq(map[string]any{"a": 1}), `{"a":1,"b":2}`, false},
-		{"corpo vazio não casa com JSON", jsonEq(map[string]any{"a": 1}), ``, false},
+		{"equality matches", eq(`amount=10`), `amount=10`, true},
+		{"equality is exact", eq(`amount=10`), `amount=100`, false},
+		{"regex matches", re(`"amount":\s*\d{3,}`), `{"amount": 1500}`, true},
+		{"regex does not match", re(`"amount":\s*\d{3,}`), `{"amount": 15}`, false},
+		{"substring matches", contains(`"currency":"BRL"`), `{"amount":1,"currency":"BRL"}`, true},
+		{"substring does not match", contains(`"currency":"BRL"`), `{"currency":"USD"}`, false},
+		{"JSON ignores key order", jsonEq(map[string]any{"a": 1, "b": 2}), `{"b":2,"a":1}`, true},
+		{"nested JSON", jsonEq(map[string]any{"a": []any{1, map[string]any{"c": true}}}), `{"a":[1,{"c":true}]}`, true},
+		{"different JSON does not match", jsonEq(map[string]any{"a": 1, "b": 2}), `{"a":1,"b":3}`, false},
+		{"JSON with an extra key does not match", jsonEq(map[string]any{"a": 1}), `{"a":1,"b":2}`, false},
+		{"an empty body does not match JSON", jsonEq(map[string]any{"a": 1}), ``, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			rt := compiled(t, ov("o", config.OverrideMatch{Path: "/api/*", Body: &c.m}))
 			got := selected(t, rt, request("POST", "/api/x", c.body)) == "o"
 			if got != c.want {
-				t.Fatalf("casou = %v, esperado %v", got, c.want)
+				t.Fatalf("matched = %v, want %v", got, c.want)
 			}
 		})
 	}
 }
 
-// O cenário da spec: igualdade JSON no corpo ignora a ordem das chaves.
+// The scenario from the spec: JSON equality on the body ignores key order.
 func TestJSONBodyEqualityIgnoresKeyOrder(t *testing.T) {
 	m := jsonEq(map[string]any{"a": 1, "b": 2})
 	rt := compiled(t, ov("json", config.OverrideMatch{Path: "/api/*", Body: &m}))
 	if got := selected(t, rt, request("POST", "/api/x", `{"b":2,"a":1}`)); got != "json" {
-		t.Fatalf("o corpo com as chaves em outra ordem deveria casar, escolhido %q", got)
+		t.Fatalf("a body with the keys in another order should match, chosen %q", got)
 	}
 }
 
 func TestAllCriteriaMustMatch(t *testing.T) {
-	body := contains("urgente")
-	rt := compiled(t, ov("todos", config.OverrideMatch{
+	body := contains("urgent")
+	rt := compiled(t, ov("all", config.OverrideMatch{
 		Path:    "/api/payments/*",
 		Method:  "POST",
 		Headers: map[string]config.Matcher{"X-Tenant": eq("acme")},
@@ -260,57 +260,58 @@ func TestAllCriteriaMustMatch(t *testing.T) {
 		Body:    &body,
 	}))
 	full := func() *http.Request {
-		return request("POST", "/api/payments/x?v=2", "pedido urgente", "X-Tenant", "acme")
+		return request("POST", "/api/payments/x?v=2", "urgent order", "X-Tenant", "acme")
 	}
-	if got := selected(t, rt, full()); got != "todos" {
-		t.Fatalf("com todos os critérios satisfeitos o override deveria casar, escolhido %q", got)
+	if got := selected(t, rt, full()); got != "all" {
+		t.Fatalf("with every criterion satisfied the override should match, chosen %q", got)
 	}
 	for name, r := range map[string]*http.Request{
-		"sem o cabeçalho": request("POST", "/api/payments/x?v=2", "pedido urgente"),
-		"método errado":   request("PUT", "/api/payments/x?v=2", "pedido urgente", "X-Tenant", "acme"),
-		"query errada":    request("POST", "/api/payments/x?v=3", "pedido urgente", "X-Tenant", "acme"),
-		"corpo errado":    request("POST", "/api/payments/x?v=2", "pedido normal", "X-Tenant", "acme"),
-		"path fora":       request("POST", "/api/orders/x?v=2", "pedido urgente", "X-Tenant", "acme"),
+		"missing header": request("POST", "/api/payments/x?v=2", "urgent order"),
+		"wrong method":   request("PUT", "/api/payments/x?v=2", "urgent order", "X-Tenant", "acme"),
+		"wrong query":    request("POST", "/api/payments/x?v=3", "urgent order", "X-Tenant", "acme"),
+		"wrong body":     request("POST", "/api/payments/x?v=2", "normal order", "X-Tenant", "acme"),
+		"path outside":   request("POST", "/api/orders/x?v=2", "urgent order", "X-Tenant", "acme"),
 	} {
 		if got := selected(t, rt, r); got != "" {
-			t.Errorf("%s: um critério que não casa deveria impedir a interceptação, escolhido %q", name, got)
+			t.Errorf("%s: a criterion that does not match should prevent the interception, chosen %q", name, got)
 		}
 	}
 }
 
-// O corpo lido para casar volta íntegro na requisição a encaminhar, case o
-// override ou não.
+// The body read for matching comes back intact in the request to forward,
+// whether the override matches or not.
 func TestBodyReadForMatchingIsReplayed(t *testing.T) {
-	m := eq("nunca")
+	m := eq("never")
 	rt := compiled(t, ov("o", config.OverrideMatch{Path: "/api/*", Body: &m}))
-	const payload = `{"pedido": 1}`
+	const payload = `{"order": 1}`
 	r := request("POST", "/api/x", payload)
 	q := NewRequest(r)
 	if Select(rt, q) != nil {
-		t.Fatal("o override não deveria casar")
+		t.Fatal("the override should not match")
 	}
 	got, err := io.ReadAll(q.Request().Body)
 	if err != nil || string(got) != payload {
-		t.Fatalf("o corpo repassado deveria ser o original: %q %v", got, err)
+		t.Fatalf("the forwarded body should be the original one: %q %v", got, err)
 	}
 	if q.Request().ContentLength != int64(len(payload)) {
-		t.Fatalf("o Content-Length deveria ser preservado: %d", q.Request().ContentLength)
+		t.Fatalf("the Content-Length should be preserved: %d", q.Request().ContentLength)
 	}
 }
 
-// Sem critério de corpo, o corpo não é lido: a requisição segue a mesma.
+// Without a body criterion, the body is not read: the request goes on
+// unchanged.
 func TestBodyNotReadWithoutBodyCriterion(t *testing.T) {
 	rt := compiled(t, ov("o", config.OverrideMatch{Path: "/api/*", Method: "PUT"}))
-	r := request("POST", "/api/x", "corpo")
+	r := request("POST", "/api/x", "body")
 	q := NewRequest(r)
 	Select(rt, q)
 	if q.Request() != r {
-		t.Fatal("sem critério de corpo a requisição não deveria ser tocada")
+		t.Fatal("without a body criterion the request should not be touched")
 	}
 }
 
-// Um corpo acima do limite de leitura não casa com critério de corpo e segue
-// inteiro para quem encaminhar.
+// A body over the read limit does not match a body criterion and goes on in
+// full to whoever forwards it.
 func TestOversizedBodyDoesNotMatchAndIsReplayed(t *testing.T) {
 	m := contains("x")
 	rt := compiled(t, ov("o", config.OverrideMatch{Path: "/api/*", Body: &m}))
@@ -318,15 +319,15 @@ func TestOversizedBodyDoesNotMatchAndIsReplayed(t *testing.T) {
 	r := httptest.NewRequest("POST", "/api/x", bytes.NewReader(payload))
 	q := NewRequest(r)
 	if Select(rt, q) != nil {
-		t.Fatal("um corpo acima do limite não deveria casar com critério de corpo")
+		t.Fatal("a body over the limit should not match a body criterion")
 	}
 	got, _ := io.ReadAll(q.Request().Body)
 	if !bytes.Equal(got, payload) {
-		t.Fatalf("o corpo repassado deveria ser o original inteiro: %d bytes de %d", len(got), len(payload))
+		t.Fatalf("the forwarded body should be the whole original one: %d bytes out of %d", len(got), len(payload))
 	}
 }
 
-// O corpo é lido uma única vez, mesmo com vários overrides que o examinam.
+// The body is read only once, even with several overrides that examine it.
 func TestBodyReadOnceAcrossOverrides(t *testing.T) {
 	a, b := eq("a"), eq("b")
 	rt := compiled(t,
@@ -336,63 +337,63 @@ func TestBodyReadOnceAcrossOverrides(t *testing.T) {
 	r := request("POST", "/api/x", "b")
 	q := NewRequest(r)
 	if o := Select(rt, q); o == nil || o.Doc.Name != "b" {
-		t.Fatalf("o segundo override deveria casar com o corpo já lido: %v", o)
+		t.Fatalf("the second override should match the body already read: %v", o)
 	}
 	got, _ := io.ReadAll(q.Request().Body)
 	if string(got) != "b" {
-		t.Fatalf("o corpo repassado deveria ser o original: %q", got)
+		t.Fatalf("the forwarded body should be the original one: %q", got)
 	}
 }
 
-// Requirement: Precedência por especificidade
+// Requirement: Precedence by specificity
 
 func TestExactPathBeatsWildcard(t *testing.T) {
 	rt := compiled(t,
-		ov("curinga", config.OverrideMatch{Path: "/api/payments/*"}),
-		ov("exato", config.OverrideMatch{Path: "/api/payments/bilulu"}),
+		ov("wildcard", config.OverrideMatch{Path: "/api/payments/*"}),
+		ov("exact", config.OverrideMatch{Path: "/api/payments/bilulu"}),
 	)
-	if got := selected(t, rt, request("GET", "/api/payments/bilulu", "")); got != "exato" {
-		t.Fatalf("o path exato deveria vencer o curinga, escolhido %q", got)
+	if got := selected(t, rt, request("GET", "/api/payments/bilulu", "")); got != "exact" {
+		t.Fatalf("the exact path should beat the wildcard, chosen %q", got)
 	}
-	if got := selected(t, rt, request("GET", "/api/payments/outro", "")); got != "curinga" {
-		t.Fatalf("fora do path exato vale o curinga, escolhido %q", got)
+	if got := selected(t, rt, request("GET", "/api/payments/other", "")); got != "wildcard" {
+		t.Fatalf("outside the exact path the wildcard holds, chosen %q", got)
 	}
 }
 
 func TestSegmentParamBetweenExactAndWildcard(t *testing.T) {
 	rt := compiled(t,
-		ov("curinga", config.OverrideMatch{Path: "/viacep/*"}),
-		ov("parametro", config.OverrideMatch{Path: "/viacep/:id/json"}),
-		ov("exato", config.OverrideMatch{Path: "/viacep/01001000/json"}),
+		ov("wildcard", config.OverrideMatch{Path: "/zip/*"}),
+		ov("param", config.OverrideMatch{Path: "/zip/:id/json"}),
+		ov("exact", config.OverrideMatch{Path: "/zip/01001000/json"}),
 	)
 	for p, want := range map[string]string{
-		"/viacep/01001000/json": "exato",
-		"/viacep/40415345/json": "parametro",
-		"/viacep/40415345/xml":  "curinga",
+		"/zip/01001000/json": "exact",
+		"/zip/40415345/json": "param",
+		"/zip/40415345/xml":  "wildcard",
 	} {
 		if got := selected(t, rt, request("GET", p, "")); got != want {
-			t.Errorf("%s: escolhido %q, esperado %q", p, got, want)
+			t.Errorf("%s: chosen %q, want %q", p, got, want)
 		}
 	}
 }
 
-// Entre paths com parâmetros, vence o de mais segmentos literais; o
-// parâmetro de segmento vem antes da expressão regular.
+// Among paths with parameters, the one with more literal segments wins; the
+// segment parameter comes before the regular expression.
 func TestSegmentParamPrecedence(t *testing.T) {
 	rt := compiled(t,
 		ov("regex", config.OverrideMatch{PathRegex: `^/api/users/[^/]+/orders/[^/]+$`}),
-		ov("dois", config.OverrideMatch{Path: "/api/:a/:b/orders/:c"}),
-		ov("tres", config.OverrideMatch{Path: "/api/users/:u/orders/:o"}),
+		ov("two", config.OverrideMatch{Path: "/api/:a/:b/orders/:c"}),
+		ov("three", config.OverrideMatch{Path: "/api/users/:u/orders/:o"}),
 	)
-	if got := selected(t, rt, request("GET", "/api/users/42/orders/7", "")); got != "tres" {
-		t.Fatalf("o path com mais literais deveria vencer, escolhido %q", got)
+	if got := selected(t, rt, request("GET", "/api/users/42/orders/7", "")); got != "three" {
+		t.Fatalf("the path with more literals should win, chosen %q", got)
 	}
 	rt = compiled(t,
 		ov("regex", config.OverrideMatch{PathRegex: `^/api/users/[^/]+$`}),
-		ov("parametro", config.OverrideMatch{Path: "/api/users/:id"}),
+		ov("param", config.OverrideMatch{Path: "/api/users/:id"}),
 	)
-	if got := selected(t, rt, request("GET", "/api/users/42", "")); got != "parametro" {
-		t.Fatalf("o parâmetro de segmento deveria vencer a expressão regular, escolhido %q", got)
+	if got := selected(t, rt, request("GET", "/api/users/42", "")); got != "param" {
+		t.Fatalf("the segment parameter should beat the regular expression, chosen %q", got)
 	}
 }
 
@@ -402,42 +403,42 @@ func TestLongerWildcardBeatsShorter(t *testing.T) {
 		ov("payments", config.OverrideMatch{Path: "/api/payments/*"}),
 	)
 	if got := selected(t, rt, request("GET", "/api/payments/charge", "")); got != "payments" {
-		t.Fatalf("o curinga mais longo deveria vencer, escolhido %q", got)
+		t.Fatalf("the longer wildcard should win, chosen %q", got)
 	}
 	if got := selected(t, rt, request("GET", "/api/orders", "")); got != "api" {
-		t.Fatalf("fora do curinga longo vale o curto, escolhido %q", got)
+		t.Fatalf("outside the longer wildcard the shorter one holds, chosen %q", got)
 	}
 }
 
 func TestMoreCriteriaWinsBetweenEqualPaths(t *testing.T) {
 	rt := compiled(t,
-		ov("qualquer", config.OverrideMatch{Path: "/api/payments/charge"}),
+		ov("any", config.OverrideMatch{Path: "/api/payments/charge"}),
 		ov("post", config.OverrideMatch{Path: "/api/payments/charge", Method: "POST"}),
 	)
 	if got := selected(t, rt, request("POST", "/api/payments/charge", "")); got != "post" {
-		t.Fatalf("o override com mais critérios deveria vencer, escolhido %q", got)
+		t.Fatalf("the override with more criteria should win, chosen %q", got)
 	}
-	if got := selected(t, rt, request("GET", "/api/payments/charge", "")); got != "qualquer" {
-		t.Fatalf("sem o método exigido vale o menos restrito, escolhido %q", got)
+	if got := selected(t, rt, request("GET", "/api/payments/charge", "")); got != "any" {
+		t.Fatalf("without the required method the less restrictive one holds, chosen %q", got)
 	}
 }
 
 func TestDeclarationOrderBreaksTies(t *testing.T) {
 	rt := compiled(t,
-		ov("primeiro", config.OverrideMatch{Path: "/api/payments/*"}),
-		ov("segundo", config.OverrideMatch{Path: "/api/payments/*"}),
+		ov("first", config.OverrideMatch{Path: "/api/payments/*"}),
+		ov("second", config.OverrideMatch{Path: "/api/payments/*"}),
 	)
-	if got := selected(t, rt, request("GET", "/api/payments/x", "")); got != "primeiro" {
-		t.Fatalf("no empate deveria valer a ordem de declaração, escolhido %q", got)
+	if got := selected(t, rt, request("GET", "/api/payments/x", "")); got != "first" {
+		t.Fatalf("on a tie the declaration order should hold, chosen %q", got)
 	}
 }
 
 func TestDisabledOverrideIsSkipped(t *testing.T) {
 	off := false
-	exact := ov("exato", config.OverrideMatch{Path: "/api/payments/bilulu"})
+	exact := ov("exact", config.OverrideMatch{Path: "/api/payments/bilulu"})
 	exact.On = &off
-	rt := compiled(t, ov("curinga", config.OverrideMatch{Path: "/api/payments/*"}), exact)
-	if got := selected(t, rt, request("GET", "/api/payments/bilulu", "")); got != "curinga" {
-		t.Fatalf("o override desligado não deveria participar da precedência, escolhido %q", got)
+	rt := compiled(t, ov("wildcard", config.OverrideMatch{Path: "/api/payments/*"}), exact)
+	if got := selected(t, rt, request("GET", "/api/payments/bilulu", "")); got != "wildcard" {
+		t.Fatalf("the disabled override should not take part in the precedence, chosen %q", got)
 	}
 }

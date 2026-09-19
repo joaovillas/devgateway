@@ -10,13 +10,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/exchange"
-	"github.com/gamerjp64/gateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/store"
 )
 
-// settingsFor monta a configuração efetiva como o processo a monta, a partir
-// de um gateway.json (vazio: arquivo ausente) e do ambiente dado.
+// settingsFor builds the effective configuration the same way the process
+// does, from a gateway.json (empty: no file) and the given environment.
 func settingsFor(t *testing.T, gatewayJSON string, env map[string]string) config.Settings {
 	t.Helper()
 	dir := t.TempDir()
@@ -36,7 +36,7 @@ func settingsFor(t *testing.T, gatewayJSON string, env map[string]string) config
 	return s
 }
 
-// Requirement: Armazenamento plugável do histórico — Memória é o padrão
+// Requirement: Pluggable history storage - memory is the default
 func TestOpenMemoryIsDefault(t *testing.T) {
 	ctx := context.Background()
 	s := settingsFor(t, "", nil)
@@ -47,20 +47,20 @@ func TestOpenMemoryIsDefault(t *testing.T) {
 	defer st.Close()
 	m, ok := st.(*store.Memory)
 	if !ok {
-		t.Fatalf("sem seleção, o backend deveria ser memória, recebido %T", st)
+		t.Fatalf("with nothing selected, the backend should be memory, got %T", st)
 	}
 	if store.BackendName(s) != config.BackendMemory {
-		t.Fatalf("nome do backend padrão: %q", store.BackendName(s))
+		t.Fatalf("default backend name: %q", store.BackendName(s))
 	}
-	// Capacidade limitada, com descarte das mais antigas ao atingi-la.
+	// Bounded capacity, dropping the oldest ones once it is reached.
 	for i := range s.HistoryCapacity + 1 {
 		m.Record(ctx, &exchange.Exchange{ID: fmt.Sprint(i)})
 	}
 	if _, err := m.Get(ctx, "0"); err != store.ErrNotFound {
-		t.Fatalf("a troca mais antiga deveria ter sido descartada: %v", err)
+		t.Fatalf("the oldest exchange should have been dropped: %v", err)
 	}
 	if _, err := m.Get(ctx, fmt.Sprint(s.HistoryCapacity)); err != nil {
-		t.Fatalf("a troca nova deveria estar registrada: %v", err)
+		t.Fatalf("the new exchange should have been recorded: %v", err)
 	}
 }
 
@@ -84,25 +84,25 @@ func TestOpenSelectsBackendByEnvironment(t *testing.T) {
 			t.Fatalf("%s: %v", c.backend, err)
 		}
 		if got := fmt.Sprintf("%T", st); got != c.want {
-			t.Errorf("%s: backend aberto %s, esperado %s", c.backend, got, c.want)
+			t.Errorf("%s: opened backend %s, want %s", c.backend, got, c.want)
 		}
 		st.Close()
 	}
 }
 
-// fileAsDir devolve um caminho cujo diretório é um arquivo comum, onde
-// nenhum backend consegue criar o seu.
+// fileAsDir returns a path whose parent directory is a plain file, where no
+// backend can create its own.
 func fileAsDir(t *testing.T, name string) string {
 	t.Helper()
-	blocker := filepath.Join(t.TempDir(), "arquivo-comum")
+	blocker := filepath.Join(t.TempDir(), "plain-file")
 	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return filepath.Join(blocker, name)
 }
 
-// Requirement: Armazenamento plugável do histórico — Backend indisponível
-// impede a inicialização (a recusa de iniciar do processo está em app).
+// Requirement: Pluggable history storage - an unavailable backend keeps the
+// process from starting (the process refusing to start lives in app).
 func TestOpenUnavailableBackendNamesBackendAndCause(t *testing.T) {
 	for _, backend := range []string{config.BackendSQLite, config.BackendNDJSON} {
 		path := fileAsDir(t, "history")
@@ -113,15 +113,15 @@ func TestOpenUnavailableBackendNamesBackendAndCause(t *testing.T) {
 		st, err := store.Open(s)
 		if err == nil {
 			st.Close()
-			t.Fatalf("%s: deveria falhar num caminho dentro de um arquivo", backend)
+			t.Fatalf("%s: should fail on a path inside a file", backend)
 		}
 		msg := err.Error()
 		if !strings.Contains(msg, backend) || !strings.Contains(msg, path) {
-			t.Errorf("%s: erro deveria nomear o backend e o caminho: %s", backend, msg)
+			t.Errorf("%s: the error should name the backend and the path: %s", backend, msg)
 		}
 		var cause *fs.PathError
 		if !errors.As(err, &cause) {
-			t.Errorf("%s: erro deveria encadear a causa do sistema de arquivos: %s", backend, msg)
+			t.Errorf("%s: the error should wrap the filesystem cause: %s", backend, msg)
 		}
 	}
 }
@@ -129,6 +129,6 @@ func TestOpenUnavailableBackendNamesBackendAndCause(t *testing.T) {
 func TestOpenUnknownBackend(t *testing.T) {
 	_, err := store.Open(config.Settings{HistoryBackend: "redis"})
 	if err == nil || !strings.Contains(err.Error(), "redis") {
-		t.Fatalf("backend desconhecido deveria ser recusado nomeando-o: %v", err)
+		t.Fatalf("an unknown backend should be rejected by name: %v", err)
 	}
 }

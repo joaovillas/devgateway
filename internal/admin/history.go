@@ -8,14 +8,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/exchange"
-	"github.com/gamerjp64/gateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/store"
 )
 
-// syncTimeout limita a espera pela gravação das trocas já fechadas antes de
-// uma leitura do histórico. Passado o limite, a leitura segue com o que já
-// estiver gravado.
+// syncTimeout caps the wait for the already finished exchanges to be
+// written before a read of the history. Past the limit, the read goes on
+// with whatever is written by then.
 const syncTimeout = 2 * time.Second
 
 func (h *Handler) historyRoutes() {
@@ -30,10 +30,10 @@ func (h *Handler) historyRoutes() {
 	h.mux.HandleFunc("/api/exchanges/{id}/newer", methodNotAllowed("GET"))
 }
 
-// exposed recusa a leitura do histórico com history.expose desligado, com uma
-// resposta distinta de uma lista vazia. Antes de ler, espera a gravação das
-// trocas que já foram respondidas, para que quem acabou de fazer uma
-// requisição a encontre.
+// exposed refuses to read the history with history.expose off, with a
+// response distinct from an empty list. Before reading, it waits for the
+// exchanges that were already answered to be written, so that whoever has
+// just made a request finds it.
 func (h *Handler) exposed(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s := h.live.Load().Settings
@@ -51,25 +51,25 @@ func (h *Handler) exposed(next http.HandlerFunc) http.HandlerFunc {
 func historyDisabled(s config.Settings) apiError {
 	e := apiError{Error: "history_disabled", Field: "history.expose"}
 	src := s.Sources["history.expose"]
-	origin := "padrão embutido"
+	origin := "built-in default"
 	switch src.Origin {
 	case config.OriginEnv:
 		e.Env = src.Name
-		origin = "variável de ambiente " + src.Name
+		origin = "environment variable " + src.Name
 	case config.OriginFile:
 		e.File = src.Name
-		origin = "arquivo " + src.Name
+		origin = "file " + src.Name
 	}
-	e.Message = "o histórico está desabilitado: history.expose = false (origem: " + origin + ")"
+	e.Message = "the history is disabled: history.expose = false (origin: " + origin + ")"
 	return e
 }
 
-// listResponse é a página da listagem do histórico.
+// listResponse is one page of the history listing.
 type listResponse struct {
 	Items []exchange.Exchange `json:"items"`
 	Next  string              `json:"next"`
-	// Recording diz se o registro está ligado; desligado, a lista pode estar
-	// vazia por isso.
+	// Recording says whether recording is on; when it is off, that alone
+	// can be why the list is empty.
 	Recording bool   `json:"recording"`
 	Backend   string `json:"backend"`
 }
@@ -85,7 +85,7 @@ func (h *Handler) listExchanges(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 {
-			writeBadParam(w, &paramError{"limit", "deve ser um inteiro positivo"})
+			writeBadParam(w, &paramError{"limit", "must be a positive integer"})
 			return
 		}
 		p.Limit = n
@@ -126,9 +126,9 @@ func (h *Handler) neighbor(d store.Direction) http.HandlerFunc {
 		}
 		e, err := h.history.Neighbor(r.Context(), r.PathValue("id"), d, f)
 		if err != nil {
-			noMore := "não há trocas mais antigas com esse filtro"
+			noMore := "no older exchange matches this filter"
 			if d == store.Newer {
-				noMore = "não há trocas mais novas com esse filtro"
+				noMore = "no newer exchange matches this filter"
 			}
 			writeStoreError(w, err, noMore)
 			return
@@ -137,11 +137,11 @@ func (h *Handler) neighbor(d store.Direction) http.HandlerFunc {
 	}
 }
 
-// clearExchanges esvazia o histórico em uso. Funciona também com a exposição
-// desligada, porque não devolve dados.
+// clearExchanges empties the history in use. It works with exposure off
+// too, because it returns no data.
 func (h *Handler) clearExchanges(w http.ResponseWriter, r *http.Request) {
 	if err := h.rec.Clear(r.Context()); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", "falha ao limpar o histórico: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "internal", "failed to clear the history: "+err.Error())
 		return
 	}
 	h.events.publish("history", historyEvent{Cause: "cleared", Backend: h.history.Backend()})
@@ -161,17 +161,18 @@ func writeStoreError(w http.ResponseWriter, err error, noMore string) {
 	}
 }
 
-// paramError é um parâmetro de query inválido.
+// paramError is an invalid query parameter.
 type paramError struct{ field, msg string }
 
-func (e *paramError) Error() string { return "parâmetro " + e.field + ": " + e.msg }
+func (e *paramError) Error() string { return "query parameter " + e.field + ": " + e.msg }
 
 func writeBadParam(w http.ResponseWriter, err error) {
 	pe := err.(*paramError)
 	writeJSON(w, http.StatusBadRequest, apiError{Error: "bad_request", Message: pe.Error(), Field: pe.field})
 }
 
-// parseFilter lê os filtros da query, espelhando exchange.Filter.
+// parseFilter reads the filters from the query string, mirroring
+// exchange.Filter.
 func parseFilter(q url.Values) (exchange.Filter, error) {
 	f := exchange.Filter{
 		Route:    q.Get("route"),
@@ -190,14 +191,14 @@ func parseFilter(q url.Values) (exchange.Filter, error) {
 		}
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
-			return f, &paramError{p.key, "deve ser um status HTTP inteiro"}
+			return f, &paramError{p.key, "must be an integer HTTP status"}
 		}
 		*p.dst = n
 	}
 	if v := q.Get("intervened"); v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			return f, &paramError{"intervened", "deve ser true ou false"}
+			return f, &paramError{"intervened", "must be true or false"}
 		}
 		f.Intervened = &b
 	}
@@ -211,7 +212,7 @@ func parseFilter(q url.Values) (exchange.Filter, error) {
 		}
 		t, err := time.Parse(time.RFC3339Nano, v)
 		if err != nil {
-			return f, &paramError{p.key, "deve ser um instante RFC 3339, como 2026-09-18T15:04:05Z"}
+			return f, &paramError{p.key, "must be an RFC 3339 instant, such as 2026-09-18T15:04:05Z"}
 		}
 		*p.dst = t
 	}

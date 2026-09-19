@@ -12,10 +12,10 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/gamerjp64/gateway/internal/config"
-	"github.com/gamerjp64/gateway/internal/exchange"
-	"github.com/gamerjp64/gateway/internal/store"
-	"github.com/gamerjp64/gateway/internal/store/storetest"
+	"github.com/gamerjp64/devgateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/store/storetest"
 )
 
 func TestSwitchableContract(t *testing.T) {
@@ -26,7 +26,7 @@ func TestSwitchableContract(t *testing.T) {
 	})
 }
 
-// closeSpy registra o fechamento e acusa qualquer uso depois dele.
+// closeSpy records the close and flags any use after it.
 type closeSpy struct {
 	store.Store
 	closed    atomic.Bool
@@ -49,8 +49,8 @@ func (c *closeSpy) Close() error {
 	return c.Store.Close()
 }
 
-// writeWhile grava trocas de vários goroutines até stop fechar, e devolve
-// quantas foram gravadas com sucesso.
+// writeWhile records exchanges from several goroutines until stop is closed,
+// and returns how many were recorded successfully.
 func writeWhile(t *testing.T, w store.Store, stop <-chan struct{}) func() int64 {
 	var wg sync.WaitGroup
 	var ok atomic.Int64
@@ -65,7 +65,7 @@ func writeWhile(t *testing.T, w store.Store, stop <-chan struct{}) func() int64 
 				}
 				e := &exchange.Exchange{ID: fmt.Sprintf("W%06d", seq.Add(1)), Method: "GET", Path: "/x", Status: 200}
 				if err := w.Record(context.Background(), e); err != nil {
-					t.Errorf("gravação durante a troca falhou: %v", err)
+					t.Errorf("a write during the swap failed: %v", err)
 					return
 				}
 				ok.Add(1)
@@ -91,17 +91,17 @@ func countAll(t *testing.T, s store.Store) int64 {
 	}
 }
 
-// Requirement: Recarga sem reinício — Backend do histórico trocado a quente
+// Requirement: Reload without restart - history backend swapped while running
 func TestSwitchMemoryToSQLiteHot(t *testing.T) {
 	ctx := context.Background()
 	mem := &closeSpy{Store: store.NewMemory(1 << 20)}
 	w := store.NewSwitchable(config.BackendMemory, mem)
 	t.Cleanup(func() { w.Close() })
-	recordIDs(t, w, "antiga")
+	recordIDs(t, w, "old")
 
 	stop := make(chan struct{})
 	wait := writeWhile(t, w, stop)
-	// Deixa as gravações em memória começarem antes da troca.
+	// Let the in-memory writes get going before the swap.
 	for mem.recorded.Load() < 50 {
 		runtime.Gosched()
 	}
@@ -111,9 +111,9 @@ func TestSwitchMemoryToSQLiteHot(t *testing.T) {
 		"GATEWAY_HISTORY_PATH":    path,
 	})
 	if err := w.Switch(ctx, sqlitePath); err != nil {
-		t.Fatalf("troca para SQLite: %v", err)
+		t.Fatalf("swap to SQLite: %v", err)
 	}
-	// E continuar depois dela, já no SQLite.
+	// And keep going after it, now on SQLite.
 	afterSwap := countAll(t, w)
 	for countAll(t, w) < afterSwap+50 {
 	}
@@ -121,45 +121,46 @@ func TestSwitchMemoryToSQLiteHot(t *testing.T) {
 	written := wait()
 
 	if w.Backend() != config.BackendSQLite {
-		t.Fatalf("backend em uso deveria ser sqlite, é %q", w.Backend())
+		t.Fatalf("the backend in use should be sqlite, it is %q", w.Backend())
 	}
 	if mem.closeHits.Load() != 1 {
-		t.Fatalf("o backend anterior deveria ser fechado uma vez, foi %d", mem.closeHits.Load())
+		t.Fatalf("the previous backend should be closed once, it was %d", mem.closeHits.Load())
 	}
 	if n := mem.afterUse.Load(); n != 0 {
-		t.Fatalf("%d gravações chegaram ao backend anterior depois de fechado", n)
+		t.Fatalf("%d writes reached the previous backend after it was closed", n)
 	}
-	// Nenhuma gravação perdida: cada uma está em exatamente um dos dois.
+	// No write lost: each one is in exactly one of the two.
 	inMem, inSQLite := countAll(t, mem.Store)-1, countAll(t, w)
 	if inMem+inSQLite != written || inSQLite == 0 {
-		t.Fatalf("gravadas %d, em memória %d, no SQLite %d", written, inMem, inSQLite)
+		t.Fatalf("written %d, in memory %d, in SQLite %d", written, inMem, inSQLite)
 	}
-	// Sem migração: a troca anterior segue só na memória.
-	if _, err := w.Get(ctx, "antiga"); err != store.ErrNotFound {
-		t.Fatalf("o histórico anterior não deveria ser migrado: %v", err)
+	// No migration: the earlier exchange stays only in memory.
+	if _, err := w.Get(ctx, "old"); err != store.ErrNotFound {
+		t.Fatalf("the previous history should not be migrated: %v", err)
 	}
-	if _, err := mem.Store.Get(ctx, "antiga"); err != nil {
-		t.Fatalf("o histórico anterior deveria seguir intacto: %v", err)
+	if _, err := mem.Store.Get(ctx, "old"); err != nil {
+		t.Fatalf("the previous history should stay intact: %v", err)
 	}
-	// As trocas seguintes estão no arquivo do SQLite.
-	recordIDs(t, w, "nova")
+	// The following exchanges are in the SQLite file.
+	recordIDs(t, w, "new")
 	w.Close()
 	reopened := openSQLite(t, path)
-	if _, err := reopened.Get(ctx, "nova"); err != nil {
-		t.Fatalf("troca registrada após a troca deveria estar no SQLite: %v", err)
+	if _, err := reopened.Get(ctx, "new"); err != nil {
+		t.Fatalf("an exchange recorded after the swap should be in SQLite: %v", err)
 	}
 	if got := countAll(t, reopened); got != inSQLite+1 {
-		t.Fatalf("SQLite deveria ter %d trocas, tem %d", inSQLite+1, got)
+		t.Fatalf("SQLite should hold %d exchanges, it holds %d", inSQLite+1, got)
 	}
 }
 
-// Requirement: Recarga sem reinício — Backend novo indisponível preserva o atual
+// Requirement: Reload without restart - an unavailable new backend keeps the
+// current one
 func TestSwitchToUnavailableKeepsCurrent(t *testing.T) {
 	ctx := context.Background()
 	mem := &closeSpy{Store: store.NewMemory(1 << 20)}
 	w := store.NewSwitchable(config.BackendMemory, mem)
 	t.Cleanup(func() { w.Close() })
-	recordIDs(t, w, "antes")
+	recordIDs(t, w, "before")
 
 	stop := make(chan struct{})
 	wait := writeWhile(t, w, stop)
@@ -168,24 +169,24 @@ func TestSwitchToUnavailableKeepsCurrent(t *testing.T) {
 	close(stop)
 	written := wait()
 	if err == nil {
-		t.Fatalf("a troca para um backend que não abre deveria ser recusada")
+		t.Fatalf("swapping to a backend that does not open should be rejected")
 	}
 	if !strings.Contains(err.Error(), config.BackendSQLite) || !strings.Contains(err.Error(), path) {
-		t.Fatalf("a recusa deveria nomear o backend e a causa: %v", err)
+		t.Fatalf("the rejection should name the backend and the cause: %v", err)
 	}
 	if cause := new(*fs.PathError); !errors.As(err, cause) {
-		t.Fatalf("a recusa deveria encadear a causa do sistema de arquivos: %v", err)
+		t.Fatalf("the rejection should wrap the filesystem cause: %v", err)
 	}
 	if w.Backend() != config.BackendMemory || mem.closeHits.Load() != 0 {
-		t.Fatalf("o backend atual deveria seguir em uso: %q, fechado %d vez(es)", w.Backend(), mem.closeHits.Load())
+		t.Fatalf("the current backend should stay in use: %q, closed %d time(s)", w.Backend(), mem.closeHits.Load())
 	}
-	recordIDs(t, w, "depois")
-	for _, id := range []string{"antes", "depois"} {
+	recordIDs(t, w, "after")
+	for _, id := range []string{"before", "after"} {
 		if _, err := mem.Store.Get(ctx, id); err != nil {
-			t.Fatalf("%s deveria estar no backend atual: %v", id, err)
+			t.Fatalf("%s should be in the current backend: %v", id, err)
 		}
 	}
 	if got := countAll(t, w); got != written+2 {
-		t.Fatalf("gravadas %d durante a tentativa, mais 2; histórico tem %d", written, got)
+		t.Fatalf("%d written during the attempt, plus 2; the history holds %d", written, got)
 	}
 }

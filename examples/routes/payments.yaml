@@ -1,6 +1,7 @@
-# Rota do serviço de pagamentos de brinquedo (examples/toys/payments).
-# /payments/* chega ao upstream sem o prefixo: /payments/balance vira /balance.
-# Os overrides casam com o path como o cliente enviou, antes do corte.
+# Route for the toy payment service (examples/toys/payments).
+# /payments/* reaches the upstream without the prefix: /payments/balance
+# becomes /balance. Overrides match the path as the client sent it, before
+# the prefix is stripped.
 schemaVersion: 1
 name: payments
 upstream: http://127.0.0.1:9001
@@ -10,8 +11,9 @@ stripPrefix: true
 rewriteHost: true
 timeout: 5s
 overrides:
-  # Override forçado: sem probability, vale em toda requisição que casa.
-  # Só pega quem envia X-Scenario: declined, o resto segue para o upstream.
+  # Forced override: with no probability, it applies to every matching
+  # request. Only requests carrying X-Scenario: declined are caught; the
+  # rest go on to the upstream.
   - name: charge-declined
     match:
       path: /payments/charges
@@ -24,10 +26,11 @@ overrides:
         Content-Type: application/json
       body:
         error: card_declined
-        message: Cartão recusado pelo emissor
+        message: Card declined by the issuer
 
-  # Override probabilístico: 30% das consultas de saldo recebem 503 sintetizado.
-  # Com seed fixa em gateway.json, a sequência se repete na mesma ordem de chegada.
+  # Probabilistic override: 30% of the balance lookups get a synthesized 503.
+  # With a fixed seed in gateway.json, the sequence repeats for the same
+  # arrival order.
   - name: balance-flaky
     match:
       path: /payments/balance
@@ -41,9 +44,9 @@ overrides:
       body:
         error: balance_unavailable
 
-  # Latência em intervalo: a consulta de cobrança vai ao upstream, mas antes
-  # espera entre 200 ms e 900 ms. No waterfall, o tempo injetado aparece
-  # separado do tempo do upstream.
+  # Latency range: the charge lookup still reaches the upstream, but waits
+  # between 200 ms and 900 ms first. In the waterfall, the injected time shows
+  # up separately from the upstream time.
   - name: charge-lookup-slow
     match:
       pathRegex: ^/payments/charges/[^/]+$
@@ -52,8 +55,8 @@ overrides:
       min: 200ms
       max: 900ms
 
-  # Desligado de propósito: ligue pelo painel ou pela API para ver o
-  # serviço inteiro "em manutenção".
+  # Disabled on purpose: turn it on from the panel or the API to see the whole
+  # service "under maintenance".
   - name: maintenance
     enabled: false
     match:

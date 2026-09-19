@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gamerjp64/gateway/internal/exchange"
-	"github.com/gamerjp64/gateway/internal/store"
-	"github.com/gamerjp64/gateway/internal/store/storetest"
+	"github.com/gamerjp64/devgateway/internal/exchange"
+	"github.com/gamerjp64/devgateway/internal/store"
+	"github.com/gamerjp64/devgateway/internal/store/storetest"
 )
 
 func openNDJSON(t storetest.TB, path string) store.Store {
@@ -70,8 +70,9 @@ func appendRaw(t *testing.T, path, raw string) {
 	}
 }
 
-// Uma escrita interrompida deixa a última linha sem terminador: ela é
-// descartada na abertura, e o registro seguinte começa numa linha limpa.
+// An interrupted write leaves the last line without a terminator: it is
+// dropped when the file is opened, and the next record starts on a clean
+// line.
 func TestNDJSONDiscardsIncompleteLastLine(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.ndjson")
 	s, err := store.OpenNDJSON(path)
@@ -80,26 +81,26 @@ func TestNDJSONDiscardsIncompleteLastLine(t *testing.T) {
 	}
 	recordIDs(t, s, "a", "b")
 	s.Close()
-	appendRaw(t, path, `{"id":"interrompida","status":2`)
+	appendRaw(t, path, `{"id":"interrupted","status":2`)
 
 	s2 := openNDJSON(t, path)
 	if got := listIDs(t, s2); len(got) != 2 || got[0] != "b" || got[1] != "a" {
-		t.Fatalf("deveriam restar b e a, recebido %v", got)
+		t.Fatalf("b and a should be left, got %v", got)
 	}
-	if _, err := s2.Get(context.Background(), "interrompida"); err != store.ErrNotFound {
-		t.Fatalf("linha incompleta não deveria ser lida: %v", err)
+	if _, err := s2.Get(context.Background(), "interrupted"); err != store.ErrNotFound {
+		t.Fatalf("the incomplete line should not be read: %v", err)
 	}
 	recordIDs(t, s2, "c")
 	s2.Close()
 
 	s3 := openNDJSON(t, path)
 	if got := listIDs(t, s3); len(got) != 3 || got[0] != "c" {
-		t.Fatalf("troca gravada após o descarte deveria sobreviver ao reinício: %v", got)
+		t.Fatalf("an exchange recorded after the drop should survive a restart: %v", got)
 	}
 }
 
-// Uma linha ilegível no meio do arquivo é ignorada sem perder as vizinhas,
-// e a navegação passa por cima dela.
+// An unreadable line in the middle of the file is skipped without losing its
+// neighbors, and navigation steps right over it.
 func TestNDJSONSkipsUnreadableMiddleLine(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.ndjson")
 	s, err := store.OpenNDJSON(path)
@@ -108,7 +109,7 @@ func TestNDJSONSkipsUnreadableMiddleLine(t *testing.T) {
 	}
 	recordIDs(t, s, "a")
 	s.Close()
-	appendRaw(t, path, "isto não é json\n")
+	appendRaw(t, path, "this is not json\n")
 	s, err = store.OpenNDJSON(path)
 	if err != nil {
 		t.Fatal(err)
@@ -118,13 +119,13 @@ func TestNDJSONSkipsUnreadableMiddleLine(t *testing.T) {
 
 	s2 := openNDJSON(t, path)
 	if got := listIDs(t, s2); len(got) != 2 || got[0] != "b" || got[1] != "a" {
-		t.Fatalf("deveriam restar b e a, recebido %v", got)
+		t.Fatalf("b and a should be left, got %v", got)
 	}
 	e, err := s2.Neighbor(context.Background(), "b", store.Older, exchange.Filter{})
 	if err != nil || e.ID != "a" {
-		t.Fatalf("anterior de b deveria ser a: %q %v", e.ID, err)
+		t.Fatalf("the one before b should be a: %q %v", e.ID, err)
 	}
 	if _, err := s2.Get(context.Background(), "b"); err != nil {
-		t.Fatalf("troca após a linha ilegível deveria ser lida: %v", err)
+		t.Fatalf("the exchange after the unreadable line should be readable: %v", err)
 	}
 }

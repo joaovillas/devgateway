@@ -7,8 +7,9 @@ import (
 	"testing"
 )
 
-// consistentSnapshot cria um snapshot cujas partes precisam concordar entre si:
-// o seed, a porta, a quantidade de rotas e o índice por nome codificam n.
+// consistentSnapshot builds a snapshot whose parts have to agree with each
+// other: the seed, the port, the number of routes and the index by name all
+// encode n.
 func consistentSnapshot(t *testing.T, n int) *Snapshot {
 	t.Helper()
 	var docs []RouteDoc
@@ -32,12 +33,12 @@ func consistentSnapshot(t *testing.T, n int) *Snapshot {
 func checkConsistent(s *Snapshot) error {
 	n := int(*s.Settings.Seed)
 	if s.Settings.TrafficPort != 10000+n || len(s.Routes) != n || len(s.byName) != n {
-		return fmt.Errorf("snapshot parcial: seed %d, porta %d, rotas %d, índice %d",
+		return fmt.Errorf("partial snapshot: seed %d, port %d, routes %d, index %d",
 			n, s.Settings.TrafficPort, len(s.Routes), len(s.byName))
 	}
 	for _, r := range s.Routes {
 		if s.Route(r.Name()) != r {
-			return fmt.Errorf("índice por nome não corresponde à lista em %s", r.Name())
+			return fmt.Errorf("the index by name does not match the list at %s", r.Name())
 		}
 	}
 	return nil
@@ -57,7 +58,7 @@ func TestLiveSwapNeverExposesPartialState(t *testing.T) {
 	for range 8 {
 		wg.Go(func() {
 			for !stop.Load() {
-				// Uma requisição captura o ponteiro uma vez e lê tudo dele.
+				// A request grabs the pointer once and reads everything from it.
 				if err := checkConsistent(live.Load()); err != nil {
 					errs <- err
 					return
@@ -66,8 +67,9 @@ func TestLiveSwapNeverExposesPartialState(t *testing.T) {
 			}
 		})
 	}
-	// Troca até haver ao menos uma leitura concorrente: com poucos núcleos, as
-	// 2000 trocas podem terminar antes de qualquer leitor começar.
+	// Keep swapping until at least one concurrent read has happened: on a
+	// machine with few cores the 2000 swaps may finish before any reader
+	// gets going.
 	for i := 0; i < 2000 || reads.Load() == 0; i++ {
 		live.Swap(snaps[i%len(snaps)])
 	}
@@ -78,25 +80,25 @@ func TestLiveSwapNeverExposesPartialState(t *testing.T) {
 		t.Fatal(err)
 	}
 	if reads.Load() == 0 {
-		t.Fatal("nenhuma leitura concorrente ocorreu")
+		t.Fatal("no concurrent read happened")
 	}
 }
 
 func TestLoaderBuildsSnapshot(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{
-		"gateway.json":     `{"routesDir":"routes"}`,
-		"routes/a.yaml":    routeYAML("a", "/a/*"),
-		"routes/b.yaml":    routeYAML("b", "/b/*"),
-		"routes/leia.txt":  "ignorado",
-		"routes/c.yaml":    routeYAML("c", "/c"),
-		"routes/old/x.yml": "ignorado: [",
+		"gateway.json":      `{"routesDir":"routes"}`,
+		"routes/a.yaml":     routeYAML("a", "/a/*"),
+		"routes/b.yaml":     routeYAML("b", "/b/*"),
+		"routes/readme.txt": "ignored",
+		"routes/c.yaml":     routeYAML("c", "/c"),
+		"routes/old/x.yml":  "ignored: [",
 	})
 	snap, err := Loader{ConfigPath: dir + "/gateway.json", Getenv: envMap(nil)}.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(snap.Routes) != 3 || snap.Route("b") == nil {
-		t.Fatalf("snapshot deveria ter as rotas a, b e c: %d", len(snap.Routes))
+		t.Fatalf("the snapshot should hold routes a, b and c: %d", len(snap.Routes))
 	}
 }

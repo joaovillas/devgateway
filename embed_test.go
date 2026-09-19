@@ -1,4 +1,4 @@
-package gateway
+package devgateway
 
 import (
 	"io/fs"

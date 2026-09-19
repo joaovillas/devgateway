@@ -24,16 +24,17 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-var testWeb = fstest.MapFS{"index.html": {Data: []byte("<p>painel</p>")}}
+var testWeb = fstest.MapFS{"index.html": {Data: []byte("<p>panel</p>")}}
 
 func quietLog() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
-// startWith sobe o processo com um gateway.json em portas livres e as rotas dadas.
+// startWith brings the process up with a gateway.json on free ports and the
+// given routes.
 func startWith(t *testing.T, gatewayJSON string, routes map[string]string) *App {
 	t.Helper()
-	// Os t.TempDir do teste, criados depois daqui (como o arquivo de um
-	// backend do histórico), só são removidos depois do encerramento do
-	// processo, que fecha esses arquivos.
+	// The test's t.TempDir directories created after this point (such as the
+	// file of a history backend) are only removed once the process has shut
+	// down and closed those files.
 	t.TempDir()
 	dir := tempDir(t)
 	writeFile(t, filepath.Join(dir, "gateway.json"), gatewayJSON)
@@ -75,7 +76,7 @@ func getBody(t *testing.T, url string) (int, string) {
 
 const freePorts = `{"ports":{"traffic":0,"admin":0}}`
 
-// Requirement: Separação entre porta de tráfego e porta de administração
+// Requirement: Separation between the traffic port and the admin port
 
 func TestAdminPathOnTrafficPortIsTraffic(t *testing.T) {
 	var hits atomic.Int64
@@ -85,7 +86,7 @@ func TestAdminPathOnTrafficPortIsTraffic(t *testing.T) {
 	})
 	status, body := getBody(t, "http://"+a.TrafficAddr()+"/api/routes")
 	if status != 200 || body != "upstream:/api/routes" {
-		t.Fatalf("/api/ na porta de tráfego deveria ir ao upstream: %d %q", status, body)
+		t.Fatalf("/api/ on the traffic port should go to the upstream: %d %q", status, body)
 	}
 }
 
@@ -93,7 +94,7 @@ func TestAdminPathWithoutRouteIsNoRoute(t *testing.T) {
 	a := startWith(t, freePorts, nil)
 	status, body := getBody(t, "http://"+a.TrafficAddr()+"/api/routes")
 	if status != http.StatusNotFound || !strings.Contains(body, "no_route") {
-		t.Fatalf("sem rota, /api/ na porta de tráfego é só um path sem rota: %d %s", status, body)
+		t.Fatalf("with no route, /api/ on the traffic port is just a path with no route: %d %s", status, body)
 	}
 }
 
@@ -103,13 +104,13 @@ func TestTrafficNotForwardedOnAdminPort(t *testing.T) {
 	a := startWith(t, freePorts, map[string]string{
 		"payments.yaml": "schemaVersion: 1\nname: payments\nupstream: " + up.URL + "\nmatch:\n  path: /payments/*\n",
 	})
-	// Controle: a rota funciona na porta de tráfego.
+	// Control: the route works on the traffic port.
 	if status, _ := getBody(t, "http://"+a.TrafficAddr()+"/payments/x"); status != 200 || hits.Load() != 1 {
-		t.Fatalf("rota deveria atender na porta de tráfego")
+		t.Fatalf("the route should serve on the traffic port")
 	}
 	status, body := getBody(t, "http://"+a.AdminAddr()+"/payments/x")
 	if hits.Load() != 1 || strings.Contains(body, "upstream:") {
-		t.Fatalf("porta de administração encaminhou ao upstream: %d %q", status, body)
+		t.Fatalf("the admin port forwarded to the upstream: %d %q", status, body)
 	}
 }
 
@@ -118,7 +119,7 @@ func TestEqualPortsRefuseToStart(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "gateway.json"), `{"ports":{"traffic":18555,"admin":18555}}`)
 	_, err := Start(Options{Loader: loaderFor(filepath.Join(dir, "gateway.json")), Web: testWeb, Log: quietLog()})
 	if err == nil || !strings.Contains(err.Error(), "18555") {
-		t.Fatalf("deveria recusar iniciar informando o conflito, recebido %v", err)
+		t.Fatalf("it should refuse to start and report the conflict, got %v", err)
 	}
 }
 
@@ -136,10 +137,10 @@ func TestStartsWithDefaultsWhenGatewayFileMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer a.Shutdown(context.Background())
-	if !strings.Contains(logs.String(), "gateway.json não encontrado") {
-		t.Fatalf("deveria registrar aviso com o caminho procurado: %s", logs.String())
+	if !strings.Contains(logs.String(), "gateway.json not found") {
+		t.Fatalf("it should log a warning with the path it looked at: %s", logs.String())
 	}
 	if status, _ := getBody(t, "http://"+a.AdminAddr()+"/"); status != 200 {
-		t.Fatalf("gateway deveria seguir operacional, admin respondeu %d", status)
+		t.Fatalf("the gateway should stay operational, admin answered %d", status)
 	}
 }

@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Origin diz de onde veio um valor efetivo.
+// Origin says where an effective value came from.
 type Origin string
 
 const (
@@ -19,10 +19,11 @@ const (
 	OriginEnv     Origin = "env"
 )
 
-// Source identifica a origem de um valor: o arquivo ou a variável de ambiente.
+// Source identifies where a value came from: the file or the environment
+// variable.
 type Source struct {
 	Origin Origin `json:"origin"`
-	// Name é o caminho do arquivo ou o nome da variável; vazio no padrão.
+	// Name is the file path or the variable name; empty for a default.
 	Name string `json:"name,omitempty"`
 }
 
@@ -32,34 +33,34 @@ const (
 	BackendSQLite = "sqlite"
 )
 
-// EnvConfigPath aponta o gateway.json; os demais valores têm variável própria.
+// EnvConfigPath points at gateway.json; every other value has its own variable.
 const EnvConfigPath = "GATEWAY_CONFIG"
 
-// Settings é a configuração efetiva do processo.
+// Settings is the effective configuration of the process.
 type Settings struct {
 	TrafficPort         int
 	AdminPort           int
-	Seed                *uint64 // nil: aleatoriedade não reproduzível
+	Seed                *uint64 // nil: randomness is not reproducible
 	HistoryBackend      string
 	HistoryPath         string
 	HistoryCapacity     int
 	HistoryRecord       bool
 	HistoryExpose       bool
 	CaptureMaxBodyBytes int
-	// LearningEnabled liga o modo aprendizado; alterável em execução.
+	// LearningEnabled turns on learning mode; can be changed at runtime.
 	LearningEnabled bool
 	RoutesDir       string
-	// Sources guarda a origem de cada valor, pela chave de settingFields.
+	// Sources holds where each value came from, keyed as in settingFields.
 	Sources map[string]Source
 }
 
-// settingField descreve um valor do processo: chave em gateway.json,
-// variável de ambiente, padrão e como ler cada forma.
+// settingField describes one process value: its key in gateway.json, its
+// environment variable, its default and how to read each form.
 type settingField struct {
 	key      string
 	env      string
 	setDef   func(*Settings)
-	fromFile func(*Settings, GatewayFile, string) bool // false: ausente no arquivo
+	fromFile func(*Settings, GatewayFile, string) bool // false: absent from the file
 	fromEnv  func(*Settings, string) error
 	value    func(Settings) any
 }
@@ -97,7 +98,7 @@ var settingFields = []settingField{
 		fromEnv: func(s *Settings, v string) error {
 			n, err := strconv.ParseUint(v, 10, 64)
 			if err != nil {
-				return fmt.Errorf("seed deve ser um inteiro não negativo")
+				return fmt.Errorf("seed must be a non-negative integer")
 			}
 			s.Seed = &n
 			return nil
@@ -119,7 +120,7 @@ var settingFields = []settingField{
 		value:   func(s Settings) any { return s.HistoryBackend },
 	},
 	{
-		// Sem valor explícito, LoadSettings escolhe o caminho pelo backend.
+		// Without an explicit value, LoadSettings picks the path from the backend.
 		key: "history.path", env: "GATEWAY_HISTORY_PATH",
 		setDef: func(s *Settings) { s.HistoryPath = "" },
 		fromFile: func(s *Settings, g GatewayFile, dir string) bool {
@@ -207,7 +208,7 @@ func setIf[P any, T any](dst *T, parent *P, get func(*P) *T) bool {
 func parseInt(v string, dst *int) error {
 	n, err := strconv.Atoi(strings.TrimSpace(v))
 	if err != nil {
-		return fmt.Errorf("deve ser um número inteiro")
+		return fmt.Errorf("must be a whole number")
 	}
 	*dst = n
 	return nil
@@ -216,14 +217,15 @@ func parseInt(v string, dst *int) error {
 func parseBool(v string, dst *bool) error {
 	b, err := strconv.ParseBool(strings.TrimSpace(v))
 	if err != nil {
-		return fmt.Errorf("deve ser true ou false")
+		return fmt.Errorf("must be true or false")
 	}
 	*dst = b
 	return nil
 }
 
-// relativeTo resolve caminhos do arquivo a partir do diretório do próprio
-// gateway.json, para que o resultado não dependa de onde o processo roda.
+// relativeTo resolves the paths in the file against the directory of
+// gateway.json itself, so the result does not depend on where the process
+// runs from.
 func relativeTo(dir, p string) string {
 	if p == "" || filepath.IsAbs(p) {
 		return p
@@ -231,7 +233,7 @@ func relativeTo(dir, p string) string {
 	return filepath.Join(dir, p)
 }
 
-// EffectiveValue é um valor do processo com sua origem.
+// EffectiveValue is a process value together with where it came from.
 type EffectiveValue struct {
 	Key    string `json:"key"`
 	Env    string `json:"env"`
@@ -239,7 +241,7 @@ type EffectiveValue struct {
 	Source Source `json:"source"`
 }
 
-// Effective lista cada valor com sua origem, na ordem de settingFields.
+// Effective lists every value with its source, in settingFields order.
 func (s Settings) Effective() []EffectiveValue {
 	out := make([]EffectiveValue, len(settingFields))
 	for i, f := range settingFields {
@@ -248,22 +250,23 @@ func (s Settings) Effective() []EffectiveValue {
 	return out
 }
 
-// LoadSettings monta a configuração do processo: padrão, depois gateway.json,
-// depois o ambiente. Um gateway.json ausente gera aviso, não erro.
+// LoadSettings assembles the process configuration: defaults, then
+// gateway.json, then the environment. A missing gateway.json yields a
+// warning, not an error.
 func LoadSettings(configPath string, getenv func(string) (string, bool)) (Settings, []string, error) {
 	data, err := os.ReadFile(configPath)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		return loadSettings(configPath, nil, false, getenv)
 	case err != nil:
-		return Settings{}, nil, fmt.Errorf("lendo %s: %w", configPath, err)
+		return Settings{}, nil, fmt.Errorf("reading %s: %w", configPath, err)
 	}
 	return loadSettings(configPath, data, true, getenv)
 }
 
-// SettingsFrom monta a configuração do processo como LoadSettings, mas com
-// data no lugar do conteúdo de configPath, sem ler o disco. Serve a quem
-// valida um gateway.json antes de gravá-lo.
+// SettingsFrom assembles the process configuration like LoadSettings, but
+// with data standing in for the content of configPath, without touching the
+// disk. It serves whoever validates a gateway.json before writing it.
 func SettingsFrom(configPath string, data []byte, getenv func(string) (string, bool)) (Settings, []string, error) {
 	return loadSettings(configPath, data, true, getenv)
 }
@@ -279,7 +282,7 @@ func loadSettings(configPath string, data []byte, exists bool, getenv func(strin
 	var warnings []string
 	x := &nodeIndex{file: configPath}
 	if !exists {
-		warnings = append(warnings, fmt.Sprintf("%s não encontrado; usando valores padrão", configPath))
+		warnings = append(warnings, fmt.Sprintf("%s not found; using default values", configPath))
 	} else {
 		var g GatewayFile
 		var err error
@@ -313,8 +316,8 @@ func loadSettings(configPath string, data []byte, exists bool, getenv func(strin
 		return s, nil, errs
 	}
 
-	// Caminhos padrão ficam ao lado do gateway.json, como os do arquivo;
-	// só os do ambiente partem do diretório de trabalho.
+	// Default paths sit next to gateway.json, like the ones in the file; only
+	// the ones from the environment start at the working directory.
 	dir := filepath.Dir(configPath)
 	if s.Sources["routesDir"].Origin == OriginDefault {
 		s.RoutesDir = relativeTo(dir, s.RoutesDir)
@@ -334,11 +337,11 @@ func loadSettings(configPath string, data []byte, exists bool, getenv func(strin
 }
 
 func envError(f settingField, msg string) *Error {
-	return &Error{File: "variável de ambiente " + f.env, Field: f.key, Msg: msg}
+	return &Error{File: "environment variable " + f.env, Field: f.key, Msg: msg}
 }
 
-// validate recusa valores inválidos, apontando o arquivo ou a variável de
-// onde cada um veio.
+// validate rejects invalid values, naming the file or the variable each one
+// came from.
 func (s Settings) validate(x *nodeIndex) error {
 	var errs Errors
 	fail := func(key, format string, args ...any) {
@@ -346,11 +349,11 @@ func (s Settings) validate(x *nodeIndex) error {
 		msg := fmt.Sprintf(format, args...)
 		switch src.Origin {
 		case OriginEnv:
-			errs = append(errs, &Error{File: "variável de ambiente " + src.Name, Field: key, Msg: msg})
+			errs = append(errs, &Error{File: "environment variable " + src.Name, Field: key, Msg: msg})
 		case OriginFile:
 			errs = append(errs, x.locate(issue{field: key, msg: msg}))
 		default:
-			errs = append(errs, &Error{File: "padrão embutido", Field: key, Msg: msg})
+			errs = append(errs, &Error{File: "built-in default", Field: key, Msg: msg})
 		}
 	}
 	for _, p := range []struct {
@@ -358,25 +361,25 @@ func (s Settings) validate(x *nodeIndex) error {
 		port int
 	}{{"ports.traffic", s.TrafficPort}, {"ports.admin", s.AdminPort}} {
 		if p.port < 0 || p.port > 65535 {
-			fail(p.key, "porta deve estar entre 0 e 65535, onde 0 escolhe uma porta livre (recebido %d)", p.port)
+			fail(p.key, "port must be between 0 and 65535, where 0 picks a free port (got %d)", p.port)
 		}
 	}
 	if s.TrafficPort == s.AdminPort && s.TrafficPort != 0 {
-		fail("ports.admin", "porta de administração igual à de tráfego (%d); as duas precisam ser distintas", s.AdminPort)
+		fail("ports.admin", "the admin port is the same as the traffic port (%d); the two have to differ", s.AdminPort)
 	}
 	switch s.HistoryBackend {
 	case BackendMemory, BackendNDJSON, BackendSQLite:
 	default:
-		fail("history.backend", "backend %q desconhecido; use memory, ndjson ou sqlite", s.HistoryBackend)
+		fail("history.backend", "unknown backend %q; use memory, ndjson or sqlite", s.HistoryBackend)
 	}
 	if s.HistoryCapacity < 1 {
-		fail("history.capacity", "capacidade deve ser ao menos 1 (recebido %d)", s.HistoryCapacity)
+		fail("history.capacity", "capacity must be at least 1 (got %d)", s.HistoryCapacity)
 	}
 	if s.CaptureMaxBodyBytes < 0 {
-		fail("capture.maxBodyBytes", "não pode ser negativo (recebido %d)", s.CaptureMaxBodyBytes)
+		fail("capture.maxBodyBytes", "cannot be negative (got %d)", s.CaptureMaxBodyBytes)
 	}
 	if s.RoutesDir == "" {
-		fail("routesDir", "obrigatório")
+		fail("routesDir", "required")
 	}
 	if len(errs) > 0 {
 		return errs

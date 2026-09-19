@@ -10,29 +10,30 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/gamerjp64/gateway/internal/config"
+	"github.com/gamerjp64/devgateway/internal/config"
 )
 
-// maxBody limita o corpo de uma escrita pela API.
+// maxBody caps the body of a write through the API.
 const maxBody = 8 << 20
 
-// bodyLabel nomeia o corpo da requisição nos erros de forma do JSON.
-const bodyLabel = "corpo da requisição"
+// bodyLabel names the request body in the JSON shape errors.
+const bodyLabel = "request body"
 
 var (
 	jsonTypes = []string{"application/json", "application/merge-patch+json"}
 	yamlTypes = []string{"application/yaml", "application/x-yaml", "text/yaml", "text/x-yaml", "text/plain"}
 )
 
-// readBody lê o corpo, recusando com 415 um Content-Type fora dos aceitos.
-// Um corpo sem Content-Type é aceito como o formato esperado.
+// readBody reads the body, rejecting with 415 a Content-Type outside the
+// accepted ones. A body with no Content-Type is taken as the expected
+// format.
 func readBody(r *http.Request, accepted []string) ([]byte, error) {
 	if ct := r.Header.Get("Content-Type"); ct != "" {
 		mt, _, err := mime.ParseMediaType(ct)
 		if err != nil || !slices.Contains(accepted, mt) {
 			return nil, &requestError{http.StatusUnsupportedMediaType, apiError{
 				Error:   "unsupported_media_type",
-				Message: fmt.Sprintf("Content-Type %q não aceito aqui; use %s", ct, accepted[0]),
+				Message: fmt.Sprintf("Content-Type %q is not accepted here; use %s", ct, accepted[0]),
 			}}
 		}
 	}
@@ -40,19 +41,19 @@ func readBody(r *http.Request, accepted []string) ([]byte, error) {
 	if err != nil {
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
-			return nil, badRequest(fmt.Sprintf("corpo maior que o limite de %d bytes", maxBody))
+			return nil, badRequest(fmt.Sprintf("body larger than the %d byte limit", maxBody))
 		}
-		return nil, badRequest("falha ao ler o corpo: " + err.Error())
+		return nil, badRequest("failed to read the body: " + err.Error())
 	}
 	if len(bytes.TrimSpace(b)) == 0 {
-		return nil, badRequest("corpo ausente")
+		return nil, badRequest("missing body")
 	}
 	return b, nil
 }
 
-// decodeJSON lê o corpo JSON no destino v, com as regras de forma dos
-// documentos: um campo desconhecido ou de tipo errado responde 422 nomeando
-// o campo. JSON malformado responde 400.
+// decodeJSON decodes the JSON body into v, with the shape rules of the
+// documents: an unknown field, or one of the wrong type, answers 422 and
+// names the field. Malformed JSON answers 400.
 func decodeJSON(r *http.Request, v any) error {
 	b, err := readBody(r, jsonTypes)
 	if err != nil {
@@ -71,9 +72,9 @@ func decodeJSONBytes(b []byte, v any) error {
 	return nil
 }
 
-// malformed converte o erro de sintaxe JSON, já localizado, num 400.
+// malformed turns the JSON syntax error, already located, into a 400.
 func malformed(err error) error {
-	body := apiError{Error: "bad_request", Message: "JSON malformado"}
+	body := apiError{Error: "bad_request", Message: "malformed JSON"}
 	var es config.Errors
 	if errors.As(err, &es) && len(es) > 0 {
 		body.Message = es[0].Error()
@@ -82,7 +83,7 @@ func malformed(err error) error {
 	return &requestError{http.StatusBadRequest, body}
 }
 
-// readPatch lê um JSON Merge Patch (RFC 7396), que precisa ser um objeto.
+// readPatch reads a JSON Merge Patch (RFC 7396), which has to be an object.
 func readPatch(r *http.Request) (map[string]any, error) {
 	b, err := readBody(r, jsonTypes)
 	if err != nil {
@@ -95,13 +96,13 @@ func readPatch(r *http.Request) (map[string]any, error) {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.UseNumber()
 	if err := dec.Decode(&p); err != nil || p == nil {
-		return nil, badRequest("o merge patch precisa ser um objeto JSON")
+		return nil, badRequest("the merge patch has to be a JSON object")
 	}
 	return p, nil
 }
 
-// applyPatch aplica o merge patch sobre cur e decodifica o resultado em out,
-// com as mesmas regras de forma de uma escrita completa.
+// applyPatch applies the merge patch over cur and decodes the result into
+// out, with the same shape rules as a full write.
 func applyPatch(cur any, patch map[string]any, out any) error {
 	b, err := json.Marshal(cur)
 	if err != nil {
@@ -120,8 +121,8 @@ func applyPatch(cur any, patch map[string]any, out any) error {
 	return config.DecodeJSON(bodyLabel, merged, out)
 }
 
-// mergePatch aplica patch sobre target segundo a RFC 7396: chaves presentes
-// substituem, null remove, objetos se fundem recursivamente.
+// mergePatch applies patch over target as per RFC 7396: keys that are
+// present replace, null removes, objects merge recursively.
 func mergePatch(target, patch any) any {
 	p, ok := patch.(map[string]any)
 	if !ok {

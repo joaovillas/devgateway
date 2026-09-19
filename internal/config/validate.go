@@ -15,36 +15,36 @@ var (
 	methodRe    = regexp.MustCompile(`^[A-Z]+$`)
 )
 
-// validateRoute aplica as regras de um documento de rota, devolvendo cada
-// problema com o caminho do campo responsável.
+// validateRoute applies the rules of a route document, reporting each problem
+// against the field responsible for it.
 func validateRoute(r Route) []issue {
 	var is []issue
 	add := func(field, format string, args ...any) { is = append(is, issuef(field, format, args...)) }
 
 	switch {
 	case r.SchemaVersion == 0:
-		add("schemaVersion", "obrigatório (versão atual: %d)", SchemaVersion)
+		add("schemaVersion", "required (current version: %d)", SchemaVersion)
 	case r.SchemaVersion < 0:
-		add("schemaVersion", "versão de schema %d inválida", r.SchemaVersion)
+		add("schemaVersion", "invalid schema version %d", r.SchemaVersion)
 	case r.SchemaVersion > SchemaVersion:
 		is = append(is, schemaIssue(r.SchemaVersion))
 	}
 
 	if !routeNameRe.MatchString(r.Name) {
-		add("name", "obrigatório, com letras minúsculas, dígitos, - ou _ (recebido %q)", r.Name)
+		add("name", "required, with lowercase letters, digits, - or _ (got %q)", r.Name)
 	}
 
 	if r.Upstream != "" {
 		if msg := checkUpstream(r.Upstream); msg != "" {
-			add("upstream", "%s (recebido %q)", msg, r.Upstream)
+			add("upstream", "%s (got %q)", msg, r.Upstream)
 		}
 	}
 
 	if r.Match.Host == "" && r.Match.Path == "" {
-		add("match", "declare host, path ou ambos")
+		add("match", "declare host, path or both")
 	}
 	if r.Match.Host != "" && strings.ContainsAny(r.Match.Host, "/ *") {
-		add("match.host", "host inválido %q", r.Match.Host)
+		add("match.host", "invalid host %q", r.Match.Host)
 	}
 	if r.Match.Path != "" {
 		if msg := checkPathPattern(r.Match.Path, false); msg != "" {
@@ -52,19 +52,19 @@ func validateRoute(r Route) []issue {
 		}
 	}
 	if r.StripPrefix && !strings.HasSuffix(r.Match.Path, "*") {
-		add("stripPrefix", "só se aplica a um padrão de path com curinga, como /api/*")
+		add("stripPrefix", "only applies to a wildcard path pattern, such as /api/*")
 	}
 	if r.Timeout != nil && *r.Timeout <= 0 {
-		add("timeout", "deve ser maior que zero")
+		add("timeout", "must be greater than zero")
 	}
 
 	names := map[string]int{}
 	for i, o := range r.Overrides {
 		base := fmt.Sprintf("overrides[%d]", i)
 		if o.Name == "" {
-			add(base+".name", "obrigatório")
+			add(base+".name", "required")
 		} else if j, dup := names[o.Name]; dup {
-			add(base+".name", "nome %q repetido (já usado em overrides[%d])", o.Name, j)
+			add(base+".name", "duplicate name %q (already used by overrides[%d])", o.Name, j)
 		} else {
 			names[o.Name] = i
 		}
@@ -73,9 +73,9 @@ func validateRoute(r Route) []issue {
 	return is
 }
 
-// ValidateOverride aplica a um override isolado as regras de override do
-// documento de rota (as que não dependem dos demais overrides, como a
-// unicidade do nome). file nomeia o documento nos erros.
+// ValidateOverride applies to a standalone override the override rules of the
+// route document (the ones that do not depend on the other overrides, such as
+// name uniqueness). file names the document in the errors.
 func ValidateOverride(file string, o Override) error {
 	is := validateOverride("override", o)
 	if len(is) == 0 {
@@ -94,20 +94,20 @@ func validateOverride(base string, o Override) []issue {
 	m := o.Match
 	switch {
 	case m.Path == "" && m.PathRegex == "":
-		add("match", "declare path ou pathRegex")
+		add("match", "declare path or pathRegex")
 	case m.Path != "" && m.PathRegex != "":
-		add("match.pathRegex", "use path ou pathRegex, não os dois")
+		add("match.pathRegex", "use path or pathRegex, not both")
 	case m.Path != "":
 		if msg := checkPathPattern(m.Path, true); msg != "" {
 			add("match.path", "%s", msg)
 		}
 	default:
 		if _, err := regexp.Compile(m.PathRegex); err != nil {
-			add("match.pathRegex", "expressão regular inválida: %v", err)
+			add("match.pathRegex", "invalid regular expression: %v", err)
 		}
 	}
 	if m.Method != "" && !methodRe.MatchString(m.Method) {
-		add("match.method", "método deve estar em maiúsculas, como POST (recebido %q)", m.Method)
+		add("match.method", "method must be uppercase, such as POST (got %q)", m.Method)
 	}
 	for _, k := range slices.Sorted(maps.Keys(m.Headers)) {
 		is = append(is, validateMatcher(base+".match.headers."+k, m.Headers[k])...)
@@ -120,56 +120,57 @@ func validateOverride(base string, o Override) []issue {
 	}
 
 	if o.Respond == nil && o.Latency == nil && !o.Drop {
-		add("", "declare ao menos respond, latency ou drop")
+		add("", "declare at least one of respond, latency or drop")
 	}
 	if r := o.Respond; r != nil {
 		if r.Status != 0 && (r.Status < 100 || r.Status > 599) {
-			add("respond.status", "status deve estar entre 100 e 599 (recebido %d)", r.Status)
+			add("respond.status", "status must be between 100 and 599 (got %d)", r.Status)
 		}
 		for _, k := range slices.Sorted(maps.Keys(r.Headers)) {
 			if !validHeaderName(k) {
-				add("respond.headers."+k, "nome de cabeçalho inválido")
+				add("respond.headers."+k, "invalid header name")
 			}
 			if len(r.Headers[k]) == 0 {
-				add("respond.headers."+k, "declare ao menos um valor")
+				add("respond.headers."+k, "declare at least one value")
 			}
 		}
 	}
 	if p := o.Probability; p != nil && (*p < 0 || *p > 1) {
-		add("probability", "deve estar entre 0.0 e 1.0 (recebido %v)", *p)
+		add("probability", "must be between 0.0 and 1.0 (got %v)", *p)
 	}
 	if l := o.Latency; l != nil {
 		switch {
 		case l.Fixed != nil:
 			if *l.Fixed < 0 {
-				add("latency", "não pode ser negativa")
+				add("latency", "cannot be negative")
 			}
 		case l.Min == nil || l.Max == nil:
-			add("latency", "o intervalo exige min e max")
+			add("latency", "a range needs both min and max")
 		case *l.Min < 0:
-			add("latency.min", "não pode ser negativa")
+			add("latency.min", "cannot be negative")
 		case *l.Min > *l.Max:
-			add("latency.min", "mínimo %s maior que o máximo %s", l.Min, l.Max)
+			add("latency.min", "minimum %s is greater than the maximum %s", l.Min, l.Max)
 		}
 	}
 	if o.TTL != nil && *o.TTL <= 0 {
-		add("ttl", "deve ser maior que zero")
+		add("ttl", "must be greater than zero")
 	}
 	if n := o.MaxApplications; n != nil && *n < 1 {
-		add("maxApplications", "deve ser ao menos 1 (recebido %d)", *n)
+		add("maxApplications", "must be at least 1 (got %d)", *n)
 	}
 	if s := o.Source; s != nil {
 		switch s.Kind {
 		case SourceLearned, SourceDerived:
 		case "":
-			add("source.kind", "obrigatório; use %s ou %s", SourceLearned, SourceDerived)
+			add("source.kind", "required; use %s or %s", SourceLearned, SourceDerived)
 		default:
-			add("source.kind", "origem %q desconhecida; use %s ou %s", s.Kind, SourceLearned, SourceDerived)
+			add("source.kind", "unknown source %q; use %s or %s", s.Kind, SourceLearned, SourceDerived)
 		}
-		// Um override derivado sempre parte de uma troca do histórico. Um
-		// aprendido com o registro desligado não tem troca gravada a apontar.
+		// A derived override always starts from an exchange in the history. A
+		// learned one with recording turned off has no recorded exchange to
+		// point at.
 		if s.Exchange == "" && s.Kind != SourceLearned {
-			add("source.exchange", "obrigatório: identificador da troca de origem")
+			add("source.exchange", "required: the identifier of the originating exchange")
 		}
 	}
 	return is
@@ -183,11 +184,11 @@ func validateMatcher(field string, m Matcher) []issue {
 		}
 	}
 	if n != 1 {
-		return []issue{issuef(field, "declare exatamente um operador entre equals, regex, json e contains")}
+		return []issue{issuef(field, "declare exactly one operator among equals, regex, json and contains")}
 	}
 	if m.Regex != nil {
 		if _, err := regexp.Compile(*m.Regex); err != nil {
-			return []issue{issuef(field+".regex", "expressão regular inválida: %v", err)}
+			return []issue{issuef(field+".regex", "invalid regular expression: %v", err)}
 		}
 	}
 	return nil
@@ -197,26 +198,26 @@ func checkUpstream(s string) string {
 	u, err := url.Parse(s)
 	switch {
 	case err != nil:
-		return "não é uma URL válida"
+		return "is not a valid URL"
 	case u.Scheme != "http" && u.Scheme != "https":
-		return "a URL do upstream deve usar http ou https"
+		return "the upstream URL must use http or https"
 	case u.Host == "":
-		return "a URL do upstream não tem host"
+		return "the upstream URL has no host"
 	case u.RawQuery != "" || u.Fragment != "":
-		return "a URL do upstream não pode ter query nem fragmento"
+		return "the upstream URL cannot carry a query or a fragment"
 	}
 	return ""
 }
 
-// paramNameRe é a forma do nome de um parâmetro de segmento.
+// paramNameRe is the shape of a segment parameter name.
 var paramNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-// checkPathPattern aceita path exato ("/health") ou curinga de sufixo
-// ("/api/*"); com params, também parâmetros de segmento ("/viacep/:id/json"),
-// que só o path de um override aceita.
+// checkPathPattern accepts an exact path ("/health") or a suffix wildcard
+// ("/api/*"); with params, it also accepts segment parameters
+// ("/zip/:id/json"), which only an override path takes.
 func checkPathPattern(p string, params bool) string {
 	if !strings.HasPrefix(p, "/") {
-		return fmt.Sprintf("o padrão deve começar com / (recebido %q)", p)
+		return fmt.Sprintf("the pattern must start with / (got %q)", p)
 	}
 	seen := map[string]bool{}
 	for seg := range strings.SplitSeq(p[1:], "/") {
@@ -224,20 +225,20 @@ func checkPathPattern(p string, params bool) string {
 		switch {
 		case !ok:
 		case !params:
-			return fmt.Sprintf("parâmetros de segmento como :id só são aceitos no path de um override (recebido %q)", p)
+			return fmt.Sprintf("segment parameters such as :id are only accepted in an override path (got %q)", p)
 		case strings.Contains(name, "*"):
-			return fmt.Sprintf("um segmento não pode ser parâmetro e curinga ao mesmo tempo (recebido %q)", p)
+			return fmt.Sprintf("a segment cannot be a parameter and a wildcard at the same time (got %q)", p)
 		case !paramNameRe.MatchString(name):
-			return fmt.Sprintf("parâmetro de segmento %q inválido: use : seguido de letras, dígitos ou _, sem começar por dígito, como :id (recebido %q)", seg, p)
+			return fmt.Sprintf("invalid segment parameter %q: use : followed by letters, digits or _, not starting with a digit, such as :id (got %q)", seg, p)
 		case seen[name]:
-			return fmt.Sprintf("parâmetro de segmento :%s repetido no path (recebido %q)", name, p)
+			return fmt.Sprintf("duplicate segment parameter :%s in the path (got %q)", name, p)
 		default:
 			seen[name] = true
 		}
 	}
 	star := strings.Index(p, "*")
 	if star >= 0 && (star != len(p)-1 || !strings.HasSuffix(p, "/*")) {
-		return fmt.Sprintf("o curinga só é aceito no fim, depois de /, como /api/* (recebido %q)", p)
+		return fmt.Sprintf("the wildcard is only accepted at the end, after /, such as /api/* (got %q)", p)
 	}
 	return ""
 }
