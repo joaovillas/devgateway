@@ -3,33 +3,33 @@ import type { Matcher } from "../api";
 import { deepEqual } from "../patch";
 import { CloseIcon, PlusIcon } from "./Icons";
 
-// Editores de mapa: cabeçalhos e query dos critérios (valor é um Matcher) e
-// cabeçalhos da resposta (valor é texto). Cada linha grava quando o foco sai
-// dela, e remover a linha grava na hora.
+// Map editors: header and query criteria (the value is a Matcher) and response
+// headers (the value is text). Each row saves when focus leaves it, and
+// removing the row saves right away.
 
-export type MatchOp = "texto" | "equals" | "contains" | "regex" | "json";
+export type MatchOp = "text" | "equals" | "contains" | "regex" | "json";
 
 export const MATCH_OPS: { value: MatchOp; label: string }[] = [
-  { value: "texto", label: "igual a" },
-  { value: "contains", label: "contém" },
+  { value: "text", label: "is" },
+  { value: "contains", label: "contains" },
   { value: "regex", label: "regex" },
   { value: "json", label: "json" },
   { value: "equals", label: "equals" },
 ];
 
 export function matcherToRow(m: Matcher): { op: MatchOp; text: string } {
-  if (typeof m === "string") return { op: "texto", text: m };
+  if (typeof m === "string") return { op: "text", text: m };
   if (m.regex !== undefined) return { op: "regex", text: m.regex };
   if (m.contains !== undefined) return { op: "contains", text: m.contains };
   if (m.equals !== undefined) return { op: "equals", text: m.equals };
   if (m.json !== undefined) return { op: "json", text: JSON.stringify(m.json) };
-  return { op: "texto", text: "" };
+  return { op: "text", text: "" };
 }
 
-/** Devolve o Matcher ou uma mensagem quando o texto não serve para o operador. */
+/** Returns the Matcher, or a message when the text does not work for the operator. */
 export function rowToMatcher(op: MatchOp, text: string): Matcher | string[] {
   switch (op) {
-    case "texto":
+    case "text":
       return text;
     case "equals":
       return { equals: text };
@@ -39,14 +39,14 @@ export function rowToMatcher(op: MatchOp, text: string): Matcher | string[] {
       try {
         new RegExp(text);
       } catch {
-        return ["regex inválida"];
+        return ["invalid regex"];
       }
       return { regex: text };
     case "json":
       try {
         return { json: JSON.parse(text) as unknown };
       } catch {
-        return ["JSON inválido"];
+        return ["invalid JSON"];
       }
   }
 }
@@ -65,8 +65,8 @@ function toRows(entries: Record<string, Matcher> | undefined): RowState[] {
 }
 
 /**
- * Mapa nome → Matcher (critério de cabeçalho ou query) ou nome → texto
- * (`plain`, cabeçalhos da resposta). `onCommit` recebe o mapa inteiro.
+ * Map of name → Matcher (header or query criterion) or name → text
+ * (`plain`, response headers). `onCommit` receives the whole map.
  */
 export function MapEditor({
   entries,
@@ -97,7 +97,7 @@ export function MapEditor({
     for (const r of list) {
       const k = r.key.trim();
       if (!k) continue;
-      if (k in out) return `nome repetido: ${k}`;
+      if (k in out) return `repeated name: ${k}`;
       const m = plain ? r.text : rowToMatcher(r.op, r.text);
       if (Array.isArray(m)) return `${k}: ${m[0]}`;
       out[k] = m;
@@ -132,7 +132,7 @@ export function MapEditor({
             className="input input--mono input--sm"
             value={r.key}
             placeholder={keyPlaceholder}
-            aria-label={`${label}: nome`}
+            aria-label={`${label}: name`}
             spellCheck={false}
             onChange={(e) => update(r.id, { key: e.target.value })}
             onKeyDown={(e) => e.key === "Enter" && commit(rows)}
@@ -141,7 +141,7 @@ export function MapEditor({
             <select
               className="input input--sm select"
               value={r.op}
-              aria-label={`${label}: operador de ${r.key || "novo item"}`}
+              aria-label={`${label}: operator for ${r.key || "new item"}`}
               onChange={(e) => {
                 const op = e.target.value as MatchOp;
                 const list = rows.map((x) => (x.id === r.id ? { ...x, op } : x));
@@ -159,7 +159,7 @@ export function MapEditor({
           <input
             className="input input--mono input--sm"
             value={r.text}
-            aria-label={`${label}: valor de ${r.key || "novo item"}`}
+            aria-label={`${label}: value for ${r.key || "new item"}`}
             spellCheck={false}
             onChange={(e) => update(r.id, { text: e.target.value })}
             onKeyDown={(e) => e.key === "Enter" && commit(rows)}
@@ -167,7 +167,7 @@ export function MapEditor({
           <button
             type="button"
             className="icon-button"
-            aria-label={`Remover ${r.key || "item vazio"} de ${label}`}
+            aria-label={`Remove ${r.key || "empty item"} from ${label}`}
             onClick={() => {
               const list = rows.filter((x) => x.id !== r.id);
               setRows(list);
@@ -181,9 +181,9 @@ export function MapEditor({
       <button
         type="button"
         className="text-button"
-        onClick={() => setRows((rs) => [...rs, { id: nextRowId++, key: "", op: "texto", text: "" }])}
+        onClick={() => setRows((rs) => [...rs, { id: nextRowId++, key: "", op: "text", text: "" }])}
       >
-        <PlusIcon /> {plain ? "cabeçalho" : "critério"}
+        <PlusIcon /> {plain ? "header" : "criterion"}
       </button>
       {problem ? (
         <span className="field__problem" id={errId} role="alert">
@@ -194,7 +194,7 @@ export function MapEditor({
   );
 }
 
-/** Critério do corpo: um Matcher só, ou nenhum. */
+/** Body criterion: a single Matcher, or none. */
 export function BodyMatcherEditor({
   value,
   onCommit,
@@ -204,22 +204,22 @@ export function BodyMatcherEditor({
   onCommit: (next: Matcher | null) => void;
   label: string;
 }) {
-  const initial = value === undefined ? { op: "nenhum" as const, text: "" } : matcherToRow(value);
-  const [op, setOp] = useState<MatchOp | "nenhum">(initial.op);
+  const initial = value === undefined ? { op: "none" as const, text: "" } : matcherToRow(value);
+  const [op, setOp] = useState<MatchOp | "none">(initial.op);
   const [text, setText] = useState(initial.text);
   const [problem, setProblem] = useState<string | null>(null);
   const box = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     if (box.current?.contains(document.activeElement)) return;
-    const r = value === undefined ? { op: "nenhum" as const, text: "" } : matcherToRow(value);
+    const r = value === undefined ? { op: "none" as const, text: "" } : matcherToRow(value);
     setOp(r.op);
     setText(r.text);
     setProblem(null);
   }, [value]);
 
-  const commit = (o: MatchOp | "nenhum", t: string) => {
-    if (o === "nenhum") {
+  const commit = (o: MatchOp | "none", t: string) => {
+    if (o === "none") {
       setProblem(null);
       if (value !== undefined) onCommit(null);
       return;
@@ -238,25 +238,25 @@ export function BodyMatcherEditor({
       <select
         className="input input--sm select"
         value={op}
-        aria-label={`${label}: operador`}
+        aria-label={`${label}: operator`}
         onChange={(e) => {
-          const o = e.target.value as MatchOp | "nenhum";
+          const o = e.target.value as MatchOp | "none";
           setOp(o);
           commit(o, text);
         }}
       >
-        <option value="nenhum">qualquer corpo</option>
+        <option value="none">any body</option>
         {MATCH_OPS.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
           </option>
         ))}
       </select>
-      {op === "nenhum" ? null : (
+      {op === "none" ? null : (
         <input
           className={"input input--mono input--sm" + (problem ? " input--bad" : "")}
           value={text}
-          aria-label={`${label}: valor`}
+          aria-label={`${label}: value`}
           aria-invalid={problem ? true : undefined}
           spellCheck={false}
           onChange={(e) => setText(e.target.value)}

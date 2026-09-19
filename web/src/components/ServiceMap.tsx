@@ -14,8 +14,8 @@ import type { Selection } from "../selection";
 import { destinationText, healthText, type ServiceRow } from "../services";
 
 /**
- * Até oito serviços, nós de 34px com folga; acima disso, nós de 26px (a altura
- * da linha da lista), para que 50 serviços caibam em poucas rolagens.
+ * Up to eight services, 34px nodes with room to breathe; above that, 26px
+ * nodes (the height of a list row), so that 50 services fit in a few scrolls.
  */
 function geometry(n: number): { row: number; pitch: number } {
   return n > 8 ? { row: 26, pitch: 30 } : { row: 34, pitch: 42 };
@@ -23,7 +23,7 @@ function geometry(n: number): { row: number; pitch: number } {
 
 interface DestNode {
   url: string;
-  /** Altura desejada: a média dos serviços que apontam para ele. */
+  /** Wanted height: the mean of the services pointing at it. */
   mean: number;
   status: UpstreamHealth["status"];
   health: UpstreamHealth | undefined;
@@ -31,10 +31,10 @@ interface DestNode {
 
 interface Model {
   rows: ServiceRow[];
-  /** Centro vertical de cada serviço, na ordem de precedência. */
+  /** Vertical center of each service, in precedence order. */
   ys: number[];
   dests: DestNode[];
-  /** Centros dos destinos sem rolagem: cada um na média dos seus serviços, sem colidir. */
+  /** Centers of the destinations with no scrolling: each on the mean of its services, without colliding. */
   destYs: number[];
   appY: number;
   height: number;
@@ -43,9 +43,9 @@ interface Model {
 }
 
 /**
- * Serviços em fila, na ordem de precedência. Cada destino fica na altura média
- * dos serviços que apontam para ele, empurrado para baixo quando colidiria com
- * o anterior: menos cruzamentos sem biblioteca de grafo.
+ * Services in a queue, in precedence order. Each destination sits at the mean
+ * height of the services pointing at it, pushed down when it would collide
+ * with the previous one: fewer crossings without a graph library.
  */
 function layout(rows: ServiceRow[]): Model {
   const { row, pitch } = geometry(rows.length);
@@ -73,10 +73,11 @@ function layout(rows: ServiceRow[]): Model {
 }
 
 /**
- * Com a coluna de serviços rolando, seu app e os destinos acompanham a janela
- * visível (como cabeçalhos colantes): cada um fica na sua altura natural
- * enquanto ela está à vista e se prende à borda da janela quando sairia dela.
- * A ordem e o espaçamento entre destinos se mantêm, então nada se sobrepõe.
+ * With the services column scrolling, your app and the destinations follow
+ * the visible window (like sticky headers): each one stays at its natural
+ * height while that height is in sight, and pins to the edge of the window
+ * when it would leave it. The order and the spacing between destinations are
+ * kept, so nothing overlaps.
  */
 function pin(natural: number[], lo: number, hi: number, m: Model): number[] {
   const half = m.row / 2;
@@ -85,7 +86,7 @@ function pin(natural: number[], lo: number, hi: number, m: Model): number[] {
   if (bottom <= top) return natural;
   const ys = natural.map((y) => Math.min(Math.max(y, top), bottom));
   for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i]!, ys[i - 1]! + m.pitch);
-  // Mais destinos que a janela comporta: descem além dela, nunca além do mapa.
+  // More destinations than the window holds: they go below it, never beyond the map.
   let limit = Math.min(m.height - half, Math.max(bottom, top + (ys.length - 1) * m.pitch));
   for (let i = ys.length - 1; i >= 0; i--) {
     ys[i] = Math.min(ys[i]!, limit);
@@ -94,7 +95,7 @@ function pin(natural: number[], lo: number, hi: number, m: Model): number[] {
   return ys;
 }
 
-/** A janela visível da coluna de serviços, em coordenadas do mapa. */
+/** The visible window of the services column, in map coordinates. */
 function useVisibleWindow(fieldRef: RefObject<HTMLDivElement | null>, headRef: RefObject<HTMLDivElement | null>) {
   const [win, setWin] = useState<{ lo: number; hi: number } | null>(null);
   useLayoutEffect(() => {
@@ -104,11 +105,11 @@ function useVisibleWindow(fieldRef: RefObject<HTMLDivElement | null>, headRef: R
     let frame = 0;
     const measure = () => {
       frame = 0;
-      // As coordenadas do mapa começam no topo das colunas, abaixo do recuo do campo.
+      // The map coordinates start at the top of the columns, below the field's inset.
       const col = field.firstElementChild ?? field;
       const top = col.getBoundingClientRect().top - scroller.getBoundingClientRect().top - scroller.clientTop;
       const head = headRef.current?.offsetHeight ?? 0;
-      // Só a área abaixo do cabeçalho colante conta como visível.
+      // Only the area below the sticky header counts as visible.
       const lo = Math.max(0, head - top);
       const hi = scroller.clientHeight - top;
       setWin((w) => (w && w.lo === lo && w.hi === hi ? w : { lo, hi }));
@@ -131,10 +132,10 @@ function useVisibleWindow(fieldRef: RefObject<HTMLDivElement | null>, headRef: R
 }
 
 /**
- * O mapa: seu app → serviços → destinos, ligados por curvas. A coluna de
- * serviços rola dentro do painel; seu app e os destinos acompanham a janela
- * visível e as curvas vão junto, sempre nas faixas entre colunas, sem cruzar
- * rótulos.
+ * The map: your app → services → destinations, joined by curves. The services
+ * column scrolls inside the panel; your app and the destinations follow the
+ * visible window and the curves go with them, always in the lanes between
+ * columns, never crossing labels.
  */
 export function ServiceMap({
   rows,
@@ -158,7 +159,7 @@ export function ServiceMap({
   const destY = new Map(m.dests.map((d, i) => [d.url, destYs[i]!]));
   const shortNames = useMemo(() => shortDestNames(m.dests.map((d) => d.url)), [m]);
 
-  // Com seleção, o que não pertence ao caminho selecionado recua.
+  // With a selection, whatever is not on the selected path steps back.
   const liveRoutes = new Set<string>();
   const liveDests = new Set<string>();
   if (selection?.kind === "route") {
@@ -173,7 +174,7 @@ export function ServiceMap({
   const dimDest = (url: string) => selection !== null && !liveDests.has(url);
   const statusOf = new Map(m.dests.map((d) => [d.url, d.status]));
 
-  // O serviço selecionado (por clique, link, busca ou cadastro) fica à vista.
+  // The selected service (by click, link, search or creation) stays in sight.
   const selKey = selection?.kind === "route" ? selection.name : "";
   useEffect(() => {
     if (!selKey) return;
@@ -186,8 +187,9 @@ export function ServiceMap({
   const selectedIn = selection?.kind === "route" && rows.some((r) => r.name === selection.name);
   const style = { "--map-row": `${m.row}px`, "--map-h": `${m.height}px` } as CSSProperties;
   const curve = (y1: number, y2: number) => `M0,${y1} C50,${y1} 50,${y2} 100,${y2}`;
-  // Só os serviços à vista (ao menos em parte) ganham curvas: as dos que
-  // estão fora da janela cruzariam a área visível sem levar a nada que se veja.
+  // Only the services in sight (at least in part) get curves: the ones of the
+  // services outside the window would cross the visible area without leading
+  // to anything that can be seen.
   const shows = (y: number) => !win || (y + m.row / 2 >= win.lo && y - m.row / 2 <= win.hi);
 
   return (
@@ -195,20 +197,20 @@ export function ServiceMap({
       className={"map" + (m.row < 34 ? " map--compact" : "")}
       style={style}
       role="group"
-      aria-label="Mapa: seu app, serviços e destinos. Setas para percorrer, seta para a direita vai ao destino, Enter para selecionar, Esc limpa a seleção."
+      aria-label="Map: your app, services and destinations. Arrows to move through them, right arrow goes to the destination, Enter to select, Esc clears the selection."
       onKeyDown={onArrowKeys}
     >
       <div className="map__head" ref={headRef} aria-hidden="true">
-        <span>seu app</span>
+        <span>your app</span>
         <span />
-        <span>serviços</span>
+        <span>services</span>
         <span />
-        <span className="map__desthead">destinos</span>
+        <span className="map__desthead">destinations</span>
       </div>
       <div className="map__field" ref={fieldRef}>
         <div className="map__col">
           <div className="node node--app" style={{ top: appY - m.row / 2 }}>
-            <span className="node__name">seu app</span>
+            <span className="node__name">your app</span>
             {trafficPort ? <span className="node__meta mono">:{trafficPort}</span> : null}
           </div>
         </div>
@@ -234,10 +236,10 @@ export function ServiceMap({
               .filter(Boolean)
               .join(" ");
             const label = [
-              `Serviço ${r.name}`,
-              r.entry ? `entrada ${r.entry}` : "entrada: qualquer requisição",
-              r.upstream ? `destino ${r.upstream}, ${h.long}` : "sem destino",
-              iv ? `regra ativa: ${iv.long}` : "sem regra ativa",
+              `Service ${r.name}`,
+              r.entry ? `entry ${r.entry}` : "entry: any request",
+              r.upstream ? `destination ${r.upstream}, ${h.long}` : "no destination",
+              iv ? `active rule: ${iv.long}` : "no active rule",
             ].join(", ");
             return (
               <button
@@ -251,28 +253,29 @@ export function ServiceMap({
                 tabIndex={(selectedIn ? isSel : i === 0) ? 0 : -1}
                 aria-pressed={isSel}
                 aria-label={label}
-                title={[`${r.name} · ${r.entry || "qualquer entrada"}`, r.upstream ? `→ ${r.upstream}` : "sem destino", iv?.long]
+                title={[`${r.name} · ${r.entry || "any entry"}`, r.upstream ? `→ ${r.upstream}` : "no destination", iv?.long]
                   .filter(Boolean)
                   .join("\n")}
                 onClick={() => onSelect(isSel ? null : { kind: "route", name: r.name })}
               >
                 <span className="node__name">{r.name}</span>
                 <span className={"node__meta mono" + (r.upstream && r.entry ? "" : " dim")}>
-                  {r.upstream ? r.entry || "qualquer" : "sem destino"}
+                  {r.upstream ? r.entry || "any" : "no destination"}
                 </span>
                 {iv ? (
                   <>
                     <span
                       className={`node__tag node__tag--${iv.kind}` + (stale ? " is-stale" : "")}
-                      title={stale ? `Sem conexão: estado da última atualização. ${iv.long}` : iv.long}
+                      title={stale ? `No connection: state of the last update. ${iv.long}` : iv.long}
                     >
-                      {iv.short} · {percent(iv.probability)}
+                      {iv.short}
+                      {iv.chance < 1 ? ` · ${percent(iv.chance)}` : null}
                       {iv.count > 1 ? <span className="dim"> +{iv.count - 1}</span> : null}
                     </span>
                     <span
                       className={`node__meter node__meter--${iv.kind}`}
                       aria-hidden="true"
-                      style={{ width: `${Math.min(1, Math.max(0, iv.probability)) * 100}%` }}
+                      style={{ width: `${Math.min(1, Math.max(0, iv.chance)) * 100}%` }}
                     />
                   </>
                 ) : null}
@@ -315,8 +318,8 @@ export function ServiceMap({
                 data-map-key={d.url}
                 tabIndex={-1}
                 aria-pressed={isSel}
-                aria-label={`Destino ${d.url}: ${text.long}. Filtra o tráfego por este destino.`}
-                title={`${d.url}\n${text.long}\nClique para filtrar o tráfego por este destino`}
+                aria-label={`Destination ${d.url}: ${text.long}. Filters the traffic by this destination.`}
+                title={`${d.url}\n${text.long}\nClick to filter the traffic by this destination`}
                 onClick={() => onSelect(isSel ? null : { kind: "upstream", name: d.url })}
               >
                 <span className={"dot " + (down ? "dot--fault" : d.status === "up" ? "dot--healthy" : "dot--idle")} />
@@ -332,7 +335,7 @@ export function ServiceMap({
           })}
           {m.dests.length === 0 ? (
             <div className="node node--ghost" style={{ top: 0 }}>
-              <span className="node__name">nenhum serviço tem destino</span>
+              <span className="node__name">no service has a destination</span>
             </div>
           ) : null}
         </div>
@@ -342,9 +345,9 @@ export function ServiceMap({
 }
 
 /**
- * Nome curto de cada destino para o mapa estreito: a porta (":9001"), que é o
- * que costuma diferenciá-los no desenvolvimento local, ou host:porta quando
- * só a porta repetiria.
+ * Short name of each destination for the narrow map: the port (":9001"),
+ * which is what usually tells them apart in local development, or host:port
+ * when the port alone would repeat.
  */
 function shortDestNames(urls: string[]): Map<string, string> {
   const parts = urls.map((url) => {
@@ -367,8 +370,9 @@ function edgeClass(dim: boolean, lit: boolean, down: boolean): string | undefine
 }
 
 /**
- * Setas percorrem o mapa: ↑ ↓ dentro da coluna, → do serviço ao destino dele,
- * ← do destino ao primeiro serviço que aponta para ele. Home e End vão às pontas.
+ * Arrows move through the map: ↑ ↓ within the column, → from the service to
+ * its destination, ← from the destination to the first service pointing at
+ * it. Home and End go to the ends.
  */
 function onArrowKeys(e: KeyboardEvent<HTMLDivElement>) {
   const target = e.target as HTMLElement;

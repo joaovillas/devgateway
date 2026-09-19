@@ -5,38 +5,40 @@ import { toApiError } from "./hooks";
 import { applyMergePatch, canCompose, composePatches, deepEqual, isEmptyPatch, type MergePatch } from "./patch";
 
 export interface PatchWriter<T> {
-  /** O valor que a tela mostra: o do servidor com as alterações ainda não confirmadas por cima. */
+  /** The value the screen shows: the server's, with the not-yet-confirmed changes on top. */
   value: T;
   /**
-   * Registra uma alteração. Sem `delay`, ela sai já; com `delay`, espera o
-   * controle parar de mexer por esse tempo (arrasto de um controle contínuo).
+   * Records a change. With no `delay` it goes out at once; with `delay` it
+   * waits for the control to stop moving for that long (dragging a continuous
+   * control).
    */
   change(patch: MergePatch, delay?: number): void;
-  /** Manda já o que estava esperando o debounce (fim do gesto de arrasto). */
+  /** Sends right away whatever was waiting on the debounce (the end of a drag gesture). */
   flush(): void;
-  /** Há alteração a caminho do servidor ou esperando a vez. */
+  /** There is a change on its way to the server or waiting its turn. */
   busy: boolean;
   error: ApiError | null;
   dismissError(): void;
 }
 
 /**
- * Escreve por PATCH (merge patch) sem botão de salvar e sem piscar.
+ * Writes by PATCH (merge patch), with no save button and no flicker.
  *
- * - Alterações seguidas se juntam num patch só, e só um PATCH fica em voo por
- *   vez; o que chega durante o voo sai logo depois, já composto. Quando a
- *   composição mudaria o sentido (remover uma chave e depois pôr um objeto
- *   nela vira um merge sobre o valor antigo), os dois patches saem em
- *   sequência em vez de juntos.
- * - Enquanto a escrita não volta, a tela mostra o valor pedido. Quando volta,
- *   a resposta do servidor passa a valer (é o estado reconciliado, que pode
- *   diferir do pedido), até a releitura trazer o mesmo valor por `base`.
- * - Se a escrita falha, o valor volta ao do servidor e o erro fica exposto. O
- *   que tinha sido composto sobre a escrita que falhou também é descartado:
- *   foi pensado sobre um valor que o servidor não aceitou.
- * - Desmontar o controle (trocar de rota, fechar a aba) não perde a última
- *   alteração: o que esperava o debounce sai na hora, e a fila continua até
- *   o fim, só sem atualizar a tela que já não existe.
+ * - Changes in a row are joined into a single patch, and only one PATCH is in
+ *   flight at a time; what arrives during the flight goes out right after it,
+ *   already composed. When composing would change the meaning (removing a key
+ *   and then putting an object in it turns into a merge over the old value),
+ *   the two patches go out in sequence instead of together.
+ * - While the write has not come back, the screen shows the value that was
+ *   asked for. When it comes back, the server's response takes over (it is the
+ *   reconciled state, which may differ from what was asked), until the re-read
+ *   brings the same value through `base`.
+ * - If the write fails, the value goes back to the server's and the error is
+ *   left showing. What had been composed on top of the write that failed is
+ *   discarded too: it was thought out over a value the server did not accept.
+ * - Unmounting the control (switching route, closing the tab) does not lose
+ *   the last change: what was waiting on the debounce goes out at once, and
+ *   the queue runs to the end, only without updating a screen that is gone.
  */
 export function usePatchWriter<T>(base: T, send: (patch: MergePatch) => Promise<T>): PatchWriter<T> {
   const [, rerender] = useReducer((n: number) => n + 1, 0);
@@ -69,8 +71,8 @@ export function usePatchWriter<T>(base: T, send: (patch: MergePatch) => Promise<
       },
       (e: unknown) => {
         inflight.current = null;
-        // Quem pediu desistiu de gravar, ou a escrita falhou: o que veio
-        // depois foi composto sobre ela e também não sai.
+        // Whoever asked gave up on saving, or the write failed: what came
+        // afterwards was composed on top of it and does not go out either.
         queue.current = [];
         if (alive.current) {
           if (!(e instanceof WriteCancelled)) setError(toApiError(e));
@@ -84,7 +86,7 @@ export function usePatchWriter<T>(base: T, send: (patch: MergePatch) => Promise<
     alive.current = true;
     return () => {
       alive.current = false;
-      // A última alteração não pode morrer no debounce.
+      // The last change must not die on the debounce.
       if (timer.current !== undefined) flush();
     };
   }, [flush]);
@@ -105,9 +107,10 @@ export function usePatchWriter<T>(base: T, send: (patch: MergePatch) => Promise<
     [flush],
   );
 
-  // Reconciliação: a releitura que traz o valor confirmado encerra o período
-  // em que a resposta do PATCH vale mais que `base`. Se a releitura trouxer
-  // outro valor (outra escrita, edição do arquivo), ela vence pouco depois.
+  // Reconciliation: the re-read that brings the confirmed value ends the
+  // period in which the PATCH response counts for more than `base`. If the
+  // re-read brings another value (another write, an edit to the file), it wins
+  // shortly afterwards.
   useEffect(() => {
     if (!confirmed.current) return;
     if (deepEqual(base, confirmed.current)) {

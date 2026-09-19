@@ -1,31 +1,36 @@
-// Leitura da configuração como lista de serviços: o que cada rota faz agora
-// com o tráfego, por onde o app entra, para onde o gateway manda e como o
-// estado vivo dos overrides chega pelo SSE.
+// Reading the configuration as a list of services: what each route does with
+// the traffic right now, where your app comes in, where the gateway sends it
+// and how the live state of the overrides arrives over SSE.
 import type { Override, OverrideLiveState, OverrideStateList, RouteResource, UpstreamHealth } from "./api";
+import { leadingEffect, neverApplies, type Effect } from "./effects";
 import { latency, percent } from "./format";
 
 export type InterventionKind = "synth" | "drop" | "delay";
 
 export interface RouteIntervention {
-  /** O efeito do override de maior precedência entre os ativos. */
+  /** The effect of the highest-precedence rule among the active ones. */
   kind: InterventionKind;
-  /** Curto, para o selo da lista: "503", "queda", "+2s". */
+  /** Short, for the badge in the list: "503", "drop", "+2s". */
   short: string;
-  /** Por extenso, para leitor de tela e dica: "responde 503 em 30% (regra flaky)". */
+  /** Spelled out, for screen readers and tooltips: "responds 503 on 30% of calls (rule flaky)". */
   long: string;
-  probability: number;
-  /** Quantos overrides ativos a rota tem ao todo. */
+  /** How often that effect holds, from 0 to 1. */
+  chance: number;
+  /** How many active rules the service has in total. */
   count: number;
 }
 
 /**
- * Um override intervém agora quando está ligado, o servidor o dá como ativo e
- * o TTL não se esgotou desde a última leitura (`at`). O servidor avisa a
- * expiração por evento; a conta local só evita que o destaque sobreviva ao
- * relógio entre um evento e outro.
+ * A rule is intervening right now when it is on, the server reports it as
+ * active, at least one of its effects can still be drawn, and the TTL has not
+ * run out since the last reading (`at`). The server announces expiry by
+ * event; the local arithmetic only keeps the highlight from outliving the
+ * clock between one event and the next.
  */
 export function isActive(o: Override, s: OverrideLiveState | undefined, now: number, at: number): boolean {
   if (o.enabled === false) return false;
+  // Every effect at 0%: the rule says nothing that can ever happen.
+  if (neverApplies(o)) return false;
   if (!s) return true;
   if (!s.active || s.expired) return false;
   if (s.ttlRemainingMs !== null && s.ttlRemainingMs - (now - at) <= 0) return false;
@@ -33,40 +38,45 @@ export function isActive(o: Override, s: OverrideLiveState | undefined, now: num
   return true;
 }
 
-function effect(o: Override): { kind: InterventionKind; short: string; long: string } {
-  if (o.drop) return { kind: "drop", short: "queda", long: "derruba a conexão" };
-  if (o.respond) {
-    const st = o.respond.status ?? 200;
-    const extra = o.latency ? ` após ${latency(o.latency)}` : "";
-    return { kind: "synth", short: String(st), long: `responde ${st}${extra}` };
+function effectText(o: Override, e: Effect): { kind: InterventionKind; short: string; long: string } {
+  switch (e.kind) {
+    case "drop":
+      return { kind: "drop", short: "drop", long: "drops the connection" };
+    case "respond": {
+      const st = o.respond?.status ?? 200;
+      return { kind: "synth", short: String(st), long: `responds ${st}` };
+    }
+    case "latency": {
+      const d = latency(o.latency!);
+      return { kind: "delay", short: "+" + d, long: `delays ${d}` };
+    }
   }
-  if (o.latency) return { kind: "delay", short: "+" + latency(o.latency), long: `atrasa ${latency(o.latency)}` };
-  return { kind: "delay", short: "sem efeito", long: "sem efeito declarado" };
 }
 
 export function routeIntervention(res: RouteResource, now: number, at: number): RouteIntervention | null {
   const active = (res.route.overrides ?? []).filter((o) => isActive(o, res.state[o.name], now, at));
   const first = active[0];
   if (!first) return null;
-  const e = effect(first);
-  const p = first.probability ?? 1;
-  const others = active.length > 1 ? ` e mais ${active.length - 1} ${active.length === 2 ? "regra" : "regras"}` : "";
+  const lead = leadingEffect(first);
+  const e = lead ? effectText(first, lead) : { kind: "delay" as const, short: "no effect", long: "no effect declared" };
+  const chance = lead?.chance ?? 0;
+  const others = active.length > 1 ? ` and ${active.length - 1} more ${active.length === 2 ? "rule" : "rules"}` : "";
   return {
     ...e,
-    probability: p,
+    chance,
     count: active.length,
-    long: `${e.long} em ${percent(p)} (regra ${first.name}${others})`,
+    long: `${e.long} on ${percent(chance)} of calls (rule ${first.name}${others})`,
   };
 }
 
-/** Algum override da lista tem TTL correndo: o selo precisa de relógio. */
+/** Some override in the list has a TTL running down: the badge needs a clock. */
 export function hasTicking(routes: RouteResource[]): boolean {
   return routes.some((r) => Object.values(r.state ?? {}).some((s) => s.ttlRemainingMs != null && s.ttlRemainingMs > 0));
 }
 
 /**
- * Aplica o estado vivo recebido pelo evento `overrides` sobre as rotas lidas
- * por REST, sem reler as rotas a cada aplicação.
+ * Applies the live state received in the `overrides` event over the routes
+ * read by REST, without re-reading the routes on every application.
  */
 export function withLiveState(routes: RouteResource[], live: OverrideStateList | null): RouteResource[] {
   if (!live) return routes;
@@ -83,13 +93,13 @@ export function withLiveState(routes: RouteResource[], live: OverrideStateList |
   });
 }
 
-/** A entrada do serviço: host e/ou path casados, ou "" quando casa qualquer requisição. */
+/** The service's entry: the host and/or path matched, or "" when it matches any request. */
 export function entryText(r: RouteResource): string {
   const m = r.route.match;
   return [m.host, m.path].filter(Boolean).join(" ");
 }
 
-/** O destino como o dev o reconhece: host:porta, sem esquema. */
+/** The destination as the developer recognizes it: host:port, without the scheme. */
 export function destinationText(url: string): string {
   try {
     const u = new URL(url);
@@ -99,7 +109,7 @@ export function destinationText(url: string): string {
   }
 }
 
-/** Os destinos conhecidos (declarados pelos serviços ou com saúde registrada), sem repetição. */
+/** The known destinations (declared by the services or with health recorded), without repetition. */
 export function knownDestinations(routes: RouteResource[], health: UpstreamHealth[]): string[] {
   const out = new Set<string>();
   for (const r of routes) if (r.route.upstream) out.add(r.route.upstream);
@@ -107,25 +117,25 @@ export function knownDestinations(routes: RouteResource[], health: UpstreamHealt
   return [...out];
 }
 
-/** Saúde do destino em palavras: curta para a linha, longa para a dica e o leitor de tela. */
+/** The destination's health in words: short for the row, long for the tooltip and the screen reader. */
 export function healthText(status: UpstreamHealth["status"], h: UpstreamHealth | undefined): { short: string; long: string } {
   if (status === "down") {
     return {
-      short: "fora",
-      long: `fora do ar, ${h?.recent.failures ?? 0} de ${h?.recent.attempts ?? 0} tentativas recentes falharam${h?.lastError ? `: ${h.lastError}` : ""}`,
+      short: "down",
+      long: `down, ${h?.recent.failures ?? 0} of ${h?.recent.attempts ?? 0} recent attempts failed${h?.lastError ? `: ${h.lastError}` : ""}`,
     };
   }
   if (status === "up") {
     const f = h?.recent.failures ?? 0;
     return {
-      short: f > 0 ? `${f}/${h?.recent.attempts} falhas` : "no ar",
-      long: f > 0 ? `no ar, ${f} de ${h?.recent.attempts} tentativas recentes falharam` : "no ar, respondendo",
+      short: f > 0 ? `${f}/${h?.recent.attempts} failures` : "up",
+      long: f > 0 ? `up, ${f} of ${h?.recent.attempts} recent attempts failed` : "up, answering",
     };
   }
-  return { short: "sem tentativas", long: "nenhuma requisição encaminhada a ele recentemente" };
+  return { short: "no attempts", long: "no request forwarded to it recently" };
 }
 
-/** Um serviço como as duas visões (mapa e lista) o mostram. */
+/** A service as both views (map and list) show it. */
 export interface ServiceRow {
   res: RouteResource;
   name: string;
@@ -134,11 +144,11 @@ export interface ServiceRow {
   status: UpstreamHealth["status"];
   health: UpstreamHealth | undefined;
   intervention: RouteIntervention | null;
-  /** Texto em minúsculas onde a busca procura: nome, entrada e destino. */
+  /** Lowercased text the search looks into: name, entry and destination. */
   haystack: string;
 }
 
-/** Os serviços com o estado do destino e a regra ativa agora, na ordem de precedência. */
+/** The services with the state of their destination and the rule active right now, in precedence order. */
 export function serviceRows(routes: RouteResource[], health: UpstreamHealth[], now: number, at: number): ServiceRow[] {
   const byUrl = new Map(health.map((h) => [h.upstream, h]));
   return routes.map((res) => {
@@ -158,7 +168,7 @@ export function serviceRows(routes: RouteResource[], health: UpstreamHealth[], n
   });
 }
 
-/** Termos da busca, separados por espaço; um serviço casa quando contém todos. */
+/** Search terms, separated by spaces; a service matches when it contains all of them. */
 export function searchTerms(query: string): string[] {
   return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
 }

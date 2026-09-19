@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { formatDuration, nice, parseDuration } from "../format";
 
-// Controles do console. Os contínuos (probabilidade e latência) usam o
-// <input type="range"> nativo: setas, Page Up/Down, Home/End e leitor de tela
-// funcionam sem código extra. Os de texto gravam ao sair do campo ou no Enter,
-// e Esc desfaz o que foi digitado.
+// Console controls. The continuous ones (frequency and latency) use the
+// native <input type="range">: arrows, Page Up/Down, Home/End and screen
+// readers work with no extra code. The text ones write when the field loses
+// focus or on Enter, and Esc undoes what was typed.
 
 export function Switch({
   checked,
@@ -18,7 +18,7 @@ export function Switch({
   id?: string;
   checked: boolean;
   onChange: (next: boolean) => void;
-  /** Nome acessível: o que o interruptor liga. */
+  /** Accessible name: what the switch turns on. */
   label: string;
   disabled?: boolean;
   title?: string;
@@ -45,13 +45,13 @@ export function Switch({
 interface TextFieldProps {
   value: string;
   onCommit: (next: string) => void;
-  /** Cada tecla, para quem mostra o efeito do texto antes de gravá-lo (a prévia do encaminhamento). */
+  /** Every keystroke, for whoever shows the effect of the text before it is written (the forwarding preview). */
   onDraft?: (text: string) => void;
   label: string;
   placeholder?: string;
   mono?: boolean;
   disabled?: boolean;
-  /** Mensagem quando o texto não serve; o valor não é gravado. */
+  /** Message for when the text will not do; the value is not written. */
   validate?: (text: string) => string | null;
   id?: string;
   inputMode?: "numeric" | "text" | "decimal";
@@ -80,7 +80,7 @@ export function TextField({
   const focused = useRef(false);
   const errId = useId();
 
-  // Valor novo vindo do servidor substitui o rascunho, exceto durante a digitação.
+  // A new value from the server replaces the draft, except while typing.
   useEffect(() => {
     if (!focused.current) {
       setDraft(value);
@@ -88,8 +88,8 @@ export function TextField({
     }
   }, [value]);
 
-  // Rascunho e quem acompanha a digitação andam juntos: a prévia do
-  // encaminhamento muda a cada tecla, e Esc a devolve ao valor gravado.
+  // The draft and whoever follows the typing move together: the forwarding
+  // preview changes on every keystroke, and Esc takes it back to the written value.
   const type = (t: string) => {
     setDraft(t);
     onDraft?.(t);
@@ -150,7 +150,7 @@ export function TextField({
   );
 }
 
-/** Número inteiro opcional: vazio grava null (remove a chave do documento). */
+/** Optional whole number: empty writes null (removes the key from the document). */
 export function IntField({
   value,
   onCommit,
@@ -185,10 +185,10 @@ export function IntField({
       describedBy={describedBy}
       validate={(t) => {
         if (t.trim() === "") return null;
-        if (!/^-?\d+$/.test(t.trim())) return "use um número inteiro";
+        if (!/^-?\d+$/.test(t.trim())) return "use a whole number";
         const n = Number(t);
-        if (min !== undefined && n < min) return `mínimo ${min}`;
-        if (max !== undefined && n > max) return `máximo ${max}`;
+        if (min !== undefined && n < min) return `minimum ${min}`;
+        if (max !== undefined && n > max) return `maximum ${max}`;
         return null;
       }}
       onCommit={(t) => onCommit(t.trim() === "" ? null : Number(t))}
@@ -196,7 +196,7 @@ export function IntField({
   );
 }
 
-/** Duração do Go em texto livre: "150ms", "2s", "1m30s". Vazio grava null. */
+/** A Go duration as free text: "150ms", "2s", "1m30s". Empty writes null. */
 export function DurationField({
   value,
   onCommit,
@@ -221,8 +221,8 @@ export function DurationField({
       value={value ?? ""}
       placeholder={placeholder}
       validate={(t) => {
-        if (t.trim() === "") return allowEmpty ? null : "informe uma duração";
-        return parseDuration(t) === null ? "duração do Go: 150ms, 2s, 1m30s" : null;
+        if (t.trim() === "") return allowEmpty ? null : "enter a duration";
+        return parseDuration(t) === null ? "Go duration: 150ms, 2s, 1m30s" : null;
       }}
       onCommit={(t) => onCommit(t.trim() === "" ? null : t.trim())}
     />
@@ -230,10 +230,11 @@ export function DurationField({
 }
 
 /**
- * Grupo de opções exclusivas, com setas para trocar (padrão de radio group).
- * Com `manual`, as setas só movem o foco e a opção vale com Espaço, Enter ou
- * clique: para escolhas de efeito pesado, em que passar pela opção do meio já
- * faria alguma coisa (trocar o backend do histórico, por exemplo).
+ * A group of exclusive options, with arrows to switch (the radio group
+ * pattern). With `manual`, the arrows only move the focus and the option
+ * takes effect on Space, Enter or a click: for heavy choices, where merely
+ * passing over the middle option would already do something (switching the
+ * history backend, for instance).
  */
 export function Segmented<T extends string>({
   value,
@@ -291,10 +292,10 @@ export function Segmented<T extends string>({
 }
 
 /**
- * Opções exclusivas empilhadas, uma por linha, para escolhas cuja consequência
- * não cabe em uma palavra ("só o que vem depois de /viacep" contra "o path
- * inteiro, /viacep/…"). Mesmo padrão de radio group do Segmented; `text` é o
- * nome acessível, porque o rótulo visível tem partes em mono.
+ * Exclusive options stacked one per line, for choices whose consequence does
+ * not fit in one word ("only what comes after /zip" against "the whole path,
+ * /zip/…"). The same radio group pattern as Segmented; `text` is the
+ * accessible name, because the visible label has parts in mono.
  */
 export function Choice<T extends string>({
   value,
@@ -348,27 +349,40 @@ export function Choice<T extends string>({
   );
 }
 
-/** Espera do debounce de um controle contínuo: curta, só para juntar o arrasto. */
+/** The debounce wait of a continuous control: short, only to gather the drag. */
 export const DRAG_DELAY = 140;
 
-/** Probabilidade 0–100% por arrasto, com o número editável ao lado. */
-export function ProbabilityControl({
+/**
+ * The frequency of one effect, 0–100% by dragging, with the number editable
+ * beside it. `lead` and `tail` are the words that turn the control into the
+ * sentence it belongs to: "responds 503 · on ——— 30 % of calls".
+ */
+export function FrequencyControl({
   value,
   onChange,
   label,
   id,
   onSettle,
+  lead,
+  tail,
 }: {
   value: number;
   onChange: (p: number, delay?: number) => void;
   label: string;
   id: string;
-  /** Fim do gesto (soltar, largar a tecla, sair do controle): grava já. */
+  /** End of the gesture (release, key up, leaving the control): write now. */
   onSettle?: () => void;
+  lead?: ReactNode;
+  tail?: ReactNode;
 }) {
   const pct = Math.round(value * 1000) / 10;
   return (
     <span className="cont">
+      {lead ? (
+        <span className="cont__word" aria-hidden="true">
+          {lead}
+        </span>
+      ) : null}
       <input
         id={id}
         type="range"
@@ -386,14 +400,14 @@ export function ProbabilityControl({
       />
       <span className="cont__num">
         <TextField
-          label={`${label}, em porcentagem`}
+          label={`${label}, as a percentage`}
           mono
           size="sm"
           inputMode="decimal"
           value={String(pct)}
           validate={(t) => {
             const n = Number(t.replace(",", "."));
-            return t.trim() === "" || Number.isNaN(n) || n < 0 || n > 100 ? "de 0 a 100" : null;
+            return t.trim() === "" || Number.isNaN(n) || n < 0 || n > 100 ? "from 0 to 100" : null;
           }}
           onCommit={(t) => onChange(Math.round(Number(t.replace(",", ".")) * 10) / 1000)}
         />
@@ -401,13 +415,18 @@ export function ProbabilityControl({
           %
         </span>
       </span>
+      {tail ? (
+        <span className="cont__word" aria-hidden="true">
+          {tail}
+        </span>
+      ) : null}
     </span>
   );
 }
 
-// Latência em escala logarítmica: a posição 0 é zero, e de 1 a STEPS cobre de
-// 10 ms a 30 s, porque a diferença entre 50 ms e 150 ms importa tanto quanto
-// a entre 5 s e 15 s.
+// Latency on a logarithmic scale: position 0 is zero, and 1 to STEPS covers
+// 10 ms to 30 s, because the difference between 50 ms and 150 ms matters as
+// much as the one between 5 s and 15 s.
 const STEPS = 120;
 const LAT_MIN = 10;
 const LAT_MAX = 30_000;
@@ -423,7 +442,7 @@ function msToPos(v: number): number {
   return Math.min(STEPS, Math.round(p));
 }
 
-/** Uma duração por arrasto (escala log de 10 ms a 30 s) e por texto ao lado. */
+/** One duration by dragging (log scale from 10 ms to 30 s) and by text beside it. */
 export function DurationSlider({
   value,
   onChange,
@@ -435,7 +454,7 @@ export function DurationSlider({
   onChange: (d: string, delay?: number) => void;
   label: string;
   id?: string;
-  /** Fim do gesto: grava já o que esperava o debounce. */
+  /** End of the gesture: write now what was waiting on the debounce. */
   onSettle?: () => void;
 }) {
   const ms = parseDuration(value) ?? 0;
@@ -460,7 +479,7 @@ export function DurationSlider({
       />
       <span className="cont__num cont__num--wide">
         <DurationField
-          label={`${label}, como duração`}
+          label={`${label}, as a duration`}
           value={value}
           allowEmpty={false}
           onCommit={(d) => {
@@ -472,7 +491,7 @@ export function DurationSlider({
   );
 }
 
-/** Rótulo e controle numa linha de formulário do console. */
+/** Label and control on one form row of the console. */
 export function Row({
   label,
   htmlFor,

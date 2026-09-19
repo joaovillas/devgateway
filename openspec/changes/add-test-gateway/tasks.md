@@ -88,7 +88,7 @@
 - [x] 8.11 Adopt the user's vocabulary throughout the interface (your app, service, entry, destination and rule instead of client, route, matching, upstream and override), keeping the internal terms only in identifiers, the API and the files, and verify against the scenario of the user vocabulary requirement
 - [x] 8.12 Display and edit paths with segment parameters in the interface (the `:id` highlighted as a parameter, accepted when creating and editing a rule), and verify by creating a `/zip/:id/json` rule through the interface
 - [x] 8.13 Implement simple mode (the default) and advanced mode, with the choice remembered and the summary flagging advanced features, and verify against the four scenarios of the corresponding requirement
-- [ ] 8.15 Display the per-effect frequency in the panel ("responds 503 in 30% of the calls"), with no global probability, and mark as inactive a rule whose effects are all at 0%, and verify against the corresponding scenarios
+- [x] 8.15 Display the per-effect frequency in the panel ("responds 503 in 30% of the calls"), with no global probability, and mark as inactive a rule whose effects are all at 0%, and verify against the corresponding scenarios
 - [x] 8.14 Trim the traffic inspection (essential columns, the intervention next to the status, the service column only when unfiltered, filters collapsed with the active ones visible), and verify against the three scenarios of the trimmed traffic requirement
 
 ## 9. Distribution and documentation

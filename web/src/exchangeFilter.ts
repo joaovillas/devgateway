@@ -2,9 +2,9 @@ import type { Exchange, ExchangeFilter } from "./api";
 import type { Selection } from "./selection";
 
 /**
- * Filtros da lista de tráfego além da seleção da lista de serviços (que dá a
- * rota ou o upstream). Os mesmos valores vão para GET /api/exchanges, para a navegação
- * item a item (older/newer) e para o fluxo ao vivo, que é filtrado aqui.
+ * Filters of the traffic list beyond the selection in the services list (which
+ * gives the route or the upstream). The same values go to GET /api/exchanges, to the
+ * item-by-item navigation (older/newer) and to the live stream, which is filtered here.
  */
 export type StatusClass = "all" | "2xx" | "3xx" | "4xx" | "5xx";
 export type InterventionFilter = "all" | "yes" | "no";
@@ -29,7 +29,7 @@ const STATUS_RANGE: Record<Exclude<StatusClass, "all">, [number, number]> = {
   "5xx": [500, 599],
 };
 
-/** O filtro no formato da API (exchange.Filter), somando a seleção da lista de serviços. */
+/** The filter in the API's format (exchange.Filter), adding in the selection from the services list. */
 export function toExchangeFilter(sel: Selection, f: ListFilter): ExchangeFilter {
   const out: ExchangeFilter = {};
   if (sel?.kind === "route") out.route = sel.name;
@@ -41,7 +41,7 @@ export function toExchangeFilter(sel: Selection, f: ListFilter): ExchangeFilter 
   return out;
 }
 
-/** A mesma regra do servidor, para as trocas que chegam pelo SSE. */
+/** The same rule as the server's, for the exchanges that arrive over SSE. */
 export function matches(e: Exchange, f: ExchangeFilter): boolean {
   if (f.route !== undefined && e.route !== f.route) return false;
   if (f.upstream !== undefined && e.upstream !== f.upstream) return false;
@@ -56,21 +56,22 @@ export function matches(e: Exchange, f: ExchangeFilter): boolean {
 }
 
 /**
- * Houve intervenção: o mesmo critério da etiqueta da lista (interventionTag),
- * que aceita o resultado como prova quando o resumo não traz `interventions`.
+ * There was an intervention: the same criterion as the list's tag
+ * (interventionTag), which takes the outcome as proof when the summary does
+ * not carry `interventions`.
  */
 export function intervened(e: Exchange): boolean {
   return (e.interventions ?? []).length > 0 || e.outcome === "synthesized" || e.outcome === "dropped";
 }
 
-/** Texto curto do filtro ativo, para mensagens como "não há trocas mais antigas com …". */
+/** Short text for the active filter, for messages like "there are no older exchanges with …". */
 export function describeFilter(f: ExchangeFilter): string {
   const parts: string[] = [];
-  if (f.route) parts.push(`serviço ${f.route}`);
-  if (f.upstream) parts.push(`destino ${f.upstream.replace(/^https?:\/\//, "")}`);
+  if (f.route) parts.push(`service ${f.route}`);
+  if (f.upstream) parts.push(`destination ${f.upstream.replace(/^https?:\/\//, "")}`);
   if (f.method) parts.push(f.method);
-  if (f.path) parts.push(`path com “${f.path}”`);
+  if (f.path) parts.push(`path containing “${f.path}”`);
   if (f.statusMin !== undefined) parts.push(`status ${String(f.statusMin)[0]}xx`);
-  if (f.intervened !== undefined) parts.push(f.intervened ? "com intervenção" : "sem intervenção");
+  if (f.intervened !== undefined) parts.push(f.intervened ? "with intervention" : "without intervention");
   return parts.join(", ");
 }

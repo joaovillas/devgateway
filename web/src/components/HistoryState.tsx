@@ -4,9 +4,9 @@ import { useResource } from "../hooks";
 import { shortPath } from "../format";
 
 /**
- * De onde vem um valor de configuração, lido de GET /api/settings. Serve para
- * dizer ao desenvolvedor exatamente qual chave, arquivo ou variável controla o
- * que ele está vendo.
+ * Where a configuration value comes from, read from GET /api/settings. It is
+ * there to tell the developer exactly which key, file or variable controls what
+ * they are seeing.
  */
 function useSetting(key: string) {
   const [settings] = useResource((s) => api.settings(s), []);
@@ -19,8 +19,8 @@ function Origin({ value, fallbackEnv, fallbackFile }: { value: EffectiveValue | 
   if (env) {
     return (
       <>
-        pela variável de ambiente <span className="mono">{env}</span>, que vence <span className="mono">gateway.json</span>.
-        Para mudar, remova ou altere a variável e reinicie o processo
+        by the environment variable <span className="mono">{env}</span>, which beats <span className="mono">gateway.json</span>.
+        To change it, remove or edit the variable and restart the process
       </>
     );
   }
@@ -28,14 +28,14 @@ function Origin({ value, fallbackEnv, fallbackFile }: { value: EffectiveValue | 
   if (file) {
     return (
       <>
-        em <span className="mono" title={file}>{shortPath(file)}</span>
+        in <span className="mono" title={file}>{shortPath(file)}</span>
       </>
     );
   }
   if (value?.source.origin === "default") {
     return (
       <>
-        pelo valor padrão, porque <span className="mono">gateway.json</span> não declara a chave
+        by the default value, because <span className="mono">gateway.json</span> does not declare the key
       </>
     );
   }
@@ -46,49 +46,49 @@ function Recovery({ keyPath, value, locked }: { keyPath: "expose" | "record"; va
   if (locked) return null;
   return (
     <p>
-      Para religar: <span className="mono">history.{keyPath}: {value}</span> em <span className="mono">gateway.json</span>,
-      ou <span className="mono">PATCH /api/settings</span> com{" "}
-      <span className="mono">{`{"history":{"${keyPath}":${value}}}`}</span>. O painel acompanha a mudança sozinho.
+      To turn it back on: <span className="mono">history.{keyPath}: {value}</span> in <span className="mono">gateway.json</span>,
+      or <span className="mono">PATCH /api/settings</span> with{" "}
+      <span className="mono">{`{"history":{"${keyPath}":${value}}}`}</span>. The panel follows the change on its own.
     </p>
   );
 }
 
-/** 403 history_disabled: o histórico existe, mas a leitura está desligada. */
+/** 403 history_disabled: the history exists, but reading it is off. */
 export function HistoryDisabled({ error }: { error: ApiError }) {
   const setting = useSetting("history.expose");
   const locked = Boolean(error.body.env) || setting?.locked === true;
   return (
     <div className="state state--disabled" role="status">
-      <p className="state__title">Histórico desabilitado</p>
+      <p className="state__title">History disabled</p>
       <p>
-        A leitura das trocas está desligada por <span className="mono">history.expose = false</span>
+        Reading the exchanges is off because of <span className="mono">history.expose = false</span>
         {" "}
-        <Origin value={setting} fallbackEnv={error.body.env} fallbackFile={error.body.file} />. Isto não é uma lista vazia:
-        o gateway não expõe o que registra.
+        <Origin value={setting} fallbackEnv={error.body.env} fallbackFile={error.body.file} />. This is not an empty list:
+        the gateway does not expose what it records.
       </p>
       <Recovery keyPath="expose" value="true" locked={locked} />
     </div>
   );
 }
 
-/** recording: false: a leitura funciona, mas nada novo é gravado. */
+/** recording: false: reading works, but nothing new is recorded. */
 export function RecordingOff({ compact, children }: { compact?: boolean; children?: ReactNode }) {
   const setting = useSetting("history.record");
   const origin = <Origin value={setting} />;
   if (compact) {
     return (
       <p className="notice notice--state" role="status">
-        <strong>Registro desligado.</strong> <span className="mono">history.record = false</span>
-        {setting ? <> {origin}</> : null}: as trocas abaixo são anteriores, e as novas não são gravadas.
+        <strong>Recording off.</strong> <span className="mono">history.record = false</span>
+        {setting ? <> {origin}</> : null}: the exchanges below are earlier ones, and new ones are not recorded.
       </p>
     );
   }
   return (
     <div className="state state--disabled" role="status">
-      <p className="state__title">Registro desligado</p>
+      <p className="state__title">Recording off</p>
       <p>
-        As requisições são encaminhadas normalmente, mas nenhuma troca é gravada: <span className="mono">history.record = false</span>
-        {setting ? <> {origin}</> : null}. A lista está vazia por isso, não por falta de tráfego.
+        Requests are forwarded normally, but no exchange is recorded: <span className="mono">history.record = false</span>
+        {setting ? <> {origin}</> : null}. That is why the list is empty, not for lack of traffic.
       </p>
       <Recovery keyPath="record" value="true" locked={setting?.locked === true} />
       {children}

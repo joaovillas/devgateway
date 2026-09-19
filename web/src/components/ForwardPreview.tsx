@@ -2,20 +2,20 @@ import type { ReactNode } from "react";
 import { destLine, forwarding, type ForwardInput, type Forwarding, type Piece } from "../forward";
 import { Choice, Row } from "./Controls";
 
-// A prévia do encaminhamento e as duas chaves que a mudam. Existe porque a
-// consequência de "remove prefixo" e "reescreve host" não cabe no nome das
-// chaves: sem remover o prefixo, o gateway anexa o path inteiro ao path do
-// destino ("/ws" + "/viacep/..." = "/ws/viacep/..."), e um destino externo
-// que recebe o Host do app responde 301 para o lugar errado. A prévia mostra
-// o resultado antes de gravar, em um exemplo concreto.
+// The forwarding preview and the two keys that change it. It exists because the
+// consequence of "strip prefix" and "rewrite host" does not fit in the names of
+// the keys: without stripping the prefix, the gateway appends the whole path to
+// the destination's path ("/ws" + "/zip/..." = "/ws/zip/..."), and an
+// external destination that receives the app's Host answers 301 to the wrong
+// place. The preview shows the result before saving, in a concrete example.
 
-/** Um path em pedaços, com o trecho inventado marcado. */
+/** A path in pieces, with the invented fragment marked. */
 function Pieces({ pieces }: { pieces: Piece[] }) {
   return (
     <>
       {pieces.map((p, i) =>
         p.sample ? (
-          <span key={i} className="fwd__ex" title="trecho de exemplo: qualquer valor serve aqui">
+          <span key={i} className="fwd__ex" title="sample fragment: any value works here">
             {p.text}
           </span>
         ) : (
@@ -27,22 +27,22 @@ function Pieces({ pieces }: { pieces: Piece[] }) {
 }
 
 /**
- * O que o app chama e o que o destino recebe, lado a lado, em uma requisição
- * de exemplo montada como o proxy monta a de verdade.
+ * What the app calls and what the destination receives, side by side, in a
+ * sample request built the way the proxy builds the real one.
  */
 export function ForwardPreview({ input }: { input: ForwardInput }) {
   const f = forwarding(input);
   return (
     <div className="fwd">
       <p className="fwd__line">
-        <span className="fwd__who">seu app</span>
+        <span className="fwd__who">your app</span>
         <span className="fwd__req mono">
           GET {f.appHost}
           <Pieces pieces={f.appPath} />
         </span>
       </p>
       <p className="fwd__line">
-        <span className="fwd__who">destino</span>
+        <span className="fwd__who">destination</span>
         {f.dest ? (
           <span className="fwd__req mono" title={destLine(f)}>
             GET <span className="fwd__base">{f.dest.host}{f.dest.base}</span>
@@ -57,8 +57,8 @@ export function ForwardPreview({ input }: { input: ForwardInput }) {
         ) : (
           <span className="fwd__req dim">
             {input.destination.trim()
-              ? "a URL do destino ainda não serve: http:// ou https://"
-              : "sem destino: só as regras deste serviço respondem"}
+              ? "the destination URL does not work yet: http:// or https://"
+              : "no destination: only this service's rules answer"}
           </span>
         )}
       </p>
@@ -67,20 +67,20 @@ export function ForwardPreview({ input }: { input: ForwardInput }) {
   );
 }
 
-/** A linha que avisa que o caminho é um exemplo, e de onde ele saiu. */
+/** The line that warns the path is an example, and where it came from. */
 function PreviewNote({ f }: { f: Forwarding }) {
   if (!f.sample) return null;
   return (
     <p className="fwd__note">
-      <span className="mono fwd__ex">{f.sample}</span> é só um exemplo:{" "}
+      <span className="mono fwd__ex">{f.sample}</span> is only an example:{" "}
       {f.entry.wildcard ? (
         <>
-          vale para qualquer path sob <span className="mono">{f.entry.prefix || ""}/</span>
+          it holds for any path under <span className="mono">{f.entry.prefix || ""}/</span>
         </>
       ) : f.entry.raw ? (
-        "o parâmetro casa com qualquer valor nesse segmento"
+        "the parameter matches any value in that segment"
       ) : (
-        "sem path na entrada, este serviço recebe qualquer requisição"
+        "with no path in the entry, this service receives any request"
       )}
       .
     </p>
@@ -88,8 +88,8 @@ function PreviewNote({ f }: { f: Forwarding }) {
 }
 
 /**
- * As duas chaves do encaminhamento com a consequência no rótulo, em vez de
- * "remove prefixo" e "reescreve host". A prévia acima muda junto.
+ * The two forwarding keys with the consequence in the label, instead of
+ * "strip prefix" and "rewrite host". The preview above changes along with them.
  */
 export function ForwardKeys({
   input,
@@ -100,7 +100,7 @@ export function ForwardKeys({
   input: ForwardInput;
   onStripPrefix: (b: boolean) => void;
   onRewriteHost: (b: boolean) => void;
-  /** Por que o cadastro decidiu assim, enquanto as chaves não forem tocadas. */
+  /** Why the setup decided this way, while the keys have not been touched. */
   why?: string | null;
 }) {
   const f = forwarding(input);
@@ -108,64 +108,64 @@ export function ForwardKeys({
   const destHost = f.dest?.host ?? "";
   const tail: ReactNode = prefix ? (
     <>
-      só o que vem depois de <span className="mono">{prefix}</span>
+      only what comes after <span className="mono">{prefix}</span>
     </>
   ) : (
-    "só o que vem depois do prefixo da entrada"
+    "only what comes after the entry's prefix"
   );
   const full: ReactNode = prefix ? (
     <>
-      o path inteiro, <span className="mono">{prefix}/…</span>
+      the whole path, <span className="mono">{prefix}/…</span>
     </>
   ) : (
-    "o path inteiro, como o seu app mandou"
+    "the whole path, as your app sent it"
   );
   return (
     <div className="fwdkeys">
-      {why ? <p className="fwd__why">{why}; mude à vontade</p> : null}
+      {why ? <p className="fwd__why">{why}; change it freely</p> : null}
       <Row
-        label="o que enviar ao destino"
+        label="what to send to the destination"
         hint={
           f.exact ? (
             <>
-              a entrada é um path exato: não há prefixo para remover
+              the entry is an exact path: there is no prefix to strip
             </>
           ) : undefined
         }
       >
         <Choice
-          label="O que enviar ao destino"
+          label="What to send to the destination"
           value={input.stripPrefix ? "tail" : "full"}
           onChange={(v) => onStripPrefix(v === "tail")}
           options={[
-            { value: "tail", text: prefix ? `só o que vem depois de ${prefix}` : "só o que vem depois do prefixo da entrada", label: tail },
-            { value: "full", text: prefix ? `o path inteiro, ${prefix}/...` : "o path inteiro, como o seu app mandou", label: full },
+            { value: "tail", text: prefix ? `only what comes after ${prefix}` : "only what comes after the entry's prefix", label: tail },
+            { value: "full", text: prefix ? `the whole path, ${prefix}/...` : "the whole path, as your app sent it", label: full },
           ]}
         />
       </Row>
-      <Row label="Host enviado" hint="destinos externos, e quase todo HTTPS, exigem o do destino">
+      <Row label="Host sent" hint="external destinations, and nearly all HTTPS, require the destination's">
         <Choice
-          label="Host enviado ao destino"
+          label="Host sent to the destination"
           value={input.rewriteHost ? "dest" : "app"}
           onChange={(v) => onRewriteHost(v === "dest")}
           options={[
             {
               value: "dest",
-              text: destHost ? `o do destino (${destHost})` : "o do destino",
+              text: destHost ? `the destination's (${destHost})` : "the destination's",
               label: destHost ? (
                 <>
-                  o do destino (<span className="mono">{destHost}</span>)
+                  the destination's (<span className="mono">{destHost}</span>)
                 </>
               ) : (
-                "o do destino"
+                "the destination's"
               ),
             },
             {
               value: "app",
-              text: `o que o seu app mandou (${f.appHost})`,
+              text: `what your app sent (${f.appHost})`,
               label: (
                 <>
-                  o que o seu app mandou (<span className="mono">{f.appHost}</span>)
+                  what your app sent (<span className="mono">{f.appHost}</span>)
                 </>
               ),
             },

@@ -8,7 +8,7 @@ interface PanelProps {
   children: ReactNode;
 }
 
-/** Painel fixo do console: cabeçalho em versalete e corpo rolável. */
+/** Fixed console panel: small-caps header and scrollable body. */
 export function Panel({ id, title, sub, tools, children }: PanelProps) {
   const headId = `${id}-title`;
   return (

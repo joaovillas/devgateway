@@ -2,16 +2,16 @@ import { pathParts } from "../format";
 import type { Override } from "../api";
 
 /**
- * Path de regra com os parâmetros de segmento destacados: ":id" sai em tinta
- * secundária com sublinhado discreto, sem cor de estado, porque é forma do
- * path e não algo que o gateway fez.
+ * Rule path with the segment parameters highlighted: ":id" comes out in
+ * secondary ink with a discreet underline, with no state color, because it is
+ * the shape of the path and not something the gateway did.
  */
 export function PathText({ path }: { path: string }) {
   return (
     <>
       {pathParts(path).map((p, i) =>
         p.param ? (
-          <span key={i} className="path-param" title={`parâmetro de segmento: ${p.text} casa com qualquer valor neste segmento`}>
+          <span key={i} className="path-param" title={`segment parameter: ${p.text} matches any value in this segment`}>
             {p.text}
           </span>
         ) : (
@@ -22,7 +22,7 @@ export function PathText({ path }: { path: string }) {
   );
 }
 
-/** O seletor da regra (método e path) com os parâmetros de segmento destacados. */
+/** The rule selector (method and path) with the segment parameters highlighted. */
 export function RuleSelector({ o }: { o: Override }) {
   const m = o.match;
   return (

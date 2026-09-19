@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /**
- * Aviso único de perda de comentários (tarefa 8.8). Uma escrita de rota ou de
- * override pela API reescreve o documento YAML inteiro e perde comentários e
- * ordem das chaves. Antes da primeira escrita num documento com comentários
- * (`hasComments`), o painel pede confirmação; confirmada, ela é lembrada para
- * aquele arquivo e não volta a aparecer. Se o arquivo voltar a ter comentários
- * depois de reescrito (alguém os pôs de novo à mão), o aviso volta a valer.
+ * The one-off warning about losing comments (task 8.8). A write to a route or
+ * an override through the API rewrites the whole YAML document and loses the
+ * comments and the key order. Before the first write to a document that has
+ * comments (`hasComments`), the panel asks for confirmation; once confirmed,
+ * it is remembered for that file and does not show up again. If the file comes
+ * to have comments again after being rewritten (someone put them back by
+ * hand), the warning applies once more.
  *
- * A confirmação só fica gravada depois que a escrita dá certo: se ela falhar
- * (409, 422, rede), o arquivo continua com os comentários e o aviso volta na
- * próxima vez. A chave inclui `scope` (o diretório de rotas do processo),
- * para a confirmação de um projeto não valer para outro servido na mesma origem.
+ * The confirmation is only stored after the write succeeds: if it fails (409,
+ * 422, network), the file still has its comments and the warning comes back
+ * next time. The key includes `scope` (the process's routes directory), so
+ * that a confirmation for one project does not count for another served from
+ * the same origin.
  */
 
-const KEY = "gateway.painel.comentariosConfirmados";
+const KEY = "gateway.panel.commentsAcknowledged";
 
 function readAcks(): Set<string> {
   try {
@@ -30,14 +32,14 @@ function writeAcks(acks: Set<string>): void {
   try {
     window.localStorage.setItem(KEY, JSON.stringify([...acks]));
   } catch {
-    // Sem armazenamento (janela privada, bloqueio): a confirmação vale só nesta sessão.
+    // With no storage (private window, blocked): the confirmation only counts for this session.
   }
 }
 
-/** A escrita esperava confirmação e o usuário desistiu. Não é erro da API. */
+/** The write was waiting for confirmation and the user gave up. Not an API error. */
 export class WriteCancelled extends Error {
   constructor() {
-    super("escrita cancelada antes de gravar");
+    super("write cancelled before it was saved");
     this.name = "WriteCancelled";
   }
 }
@@ -54,20 +56,20 @@ interface Waiting {
 }
 
 export interface CommentsGuard {
-  /** Roda `run` depois da confirmação, quando ela é necessária. */
+  /** Runs `run` after the confirmation, when one is needed. */
   guard<T>(doc: GuardedDoc, run: () => Promise<T>): Promise<T>;
-  /** Arquivo aguardando confirmação agora, ou null. */
+  /** The file waiting for confirmation right now, or null. */
   asking: string | null;
   confirm(): void;
   cancel(): void;
-  /** Informa o estado atual de um documento: sem comentários, a confirmação antiga caduca. */
+  /** Reports a document's current state: with no comments, the old confirmation expires. */
   observe(doc: GuardedDoc): void;
 }
 
 export function useCommentsGuard(scope = ""): CommentsGuard {
   const acks = useRef<Set<string>>(readAcks());
-  // Confirmadas nesta sessão, com a escrita ainda a caminho: não perguntam de
-  // novo, mas só vão para o armazenamento quando a escrita der certo.
+  // Confirmed in this session, with the write still on its way: they do not
+  // ask again, but they only go to storage once the write succeeds.
   const pending = useRef<Set<string>>(new Set());
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
@@ -89,7 +91,7 @@ export function useCommentsGuard(scope = ""): CommentsGuard {
           return r;
         },
         (e: unknown) => {
-          // A escrita não aconteceu: os comentários continuam lá, e o aviso também.
+          // The write did not happen: the comments are still there, and so is the warning.
           pending.current.delete(key);
           throw e;
         },
@@ -126,7 +128,7 @@ export function useCommentsGuard(scope = ""): CommentsGuard {
     if (!doc.hasComments && acks.current.delete(keyOf(doc.file))) writeAcks(acks.current);
   }, []);
 
-  // Ao desmontar, nenhuma escrita fica pendurada esperando resposta.
+  // On unmount, no write is left hanging and waiting for an answer.
   useEffect(
     () => () => {
       for (const w of waiting.current) w.reject(new WriteCancelled());

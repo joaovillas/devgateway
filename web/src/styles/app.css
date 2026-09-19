@@ -64,7 +64,7 @@ button {
   font-variant-numeric: tabular-nums slashed-zero;
 }
 
-/* ---------- Esqueleto da tela ---------- */
+/* ---------- Screen skeleton ---------- */
 
 .console {
   display: grid;
@@ -87,9 +87,9 @@ button {
   min-height: 0;
 }
 
-/* A lista de serviços ocupa a altura do que mostra (até metade da coluna,
-   depois rola) e o resto vai para o tráfego: cada linha a mais de trocas
-   vale mais que grafite vazio. */
+/* The service list takes the height of what it shows (up to half the column,
+   then it scrolls) and the rest goes to the traffic: one more row of exchanges
+   is worth more than empty graphite. */
 .column--left {
   grid-template-rows: fit-content(50%) minmax(0, 1fr);
 }
@@ -98,8 +98,9 @@ button {
   grid-template-rows: minmax(0, 1fr);
 }
 
-/* Estreito: os painéis empilham e a página rola; cada painel ocupa a altura
-   do que mostra, e só o tráfego e a lista de serviços mantêm rolagem própria. */
+/* Narrow: the panels stack and the page scrolls; each panel takes the height
+   of what it shows, and only the traffic and the service list keep their own
+   scrolling. */
 @media (max-width: 900px) {
   html,
   body,
@@ -128,15 +129,15 @@ button {
     max-height: 70vh;
     overflow: auto;
   }
-  /* Com 50 serviços, a lista empilhada empurraria o tráfego para longe: ela
-     também rola sozinha, com o cabeçalho de colunas colado no alto. */
+  /* With 50 services, the stacked list would push the traffic far away: it
+     also scrolls on its own, with the column header sticky at the top. */
   .panel[aria-labelledby="services-title"] .panel__body {
     max-height: 45vh;
     overflow: auto;
   }
 }
 
-/* ---------- Barra fina ---------- */
+/* ---------- Thin bar ---------- */
 
 .bar {
   display: flex;
@@ -219,7 +220,7 @@ button {
   color: #fff;
 }
 
-/* ---------- Painel ---------- */
+/* ---------- Panel ---------- */
 
 .panel {
   display: grid;
@@ -261,14 +262,15 @@ button {
 }
 
 .panel__body {
-  /* Contém os absolutos (legendas sr-only, segmentos): sem isto, eles se
-     posicionam pela página e a fazem rolar além do console. */
+  /* Contains the absolutely positioned pieces (sr-only captions, segments):
+     without this they position against the page and make it scroll beyond the
+     console. */
   position: relative;
   min-height: 0;
   overflow: auto;
 }
 
-/* ---------- Estados honestos ---------- */
+/* ---------- Honest states ---------- */
 
 .state {
   padding: var(--s-5) var(--s-4);
@@ -291,8 +293,8 @@ button {
   color: var(--ink);
 }
 
-/* Falha de leitura não é queda nem resposta sintetizada: o vermelho fica
-   reservado para o que o gateway faz com o tráfego. */
+/* A read failure is neither a drop nor a synthesized response: the red stays
+   reserved for what the gateway does to the traffic. */
 .state--fault .state__title {
   color: var(--ink);
 }
@@ -335,10 +337,10 @@ button {
   color: var(--ink);
 }
 
-/* ---------- Serviços ---------- */
+/* ---------- Services ---------- */
 
-/* Busca e "+ serviço" moram no cabeçalho do painel: fixos, qualquer que
-   seja a rolagem ou a seleção. */
+/* Search and "+ service" live in the panel header: fixed, whatever the
+   scrolling or the selection. */
 .search {
   position: relative;
   display: inline-flex;
@@ -370,9 +372,10 @@ button {
   border-color: var(--override);
 }
 
-/* Linha, cabeçalho e colunas: serviço (ponto, nome, entrada), destino e regra.
-   As larguras fixas do destino e da regra alinham as colunas entre linhas sem
-   tabela, e o nome tem teto para a entrada não ser esmagada. */
+/* Row, header and columns: service (dot, name, entry), destination and rule.
+   The fixed widths of the destination and the rule align the columns across
+   rows without a table, and the name has a ceiling so the entry is not
+   crushed. */
 .svc {
   --svc-dest: minmax(0, 13rem);
   --svc-rule: 8.5rem;
@@ -430,7 +433,8 @@ button {
 .svc__row:hover {
   background: var(--panel-raised);
 }
-/* Selecionado: o mesmo azul da troca aberta no tráfego, fundo e dois traços. */
+/* Selected: the same blue as the exchange opened in the traffic, a background
+   and two strokes. */
 .svc__row.is-selected {
   background: var(--override-dim);
   box-shadow: inset 0 1px 0 var(--override), inset 0 -1px 0 var(--override);
@@ -460,7 +464,8 @@ button {
   background: transparent;
 }
 
-/* Destino: botão próprio, porque clicar nele filtra o tráfego por destino. */
+/* Destination: a button of its own, because clicking it filters the traffic by
+   destination. */
 .svc__dest {
   display: flex;
   align-items: center;
@@ -500,8 +505,8 @@ button {
   font-size: var(--text-md);
 }
 
-/* Regra ativa: efeito e probabilidade, na cor do que ela faz, com a
-   probabilidade também como fração de um traço de 2px sob o selo. */
+/* Active rule: effect and frequency, in the color of what it does, with the
+   frequency also as a fraction of a 2px stroke under the badge. */
 .svc__rule {
   display: flex;
   justify-content: flex-end;
@@ -524,7 +529,7 @@ button {
 .svc__tag--delay {
   color: var(--injected);
 }
-/* Trilho de costura e, sobre ele, a fração aplicada: um medidor, não um sublinhado. */
+/* A seam track and, over it, the applied fraction: a meter, not an underline. */
 .svc__tag::before {
   content: "";
   position: absolute;
@@ -545,8 +550,8 @@ button {
   color: var(--ink-3);
 }
 
-/* Com um destino selecionado, os serviços que não vão para ele recuam pelo
-   tom (tinta --ink-3, legível) e perdem a cor de estado. */
+/* With a destination selected, the services that do not go to it recede by
+   tone (--ink-3 ink, still legible) and lose the state color. */
 .svc__row.is-dim .svc__name,
 .svc__row.is-dim .svc__entry,
 .svc__row.is-dim .svc__dest,
@@ -564,7 +569,7 @@ button {
   border-bottom: 1px solid var(--seam);
 }
 
-/* Cadastro de serviço no painel da direita. */
+/* The new-service form in the right panel. */
 .newsvc {
   padding: var(--s-1) var(--s-4) var(--s-5);
 }
@@ -572,8 +577,9 @@ button {
   color: var(--override);
 }
 
-/* Estreito: a entrada sai da linha (continua na dica e no leitor de tela), e
-   destino e regra encolhem; o "fora" fica em texto, sem depender da cor. */
+/* Narrow: the entry leaves the row (it stays in the tooltip and in the screen
+   reader), and destination and rule shrink; the "down" is text, so it does not
+   depend on color. */
 @media (max-width: 640px) {
   .svc {
     --svc-dest: minmax(0, 9rem);
@@ -590,8 +596,8 @@ button {
   .svc__entry {
     display: none;
   }
-  /* Cabeçalho estreito: chave, busca e "+ serviço" dividem a linha com o
-     título e a contagem; a busca cede espaço antes da contagem. */
+  /* Narrow header: the key, the search and "+ service" share the line with the
+     title and the count; the search gives up space before the count does. */
   .search {
     flex-basis: 96px;
     min-width: 64px;
@@ -611,11 +617,11 @@ button {
   }
 }
 
-/* ---------- Mapa de serviços ---------- */
+/* ---------- Service map ---------- */
 
-/* Seu app → serviços → destinos em três colunas, com as ligações em SVG nas
-   faixas entre elas: as curvas nunca passam sobre um rótulo. O cabeçalho de
-   colunas e o campo compartilham a mesma grade. */
+/* Your app → services → destinations in three columns, with the edges drawn in
+   SVG in the bands between them: the curves never pass over a label. The column
+   header and the field share the same grid. */
 .map {
   --map-cols: 124px minmax(20px, 1fr) minmax(128px, 3.2fr) minmax(20px, 1fr) minmax(112px, 2.6fr);
 }
@@ -626,7 +632,7 @@ button {
   padding-inline: var(--s-4);
 }
 
-/* Colante e opaco: os nós passam por trás ao rolar. */
+/* Sticky and opaque: the nodes pass behind it while scrolling. */
 .map__head {
   position: sticky;
   top: 0;
@@ -649,8 +655,8 @@ button {
 .map__field {
   grid-template-rows: var(--map-h);
   padding-block: var(--s-4);
-  /* O campo do mapa é uma superfície: a grade de pontos de 1px do console,
-     na cor da costura, sob os nós. Textura, não cor de estado. */
+  /* The map's field is a surface: the console's 1px dot grid, in the seam
+     color, under the nodes. Texture, not state color. */
   background-image: radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 1px);
   background-size: var(--grid-step) var(--grid-step);
   background-position: calc(var(--s-4) - 1px) calc(var(--s-4) - 1px);
@@ -683,7 +689,7 @@ button {
 .map__edges .is-selected {
   stroke: var(--override);
 }
-/* Destino fora do ar: a ligação até ele fica vermelha e tracejada. */
+/* Destination down: the edge to it turns red and dashed. */
 .map__edges .is-down {
   stroke: var(--fault);
   stroke-dasharray: 3 3;
@@ -704,12 +710,12 @@ button {
   min-width: 0;
   text-align: left;
   overflow: hidden;
-  /* O cabeçalho colante não esconde o nó que a seleção trouxe à vista. */
+  /* The sticky header does not hide the node the selection brought into view. */
   scroll-margin-block: calc(var(--row-h) + var(--s-3)) var(--s-3);
   transition: opacity 160ms var(--ease-out), border-color 160ms var(--ease-out),
     background-color 160ms var(--ease-out), top 160ms var(--ease-out);
 }
-/* Os nós presos à janela acompanham a rolagem sem atraso. */
+/* The nodes pinned to the viewport follow the scrolling without lag. */
 .map__col > .node--app,
 .map__col > .node--dest {
   transition: opacity 160ms var(--ease-out), border-color 160ms var(--ease-out),
@@ -753,8 +759,8 @@ button {
   display: none;
 }
 
-/* Regra ativa: efeito e probabilidade na cor do que ela faz, e a
-   probabilidade também como fração da largura do nó, num traço de 2px. */
+/* Active rule: effect and frequency in the color of what it does, and the
+   frequency also as a fraction of the node's width, in a 2px stroke. */
 .node__tag {
   flex: none;
   font-family: var(--font-mono);
@@ -810,10 +816,10 @@ button.node--down:hover {
   color: var(--ink-3);
 }
 
-/* Fora da seleção, o nó recua pelo tom, não pela opacidade: fundo do painel,
-   costura fina e tinta --ink-3, para continuar legível e clicável. As cores de
-   estado viram cinza; o que está fora do foco não disputa atenção com o
-   caminho selecionado. */
+/* Outside the selection, the node recedes by tone, not by opacity: panel
+   background, thin seam and --ink-3 ink, so it stays legible and clickable. The
+   state colors turn gray; what is out of focus does not compete for attention
+   with the selected path. */
 .node.is-dim {
   background: var(--panel);
   border-color: var(--seam);
@@ -850,14 +856,15 @@ button.node--down:hover {
   color: var(--ink-3);
 }
 
-/* Compacto (mais de oito serviços): nós da altura de uma linha da lista. */
+/* Compact (more than eight services): nodes the height of a list row. */
 .map--compact .node {
   gap: var(--s-2);
 }
 
-/* Estreito: seu app vira a porta, o serviço perde a entrada (continua na dica
-   e no leitor de tela) e o destino vira a porta, que é o que os diferencia; o
-   "fora" fica em texto, para não depender só da cor. */
+/* Narrow: your app becomes the port, the service loses the entry (it stays in
+   the tooltip and in the screen reader) and the destination becomes the port,
+   which is what tells them apart; the "down" is text, so as not to depend on
+   color alone. */
 @media (max-width: 640px) {
   .map {
     --map-cols: 44px minmax(10px, 1fr) minmax(0, 6fr) minmax(10px, 1fr) minmax(0, 3.6fr);
@@ -904,7 +911,7 @@ button.node--down:hover {
   }
 }
 
-/* ---------- Tráfego ---------- */
+/* ---------- Traffic ---------- */
 
 .traffic {
   width: 100%;
@@ -953,8 +960,8 @@ button.node--down:hover {
   color: var(--fault);
 }
 
-/* Marca da intervenção, colada ao status: forma além de cor, para o que o
-   gateway fez não depender só do vermelho. */
+/* The intervention's mark, stuck to the status: shape beyond color, so that
+   what the gateway did does not depend on the red alone. */
 .imark {
   display: inline-flex;
   align-items: center;
@@ -1006,7 +1013,7 @@ button.node--down:hover {
   height: 6px;
 }
 
-/* ---------- Controles ---------- */
+/* ---------- Controls ---------- */
 
 .inline {
   display: inline-flex;
@@ -1036,7 +1043,7 @@ button.node--down:hover {
   max-width: 62ch;
 }
 
-/* Botões: sem cor de estado. O principal é tinta cheia, o resto é contorno. */
+/* Buttons: no state color. The primary one is solid ink, the rest are outlines. */
 .button {
   display: inline-flex;
   align-items: center;
@@ -1107,7 +1114,7 @@ kbd {
   background: var(--panel-raised);
 }
 
-/* Campos */
+/* Fields */
 .field {
   display: inline-flex;
   flex-direction: column;
@@ -1157,9 +1164,9 @@ kbd {
 .input--bad:hover {
   border-color: var(--fault);
 }
-/* Seletor nativo sem a caixa do navegador: a mesma caixa reta dos campos e
-   uma divisa de 1px na tinta terciária (a cor de --ink-3, que o data URI
-   não lê de variável). */
+/* Native select without the browser's box: the same straight box as the fields
+   and a 1px chevron in the tertiary ink (the color of --ink-3, which the data
+   URI cannot read from a variable). */
 .select {
   appearance: none;
   width: auto;
@@ -1186,7 +1193,7 @@ kbd {
   font-size: var(--text-sm);
 }
 
-/* Interruptor: azul quando liga um override ou uma configuração. */
+/* Switch: blue when it turns on an override or a setting. */
 .switch {
   position: relative;
   flex: none;
@@ -1231,7 +1238,7 @@ kbd {
   opacity: 0.7;
 }
 
-/* Opções exclusivas */
+/* Exclusive options */
 .seg {
   display: inline-flex;
   flex: none;
@@ -1257,7 +1264,8 @@ kbd {
 .seg__opt:disabled {
   cursor: not-allowed;
 }
-/* Travado (valor do ambiente): contorno tracejado e a opção vigente sem destaque de interação. */
+/* Locked (value from the environment): a dashed outline, and the current option
+   without the interaction highlight. */
 .seg:has(.seg__opt:disabled) {
   border-style: dashed;
 }
@@ -1276,9 +1284,9 @@ kbd {
   outline-offset: -2px;
 }
 
-/* Opções exclusivas empilhadas, quando a consequência não cabe em uma
-   palavra: uma por linha, separadas por costura de 1px, e a escolhida
-   marcada pelo azul da seleção. */
+/* Stacked exclusive options, for when the consequence does not fit in one
+   word: one per line, separated by a 1px seam, and the chosen one marked by
+   the selection blue. */
 .choice {
   display: flex;
   flex-direction: column;
@@ -1325,8 +1333,8 @@ kbd {
   overflow-wrap: anywhere;
 }
 
-/* Prévia do encaminhamento: a requisição de exemplo que o app faz e a que o
-   destino recebe dela, em mono, com o que foi inventado sublinhado. */
+/* Forwarding preview: the example request your app makes and the one the
+   destination receives from it, in mono, with what was made up underlined. */
 .fwd {
   display: grid;
   gap: var(--s-1);
@@ -1354,7 +1362,7 @@ kbd {
   color: var(--ink);
   overflow-wrap: anywhere;
 }
-/* O que veio da URL do destino, para o resto se ler como o que foi anexado. */
+/* What came from the destination's URL, so the rest reads as what was appended. */
 .fwd__base {
   color: var(--ink-2);
 }
@@ -1365,8 +1373,8 @@ kbd {
 .fwd__host {
   color: var(--ink-2);
 }
-/* Trecho de exemplo: é forma do path, não estado, então repete o tratamento
-   do parâmetro de segmento — tinta secundária e sublinhado de 1px. */
+/* Example fragment: it is path shape, not state, so it repeats the treatment of
+   the segment parameter — secondary ink and a 1px underline. */
 .fwd__ex {
   color: var(--ink-2);
   text-decoration: underline 1px solid var(--ink-3);
@@ -1377,7 +1385,7 @@ kbd {
   color: var(--ink-3);
   max-width: 62ch;
 }
-/* As duas chaves do encaminhamento, com a razão da escolha antes delas. */
+/* The two forwarding keys, with the reason for the choice before them. */
 .fwdkeys {
   display: grid;
   gap: var(--s-2);
@@ -1388,8 +1396,8 @@ kbd {
   color: var(--ink-3);
   max-width: 72ch;
 }
-/* Estreito: o "seu app"/"destino" passa para cima da requisição, e as
-   escolhas de consequência longa ganham a linha inteira. */
+/* Narrow: the "your app"/"destination" moves above the request, and the choices
+   with a long consequence get the whole line. */
 @media (max-width: 640px) {
   .fwd__line {
     display: grid;
@@ -1401,7 +1409,8 @@ kbd {
   .fwd__why {
     padding-left: 0;
   }
-  /* O Host ganha a própria linha, em vez de empurrar o path para a de cima. */
+  /* The Host gets a line of its own, instead of pushing the path onto the one
+     above. */
   .fwd__host {
     display: block;
   }
@@ -1413,13 +1422,14 @@ kbd {
     gap: var(--s-1);
   }
 }
-/* A prévia do modo simples: separada do resumo pela mesma costura das seções. */
+/* The simple mode's preview: separated from the summary by the same seam the
+   sections use. */
 .route__preview {
   padding: var(--s-4) 0;
   border-bottom: 1px solid var(--seam);
 }
 
-/* Controle contínuo: trilho de 2px, preenchido até o valor. */
+/* Continuous control: a 2px track, filled up to the value. */
 .cont {
   display: flex;
   align-items: center;
@@ -1500,7 +1510,7 @@ kbd {
   outline-offset: 2px;
 }
 
-/* Linha de formulário: rótulo à esquerda, controle à direita. */
+/* Form row: label on the left, control on the right. */
 .form {
   display: grid;
   gap: var(--s-2);
@@ -1545,7 +1555,7 @@ kbd {
   margin-top: 0;
 }
 
-/* Abas no cabeçalho do painel de controles */
+/* Tabs in the header of the controls panel */
 .tabs {
   display: flex;
   align-self: stretch;
@@ -1578,7 +1588,7 @@ kbd {
   outline-offset: 2px;
 }
 
-/* ---------- Painel da rota ---------- */
+/* ---------- Route panel ---------- */
 
 .route {
   padding: 0 var(--s-4) var(--s-5);
@@ -1621,7 +1631,8 @@ kbd {
   min-width: 0;
 }
 
-/* O serviço em uma linha no modo simples: ler basta, editar é no avançado. */
+/* The service in one line in simple mode: reading is enough, editing happens in
+   advanced mode. */
 .route__summary {
   display: flex;
   flex-wrap: wrap;
@@ -1702,8 +1713,8 @@ kbd {
   color: var(--ink-2);
 }
 
-/* Modo simples: o efeito resumido fica no cabeçalho da regra, entre o nome e
-   o que se esgota, e a linha da probabilidade vem logo abaixo. */
+/* Simple mode: the summarized effect sits in the rule's header, between the
+   name and what runs out, and the frequency row comes right below. */
 .ov--simple {
   gap: var(--s-2);
   padding: var(--s-3) 0;
@@ -1712,7 +1723,7 @@ kbd {
   flex: none;
   white-space: nowrap;
 }
-/* Recurso que só o avançado edita: marca discreta, sem cor de estado. */
+/* A feature only advanced mode edits: a discreet mark, no state color. */
 .ov__adv {
   flex: none;
 }
@@ -1723,9 +1734,10 @@ kbd {
 }
 
 /*
- * Parâmetro de segmento (":id") no path de uma regra: é forma do path, não
- * estado, então fica em tinta secundária com sublinhado discreto de 1px, sem
- * cor de estado e sem o pontilhado, que é do erro vindo do destino.
+ * Segment parameter (":id") in a rule's path: it is path shape, not state, so
+ * it stays in secondary ink with a discreet 1px underline, without a state
+ * color and without the dotted line, which belongs to the error coming from the
+ * destination.
  */
 .path-param {
   color: var(--ink-2);
@@ -1766,7 +1778,7 @@ kbd {
   font-size: var(--text-sm);
 }
 
-/* Procedência: aprendido e derivado não são estado, então não levam cor. */
+/* Provenance: learned and derived are not state, so they carry no color. */
 .prov {
   flex: none;
   height: 18px;
@@ -1854,7 +1866,7 @@ kbd {
   width: auto;
 }
 
-/* Erro de escrita, junto do controle */
+/* Write error, next to the control */
 .err {
   padding: var(--s-3) var(--s-4);
   border: 1px solid var(--seam-strong);
@@ -1883,7 +1895,7 @@ kbd {
   padding-left: var(--s-5);
 }
 
-/* Confirmação única de perda de comentários */
+/* Single confirmation of comment loss */
 .guard {
   position: sticky;
   top: 0;
@@ -1925,7 +1937,7 @@ kbd {
   margin: var(--s-4) 0 0;
 }
 
-/* ---------- Processo ---------- */
+/* ---------- Process ---------- */
 
 .proc {
   padding: var(--s-4) var(--s-4) var(--s-5);
@@ -2038,7 +2050,7 @@ kbd {
   padding: var(--s-3) var(--s-4);
 }
 
-/* ---------- Tempo real e histórico ---------- */
+/* ---------- Real time and history ---------- */
 
 .live {
   display: inline-flex;
@@ -2065,7 +2077,8 @@ kbd {
   font-weight: 600;
 }
 
-/* Desabilitado não é vazio: o título ganha a marca de configuração, não a de ausência. */
+/* Disabled is not empty: the title gets the configuration mark, not the mark of
+   absence. */
 .state--disabled .state__title::before {
   content: "";
   display: inline-block;
@@ -2077,7 +2090,8 @@ kbd {
   background: repeating-linear-gradient(135deg, var(--ink-2) 0 1px, transparent 1px 3px);
 }
 
-/* O único momento animado da tela: a troca que acabou de chegar pelo fluxo. */
+/* The screen's only animated moment: the exchange that has just arrived through
+   the stream. */
 .traffic tr.is-new td {
   animation: arrive 1.6s var(--ease-out);
 }
@@ -2100,7 +2114,7 @@ kbd {
   }
 }
 
-/* Desconectado: a barra inteira avisa, porque tudo abaixo dela parou. */
+/* Disconnected: the whole bar warns, because everything below it has stopped. */
 .bar--offline {
   background: linear-gradient(var(--fault-dim), var(--fault-dim)), var(--panel);
 }
@@ -2110,7 +2124,7 @@ kbd {
   text-overflow: ellipsis;
 }
 
-/* Estreito, depois das regras da barra e do painel para prevalecer sobre elas. */
+/* Narrow, placed after the bar's and the panel's rules so it prevails over them. */
 @media (max-width: 900px) {
   .bar {
     flex-wrap: wrap;
@@ -2134,7 +2148,7 @@ kbd {
   white-space: nowrap;
 }
 
-/* ---------- Tráfego: filtros e lista ---------- */
+/* ---------- Traffic: filters and list ---------- */
 
 .sr-only {
   position: absolute;
@@ -2145,7 +2159,7 @@ kbd {
   white-space: nowrap;
 }
 
-/* Filtros fixos no alto; só a lista rola. */
+/* Filters fixed at the top; only the list scrolls. */
 .traffic-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -2162,8 +2176,8 @@ kbd {
   padding: var(--s-2) var(--s-4) var(--s-3) var(--s-3);
   border-bottom: 1px solid var(--seam);
 }
-/* Em repouso, a barra é só o botão e os filtros ativos; os controles descem
-   quando ela abre. */
+/* At rest, the bar is just the button and the active filters; the controls drop
+   down when it opens. */
 .filters__bar {
   display: flex;
   flex-wrap: wrap;
@@ -2199,7 +2213,7 @@ kbd {
   letter-spacing: 0.08em;
   font-weight: 600;
 }
-/* Filtro ativo é seleção: a borda fica azul. */
+/* An active filter is a selection: the border turns blue. */
 .select--on,
 .input--on {
   border-color: var(--override);
@@ -2216,8 +2230,8 @@ kbd {
 .traffic__c-method {
   width: 60px;
 }
-/* O path é o dado da linha e fica com a largura livre; a rota é um rótulo
-   curto e sai de todo quando a lista já está filtrada por uma rota. */
+/* The path is the row's data and gets the free width; the route is a short label
+   and goes away entirely once the list is already filtered by a route. */
 .traffic__c-route {
   width: 96px;
 }
@@ -2241,7 +2255,7 @@ kbd {
 .traffic tbody tr {
   cursor: pointer;
 }
-/* A troca aberta no detalhe: seleção, então azul. */
+/* The exchange opened in the detail: a selection, so blue. */
 .traffic tr.is-open td {
   background: var(--override-dim);
   box-shadow: inset 0 1px 0 var(--override), inset 0 -1px 0 var(--override);
@@ -2256,19 +2270,20 @@ kbd {
   box-shadow: inset 1px 1px 0 var(--override), inset 0 -1px 0 var(--override);
 }
 
-/* Erro do upstream: não é intervenção, então sem cor de estado; o sublinhado
-   pontilhado o separa de um 200 sem roubar o vermelho do que o gateway fez. */
+/* Upstream error: it is not an intervention, so no state color; the dotted
+   underline sets it apart from a 200 without stealing the red of what the
+   gateway did. */
 .status--upstream-error {
   color: var(--ink);
   text-decoration: underline dotted var(--ink-3);
   text-underline-offset: 3px;
 }
-/* Erro do próprio gateway: nem intervenção nem upstream, o cinza da etiqueta. */
+/* The gateway's own error: neither intervention nor upstream, the badge's gray. */
 .status--gateway {
   color: var(--ink-2);
 }
 
-/* Sem conexão: números vivos da última atualização, marcados como parados. */
+/* No connection: live numbers from the last update, marked as stopped. */
 .ov__live.is-stale,
 .ov__live.is-stale .ov__on {
   color: var(--ink-3);
@@ -2280,7 +2295,7 @@ kbd {
   padding: var(--s-3) var(--s-4);
 }
 
-/* ---------- Detalhe da troca ---------- */
+/* ---------- Exchange detail ---------- */
 
 .xd {
   padding-bottom: var(--s-5);
@@ -2391,7 +2406,7 @@ kbd {
   border-top: 1px solid var(--seam);
 }
 
-/* Waterfall do detalhe: uma faixa por grandeza, eixo comum de 0 ao total. */
+/* The detail's waterfall: one lane per quantity, a shared axis from 0 to the total. */
 .lanes {
   width: 100%;
   border-collapse: collapse;
@@ -2471,7 +2486,7 @@ kbd {
   left: 0;
 }
 
-/* Cabeçalhos e registro: nome à esquerda, valores empilhados à direita. */
+/* Headers and record: name on the left, values stacked on the right. */
 .hdrs {
   margin: 0 0 var(--s-3);
   display: grid;
@@ -2516,7 +2531,8 @@ kbd {
   letter-spacing: 0.08em;
   color: var(--ink-3);
 }
-/* Corpo cortado na captura: aviso neutro e tracejado, porque não é estado do tráfego. */
+/* Body truncated at capture: a neutral, dashed notice, because it is not traffic
+   state. */
 .body__cut {
   margin: 0 0 var(--s-3);
   padding: var(--s-3);
@@ -2557,7 +2573,7 @@ kbd {
   overflow-wrap: normal;
   color: var(--ink-2);
 }
-/* O fim de um corpo cortado não fecha: a borda de baixo tracejada diz isso. */
+/* The end of a truncated body does not close: the dashed bottom border says so. */
 .code--cut {
   border-bottom: 1px dashed var(--ink-3);
   border-bottom-left-radius: 0;
@@ -2568,7 +2584,7 @@ kbd {
   color: var(--ink-3);
 }
 
-/* Rascunho de override derivado: moldura própria, nada gravado ainda. */
+/* Draft of a derived override: a frame of its own, nothing recorded yet. */
 .draft {
   margin: 0 var(--s-4) var(--s-2);
   padding: var(--s-4);
@@ -2621,8 +2637,8 @@ kbd {
   }
 }
 
-/* Estreito: a lista deixa de lado a rota e encurta o waterfall; a troca
-   aberta mostra tudo no detalhe. */
+/* Narrow: the list sets the route aside and shortens the waterfall; the opened
+   exchange shows everything in the detail. */
 @media (max-width: 640px) {
   .traffic__c-route,
   .traffic__route,
@@ -2676,13 +2692,14 @@ kbd {
   }
 }
 
-/* O aviso de comentários fica acima da barra de navegação da troca, que também é fixa. */
+/* The comments notice sits above the exchange's navigation bar, which is sticky
+   too. */
 .xd__bar ~ .guard,
 .panel__body > .guard {
   z-index: 3;
 }
 
-/* A porta de administração mudou: o painel desta origem parou de vez. */
+/* The admin port changed: the panel from this origin has stopped for good. */
 .bar__moved {
   color: var(--injected);
 }
@@ -2690,7 +2707,7 @@ kbd {
   color: var(--override);
 }
 
-/* Saúde do upstream selecionado, no painel de detalhe. */
+/* Health of the selected upstream, in the detail panel. */
 .uph {
   margin: 0 0 var(--s-4);
   display: grid;
@@ -2709,7 +2726,7 @@ kbd {
   color: var(--fault);
 }
 
-/* Marca colada ao fim do eixo: rótulo alinhado pela direita, dentro da faixa. */
+/* Tick stuck to the end of the axis: the label is right-aligned, inside the lane. */
 .lanes__tick--end {
   transform: translateX(-100%);
 }
@@ -2719,4 +2736,19 @@ kbd {
 }
 .setting__unit {
   white-space: nowrap;
+}
+
+/* The words that make the frequency control read as the sentence it belongs
+   to: "responds 503 · on ——— 30 % of calls". They are decoration around the
+   slider, which carries the whole sentence in its accessible name, so on a
+   narrow screen they give their room back to the track. */
+.cont__word {
+  flex: none;
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+@media (max-width: 640px) {
+  .cont__word {
+    display: none;
+  }
 }

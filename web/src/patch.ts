@@ -1,5 +1,6 @@
-// JSON Merge Patch (RFC 7396), o formato dos PATCH da API: as chaves presentes
-// substituem as atuais, `null` remove o campo e listas são trocadas inteiras.
+// JSON Merge Patch (RFC 7396), the format of the API PATCH bodies: the keys
+// present replace the current ones, `null` removes the field and lists are
+// swapped whole.
 
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 export type MergePatch = { [k: string]: unknown };
@@ -21,7 +22,7 @@ export function deepEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
-/** Aplica um merge patch sobre `target` sem alterá-lo. */
+/** Applies a merge patch over `target` without changing it. */
 export function applyMergePatch<T>(target: T, patch: MergePatch): T {
   const out: Record<string, unknown> = isObject(target) ? { ...target } : {};
   for (const [k, v] of Object.entries(patch)) {
@@ -32,7 +33,7 @@ export function applyMergePatch<T>(target: T, patch: MergePatch): T {
   return out as T;
 }
 
-/** Junta dois patches como se fossem aplicados em sequência (`b` depois de `a`). */
+/** Joins two patches as if they were applied in sequence (`b` after `a`). */
 export function composePatches(a: MergePatch, b: MergePatch): MergePatch {
   const out: MergePatch = { ...a };
   for (const [k, v] of Object.entries(b)) {
@@ -43,9 +44,9 @@ export function composePatches(a: MergePatch, b: MergePatch): MergePatch {
 }
 
 /**
- * `b` pode ser juntado a `a` sem mudar o resultado. Não pode quando `a` remove
- * uma chave (`null`) e `b` põe um objeto nela: juntos virariam um merge sobre
- * o valor antigo, e não a troca pelo objeto novo.
+ * `b` can be joined to `a` without changing the result. It cannot when `a`
+ * removes a key (`null`) and `b` puts an object in it: joined they would turn
+ * into a merge over the old value instead of the replacement by the new object.
  */
 export function canCompose(a: MergePatch, b: MergePatch): boolean {
   for (const [k, v] of Object.entries(b)) {
@@ -57,8 +58,9 @@ export function canCompose(a: MergePatch, b: MergePatch): boolean {
 }
 
 /**
- * O menor patch que leva `from` a `to`. Chave ausente em `to` vira `null`,
- * objetos são comparados chave a chave e o resto é trocado inteiro.
+ * The smallest patch that takes `from` to `to`. A key missing from `to`
+ * becomes `null`, objects are compared key by key and the rest is swapped
+ * whole.
  */
 export function mergeDiff(from: unknown, to: unknown): MergePatch {
   const a = isObject(from) ? from : {};
@@ -85,7 +87,7 @@ export function isEmptyPatch(p: MergePatch): boolean {
   return Object.keys(p).length === 0;
 }
 
-/** Monta o patch aninhado de uma chave pontuada: ("history.path", x) → {history:{path:x}}. */
+/** Builds the nested patch for a dotted key: ("history.path", x) → {history:{path:x}}. */
 export function patchForKey(key: string, value: unknown): MergePatch {
   const parts = key.split(".");
   let out: unknown = value;

@@ -1,4 +1,4 @@
-/** Ícones desenhados à mão, traço de 1.5 px, na cor do texto. */
+/** Hand-drawn icons, 1.5 px stroke, in the text color. */
 export function CloseIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false">
@@ -7,7 +7,7 @@ export function CloseIcon() {
   );
 }
 
-/** Cadeado: valor travado por variável de ambiente. */
+/** Padlock: value locked by an environment variable. */
 export function LockIcon() {
   return (
     <svg width="10" height="11" viewBox="0 0 10 11" aria-hidden="true" focusable="false" className="icon">
@@ -17,7 +17,7 @@ export function LockIcon() {
   );
 }
 
-/** Seta de abrir e fechar uma seção; gira por CSS quando aberta. */
+/** Arrow to open and close a section; CSS rotates it when open. */
 export function ChevronIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false" className="icon icon--chevron">
@@ -26,7 +26,7 @@ export function ChevronIcon() {
   );
 }
 
-/** Mais: acrescentar um item. */
+/** Plus: add an item. */
 export function PlusIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false" className="icon">
@@ -35,7 +35,7 @@ export function PlusIcon() {
   );
 }
 
-/** Seta vertical: navegação para a troca mais nova (up) ou mais antiga (down). */
+/** Vertical arrow: navigation to the newer (up) or older (down) exchange. */
 export function ArrowIcon({ dir }: { dir: "up" | "down" }) {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false" className="icon">
@@ -51,7 +51,7 @@ export function ArrowIcon({ dir }: { dir: "up" | "down" }) {
   );
 }
 
-/** Pilha de ajustes: a regra usa algo que só o modo avançado edita. */
+/** Stack of sliders: the rule uses something only advanced mode edits. */
 export function SlidersIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false" className="icon">
@@ -62,7 +62,7 @@ export function SlidersIcon() {
   );
 }
 
-/** Funil: o controle único que abre e fecha os filtros do tráfego. */
+/** Funnel: the single control that opens and closes the traffic filters. */
 export function FilterIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false" className="icon">
@@ -77,7 +77,7 @@ export function FilterIcon() {
   );
 }
 
-/** Triângulo cheio: a marca da intervenção junto do status no tráfego. */
+/** Filled triangle: the mark of the intervention next to the status in the traffic. */
 export function MarkIcon() {
   return (
     <svg width="7" height="7" viewBox="0 0 7 7" aria-hidden="true" focusable="false" className="icon">

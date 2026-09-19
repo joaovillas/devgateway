@@ -20,12 +20,12 @@ import { TrafficPanel } from "./components/TrafficPanel";
 import { RoutePanel, type ControlView } from "./components/RoutePanel";
 import type { OpenedExchange } from "./components/ExchangeDetail";
 
-const VIEW_KEY = "gateway.painel.controles";
+const VIEW_KEY = "gateway.panel.controls";
 
-/** A aba lembrada entre sessões: serviço ou processo. A troca aberta não sobrevive a um F5. */
+/** The tab remembered between sessions: service or process. The open exchange does not survive an F5. */
 function readView(): ControlView {
-  // Um link para um serviço (#rota=...) abre os controles dele, não a aba lembrada.
-  if (window.location.hash.startsWith("#rota=")) return "route";
+  // A link to a service (#route=...) opens its controls, not the remembered tab.
+  if (window.location.hash.startsWith("#route=")) return "route";
   try {
     return window.localStorage.getItem(VIEW_KEY) === "process" ? "process" : "route";
   } catch {
@@ -37,8 +37,8 @@ export function App() {
   const [stream] = useState(() => new EventStream());
   const connection = useConnection(stream);
   const [status, reloadStatus] = useResource((s) => api.status(s), []);
-  // Instante em que a leitura de rotas em curso foi pedida: o estado vivo que
-  // chegou depois disso pode ser mais novo que ela e não é descartado.
+  // The instant the routes read in flight was asked for: live state that
+  // arrived after that may be newer than it, and so is not discarded.
   const routesAskedAt = useRef(Date.now());
   const [loadedRoutes, reloadRoutes] = useResource((s) => {
     routesAskedAt.current = Date.now();
@@ -49,20 +49,20 @@ export function App() {
   const [selection, setSelectionRaw] = useSelection();
   const [docVersion, setDocVersion] = useState(0);
   const [view, setViewRaw] = useState<ControlView>(readView);
-  // Simples (o padrão) ou avançado, lembrado entre visitas.
+  // Simple (the default) or advanced, remembered between visits.
   const [mode, setModeRaw] = useState<DetailMode>(readMode);
   const setMode = useCallback((m: DetailMode) => {
     setModeRaw(m);
     storeMode(m);
   }, []);
-  // Troca aberta no detalhe (aba "troca"), com a rota dela.
+  // The exchange open in the detail (the "exchange" tab), with its route.
   const [opened, setOpened] = useState<(OpenedExchange & { route?: string }) | null>(null);
   const [listFilter, setListFilter] = useState<ListFilter>(EMPTY_FILTER);
-  // Cadastro de serviço aberto no painel da direita, com ou sem seleção.
+  // The new-service form open in the right panel, with or without a selection.
   const [creating, setCreating] = useState(false);
-  // Estado vivo dos overrides vindo do evento `overrides` (e das respostas de
-  // PATCH e reset). Uma releitura das rotas já traz o estado atual, então só o
-  // que chegou antes de ela ser pedida é descartado.
+  // Live override state coming from the `overrides` event (and from the PATCH
+  // and reset responses). A re-read of the routes already brings the current
+  // state, so only what arrived before it was asked for is discarded.
   const [live, setLive] = useState<{ list: OverrideStateList; at: number } | null>(null);
   useEffect(() => setLive((l) => (l && l.at > routesAskedAt.current ? l : null)), [loadedRoutes]);
   const onLiveEvent = useCallback((list: OverrideStateList) => setLive({ list, at: Date.now() }), []);
@@ -75,8 +75,8 @@ export function App() {
       }),
     [],
   );
-  // A porta de administração mudou por uma escrita desta aba: esta origem
-  // deixa de responder, então o fluxo para e a barra aponta a porta nova.
+  // The admin port changed because of a write from this tab: this origin
+  // stops answering, so the stream stops and the bar points at the new port.
   const [movedTo, setMovedTo] = useState<number | null>(null);
 
   const setView = useCallback((v: ControlView) => {
@@ -85,12 +85,12 @@ export function App() {
     try {
       window.localStorage.setItem(VIEW_KEY, v);
     } catch {
-      // só conveniência: sem armazenamento, a aba volta a "rota" no F5
+      // only a convenience: with no storage, the tab goes back to "route" on F5
     }
   }, []);
 
-  // Selecionar um serviço no mapa ou na lista traz os controles dele para a frente e
-  // fecha o cadastro que estivesse aberto.
+  // Selecting a service on the map or in the list brings its controls to the front
+  // and closes the new-service form if one was open.
   const setSelection = useCallback(
     (s: Selection) => {
       setSelectionRaw(s);
@@ -116,9 +116,9 @@ export function App() {
       reloadLearning();
       setDocVersion((v) => v + 1);
     };
-    // O evento upstreams só sai quando o status muda; as contagens recentes
-    // (falhas em tentativas) andam a cada troca, então são relidas junto com
-    // as trocas novas, no máximo a cada dois segundos.
+    // The upstreams event only goes out when the status changes; the recent
+    // counts (failures out of attempts) move on every exchange, so they are
+    // re-read together with the new exchanges, at most every two seconds.
     let countsTimer: number | undefined;
     const refreshCounts = () => {
       if (countsTimer !== undefined) return;
@@ -129,10 +129,10 @@ export function App() {
     };
     const offs = [
       stream.on("exchanges", refreshCounts),
-      // Ao (re)conectar, tudo é relido: o servidor não reenvia eventos perdidos.
+      // On (re)connecting everything is re-read: the server does not resend missed events.
       stream.on("hello", all),
-      // Escrita, recarga ou aprendizado: rotas, upstreams, estado do processo
-      // e documentos podem ter mudado juntos.
+      // A write, a reload or learning: routes, upstreams, process state and
+      // documents may have changed together.
       stream.on("config", all),
       stream.on("overrides", onLiveEvent),
       stream.on("upstreams", reloadUpstreams),
@@ -179,7 +179,7 @@ export function App() {
     setOpened(null);
     setViewRaw((v) => (v === "exchange" ? readView() : v));
   }, []);
-  // Serviço criado: relê a lista (o evento config também chegaria) e o seleciona.
+  // Service created: re-read the list (the config event would arrive too) and select it.
   const onCreated = useCallback(
     (name: string) => {
       reloadRoutes();
@@ -187,7 +187,7 @@ export function App() {
     },
     [reloadRoutes, setSelection],
   );
-  // Seletor de serviço da lista de tráfego: filtra como o painel de serviços, sem trocar a aba do detalhe.
+  // Service picker in the traffic list: filters like the services panel, without switching the detail tab.
   const filterRoute = useCallback(
     (name: string | null) => setSelectionRaw(name ? { kind: "route", name } : null),
     [setSelectionRaw],

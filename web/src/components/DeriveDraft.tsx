@@ -3,7 +3,7 @@ import { api, type Exchange, type Matcher, type Override, type RouteResource } f
 import { WriteCancelled, type CommentsGuard } from "../commentsGuard";
 import { PATH_HINT, rulePathProblem, shortPath } from "../format";
 import { toApiError, type Load } from "../hooks";
-import { ProbabilityControl, Row, Switch } from "./Controls";
+import { FrequencyControl, Row, Switch } from "./Controls";
 import { ErrorNote } from "./ErrorNote";
 import { MapEditor } from "./MapEditor";
 import type { ApiError } from "../api";
@@ -26,7 +26,7 @@ function bodyText(b: unknown): string {
   return typeof b === "string" ? b : JSON.stringify(b, null, 2);
 }
 
-/** JSON válido vira estrutura, como o derive faz; qualquer outro texto vai como texto. */
+/** Valid JSON becomes a structure, as derive does; any other text goes as text. */
 function parseBody(t: string): unknown {
   if (t.trim() === "") return undefined;
   try {
@@ -43,9 +43,10 @@ function queryCriteria(q: string): Record<string, Matcher> {
 }
 
 /**
- * Rascunho de override montado pela API a partir de uma troca
- * (POST .../overrides/derive com save: false). Tudo é editável aqui e nada é
- * gravado até a confirmação, que cria o override com POST .../overrides.
+ * Draft of a rule assembled by the API from an exchange
+ * (POST .../overrides/derive with save: false). Everything is editable here
+ * and nothing is written until it is confirmed, which creates the override
+ * with POST .../overrides.
  */
 export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }: DeriveDraftProps) {
   const route = x.route!;
@@ -84,17 +85,17 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
   if (stage.kind === "loading") {
     return (
       <div className="draft" role="status">
-        <p className="draft__title">Montando o rascunho a partir da troca…</p>
+        <p className="draft__title">Assembling the draft from the exchange…</p>
       </div>
     );
   }
   if (stage.kind === "error" || !draft) {
     return (
       <div className="draft">
-        {stage.kind === "error" ? <ErrorNote error={stage.error} what="O rascunho não pôde ser montado" /> : null}
+        {stage.kind === "error" ? <ErrorNote error={stage.error} what="The draft could not be assembled" /> : null}
         <p>
           <button type="button" className="button" onClick={onCancel}>
-            Fechar
+            Close
           </button>
         </p>
       </div>
@@ -125,7 +126,8 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
       enabled,
       respond: { ...restRespond, ...(b !== undefined ? { body: b } : {}) },
     };
-    if (o.probability === 1) delete o.probability;
+    // An effect that holds on every call declares no frequency at all.
+    if (o.respond && o.respond.chance === 1) delete o.respond.chance;
     setSending(true);
     setError(null);
     guard
@@ -142,20 +144,21 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
   return (
     <form className="draft" onSubmit={submit} aria-labelledby={`${ids}-t`}>
       <p className="draft__title" id={`${ids}-t`}>
-        Rascunho de regra em <span className="mono">{route}</span>
-        <span className="draft__state">não gravado</span>
+        Draft rule in <span className="mono">{route}</span>
+        <span className="draft__state">not saved</span>
       </p>
       <p className="hint">
-        Preenchido com esta requisição e esta resposta. Revise e edite; ela só passa a valer quando for criada, e entra no
-        fim da lista do serviço, gravada em <span className="mono" title={res?.file}>{res ? shortPath(res.file) : `routes/${route}.yaml`}</span>.
+        Filled in with this request and this response. Review and edit it; it only takes effect once it is created, and it
+        goes to the end of the service's list, saved in <span className="mono" title={res?.file}>{res ? shortPath(res.file) : `routes/${route}.yaml`}</span>.
       </p>
 
       {incomplete || stage.warnings.length ? (
         <div className="body__cut" role="note">
           {incomplete ? (
             <p>
-              <strong>Corpo incompleto:</strong> a resposta foi cortada na captura, então o corpo abaixo não é o que o
-              destino mandou por inteiro. Complete-o antes de criar, ou crie assim sabendo que a resposta sai cortada.
+              <strong>Incomplete body:</strong> the response was truncated on capture, so the body below is not the whole
+              of what the destination sent. Complete it before creating the rule, or create it as it is, knowing the
+              response comes out truncated.
             </p>
           ) : null}
           {stage.warnings.length ? (
@@ -170,9 +173,9 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
 
       <div className="form">
         <Row
-          label="nome"
+          label="name"
           htmlFor={`${ids}-n`}
-          hint={nameTaken ? <span className="field__problem">já existe uma regra com esse nome em {route}</span> : undefined}
+          hint={nameTaken ? <span className="field__problem">a rule with this name already exists in {route}</span> : undefined}
         >
           <input
             ref={nameRef}
@@ -186,7 +189,7 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
           />
         </Row>
 
-        <h4 className="form__group">critérios</h4>
+        <h4 className="form__group">criteria</h4>
         <Row
           label="path"
           htmlFor={`${ids}-p`}
@@ -196,7 +199,7 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
                 {pathProblem}
               </span>
             ) : (
-              `exato, como observado; ${PATH_HINT}`
+              `exact, as observed; ${PATH_HINT}`
             )
           }
         >
@@ -204,20 +207,20 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
             id={`${ids}-p`}
             className={"input input--mono input--sm" + (pathProblem ? " input--bad" : "")}
             value={draft.match.path ?? ""}
-            placeholder="qualquer"
+            placeholder="any"
             spellCheck={false}
             aria-invalid={pathProblem ? true : undefined}
             aria-describedby={pathProblem ? `${ids}-pe` : undefined}
             onChange={(e) => setMatch({ path: e.target.value || undefined })}
           />
         </Row>
-        <Row label="método" htmlFor={`${ids}-m`}>
+        <Row label="method" htmlFor={`${ids}-m`}>
           <input
             id={`${ids}-m`}
             className="input input--mono input--sm"
             list="http-methods"
             value={draft.match.method ?? ""}
-            placeholder="qualquer"
+            placeholder="any"
             spellCheck={false}
             onChange={(e) => setMatch({ method: e.target.value.toUpperCase() || undefined })}
           />
@@ -227,29 +230,29 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
           hint={
             observedQuery && !draft.match.query ? (
               <button type="button" className="link-button" onClick={() => setMatch({ query: observedQuery })}>
-                usar a query observada ({x.query})
+                use the observed query ({x.query})
               </button>
             ) : undefined
           }
         >
           <MapEditor
-            label="Critérios de query do rascunho"
+            label="Query criteria of the draft"
             keyPlaceholder="retry"
             entries={draft.match.query}
             onCommit={(next) => setMatch({ query: next })}
           />
         </Row>
-        <Row label="cabeçalhos">
+        <Row label="headers">
           <MapEditor
-            label="Critérios de cabeçalho do rascunho"
+            label="Header criteria of the draft"
             keyPlaceholder="X-Tenant"
             entries={draft.match.headers}
             onCommit={(next) => setMatch({ headers: next })}
           />
         </Row>
 
-        <h4 className="form__group">resposta</h4>
-        <Row label="status" htmlFor={`${ids}-s`} hint={statusOk ? undefined : <span className="field__problem">de 100 a 599</span>}>
+        <h4 className="form__group">response</h4>
+        <Row label="status" htmlFor={`${ids}-s`} hint={statusOk ? undefined : <span className="field__problem">from 100 to 599</span>}>
           <input
             id={`${ids}-s`}
             className={"input input--mono input--sm input--num" + (statusOk ? "" : " input--bad")}
@@ -262,57 +265,67 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
             }}
           />
         </Row>
-        <Row label="cabeçalhos">
+        <Row label="headers">
           <MapEditor
             plain
-            label="Cabeçalhos da resposta do rascunho"
+            label="Response headers of the draft"
             keyPlaceholder="Content-Type"
             entries={respond.headers}
             onCommit={(next) => setRespond({ headers: next as Record<string, string> | undefined })}
           />
         </Row>
-        <Row label="corpo" htmlFor={`${ids}-b`} hint="JSON válido vira estrutura; o resto vai como texto">
+        <Row label="body" htmlFor={`${ids}-b`} hint="valid JSON becomes a structure; anything else goes as text">
           <textarea
             id={`${ids}-b`}
             className={"input input--mono textarea" + (incomplete ? " textarea--cut" : "")}
             value={body}
             rows={Math.min(10, Math.max(3, body.split("\n").length))}
             spellCheck={false}
-            placeholder="sem corpo"
+            placeholder="no body"
             onChange={(e) => setBody(e.target.value)}
           />
         </Row>
 
-        <h4 className="form__group">aplicação</h4>
-        <Row label="probabilidade" htmlFor={`${ids}-pr`}>
-          <ProbabilityControl
+        <h4 className="form__group">application</h4>
+        <Row
+          label={
+            <>
+              responds <span className="mono">{respond.status ?? 200}</span>
+            </>
+          }
+          htmlFor={`${ids}-pr`}
+          hint={(respond.chance ?? 1) <= 0 ? <span className="tone-drop">never applies (0%)</span> : undefined}
+        >
+          <FrequencyControl
             id={`${ids}-pr`}
-            label="Probabilidade do rascunho"
-            value={draft.probability ?? 1}
-            onChange={(p) => set({ probability: p })}
+            label="Response frequency of the draft"
+            value={respond.chance ?? 1}
+            lead="on"
+            tail="of calls"
+            onChange={(p) => setRespond({ chance: p })}
           />
         </Row>
-        <Row label="ao criar">
+        <Row label="on creation">
           <span className="inline">
-            <Switch checked={enabled} label="Ligar a regra ao criar" onChange={setEnabled} />
+            <Switch checked={enabled} label="Turn the rule on when creating it" onChange={setEnabled} />
             <span className="dim">
-              {enabled ? "passa a valer na hora para as requisições seguintes" : "nasce desligada"}
+              {enabled ? "takes effect right away for the following requests" : "starts off"}
             </span>
           </span>
         </Row>
       </div>
 
-      {error ? <ErrorNote error={error} onDismiss={() => setError(null)} what="A regra não foi criada" /> : null}
+      {error ? <ErrorNote error={error} onDismiss={() => setError(null)} what="The rule was not created" /> : null}
       <p className="inline draft__actions">
         <button
           type="submit"
           className="button button--primary"
           disabled={sending || !res || !draft.name.trim() || nameTaken || !statusOk || pathProblem !== null}
         >
-          {sending ? "Criando…" : incomplete ? `Criar em ${route} com o corpo incompleto` : `Criar regra em ${route}`}
+          {sending ? "Creating…" : incomplete ? `Create in ${route} with the incomplete body` : `Create rule in ${route}`}
         </button>
         <button type="button" className="button" onClick={onCancel} disabled={sending}>
-          Descartar o rascunho
+          Discard the draft
         </button>
       </p>
     </form>

@@ -1,22 +1,23 @@
-// O encaminhamento em um exemplo: dada a entrada, o destino e as duas chaves
-// do serviço, monta a requisição que o gateway faria ao destino, como o
-// proxy a monta de verdade (internal/proxy/proxy.go, rewriteFor):
+// The forwarding shown as an example: given the entry, the destination and
+// the service's two keys, this builds the request the gateway would make to
+// the destination, the way the proxy really builds it (internal/proxy/proxy.go,
+// rewriteFor):
 //
-//   1. com "remove prefixo", o path perde a parte fixa do curinga
-//      (PathPattern.Strip: só o prefixo de "/api/*"; num path exato não há o
-//      que remover);
-//   2. o path que sobrou é colado ao path do destino (httputil.SetURL, que
-//      junta com uma barra só);
-//   3. o Host enviado é o do destino quando "reescreve host" está ligado, e
-//      o que o app mandou quando não está.
+//   1. with "strip prefix", the path loses the fixed part of the wildcard
+//      (PathPattern.Strip: only the prefix of "/api/*"; on an exact path there
+//      is nothing to strip);
+//   2. what is left of the path is glued to the destination's path
+//      (httputil.SetURL, which joins them with a single slash);
+//   3. the Host that is sent is the destination's when "rewrite host" is on,
+//      and the one the app sent when it is not.
 //
-// É daqui que sai a prévia do painel: o que a tela mostra é o que o gateway
-// faz, e não uma paráfrase dele.
+// This is where the panel's preview comes from: what the screen shows is what
+// the gateway does, and not a paraphrase of it.
 
-/** A entrada do serviço já separada: parte fixa e curinga de sufixo. */
+/** The service's entry already taken apart: fixed part and suffix wildcard. */
 export interface EntryPattern {
   raw: string;
-  /** Parte fixa do curinga: "/api" em "/api/*"; vazia num path exato. */
+  /** The fixed part of the wildcard: "/api" in "/api/*"; empty on an exact path. */
   prefix: string;
   wildcard: boolean;
 }
@@ -28,9 +29,9 @@ export function parseEntry(path: string): EntryPattern {
 }
 
 /**
- * Um pedaço do path mostrado na prévia. `sample` marca o que foi inventado
- * para o exemplo (o trecho sob o curinga, o valor de um `:id`); o resto veio
- * do que o usuário digitou.
+ * A piece of the path shown in the preview. `sample` marks what was invented
+ * for the example (the stretch under the wildcard, the value of an `:id`); the
+ * rest came from what the user typed.
  */
 export interface Piece {
   text: string;
@@ -41,35 +42,35 @@ export function pieceText(ps: Piece[]): string {
   return ps.map((p) => p.text).join("");
 }
 
-// Trechos de exemplo plausíveis: a entrada costuma dizer do que o serviço
-// trata, e um exemplo reconhecível ensina mais que "algum/caminho". Sem
-// pista, o genérico serve.
+// Plausible example stretches: the entry usually says what the service deals
+// with, and a recognizable example teaches more than "some/path". With no
+// clue, the generic one does the job.
 const CLUES: { test: RegExp; tail: string }[] = [
-  { test: /cep/, tail: "40415345/json" },
+  { test: /(zip|postcode|cep)/, tail: "40415345/json" },
   { test: /(usuari|user|cliente|conta|account)/, tail: "42" },
   { test: /(pedido|order|cobran|charge|pagament|payment)/, tail: "1234" },
   { test: /(produto|product|item|catalog|estoque|stock)/, tail: "p1" },
-  { test: /(busca|search)/, tail: "termo" },
+  { test: /(busca|search)/, tail: "term" },
 ];
 
-const GENERIC_TAIL = "algum/caminho";
+const GENERIC_TAIL = "some/path";
 
-/** O trecho de exemplo sob o curinga, escolhido pelo que a entrada e o destino dizem. */
+/** The example stretch under the wildcard, chosen by what the entry and the destination say. */
 function sampleTail(clue: string): string {
   const c = clue.toLowerCase();
   return CLUES.find((x) => x.test.test(c))?.tail ?? GENERIC_TAIL;
 }
 
-/** O valor de exemplo de um parâmetro de segmento (":id"): o primeiro trecho da pista. */
+/** The example value of a segment parameter (":id"): the first stretch of the clue. */
 function sampleValue(clue: string): string {
   const first = sampleTail(clue).split("/")[0]!;
-  return first === "algum" ? "123" : first;
+  return first === "some" ? "123" : first;
 }
 
 /**
- * O path que o app chamaria, em pedaços: o literal que o usuário digitou e o
- * que foi inventado para o exemplo. Entrada vazia casa qualquer path, então
- * o exemplo é todo inventado.
+ * The path the app would call, in pieces: the literal the user typed and what
+ * was invented for the example. An empty entry matches any path, so the whole
+ * example is invented.
  */
 function requestPath(e: EntryPattern, clue: string): Piece[] {
   const tail = sampleTail(clue);
@@ -95,7 +96,7 @@ function requestPath(e: EntryPattern, clue: string): Piece[] {
   return out.filter((p) => p.text !== "");
 }
 
-/** PathPattern.Strip em pedaços: tira a parte fixa do curinga, mantendo ao menos "/". */
+/** PathPattern.Strip in pieces: takes off the fixed part of the wildcard, keeping at least "/". */
 function strip(pieces: Piece[], prefix: string): Piece[] {
   let left = prefix.length;
   const out: Piece[] = [];
@@ -117,9 +118,9 @@ function strip(pieces: Piece[], prefix: string): Piece[] {
 }
 
 /**
- * singleJoiningSlash do httputil: o path do destino colado ao path que veio,
- * com uma barra só entre eles. O pedaço do destino sai separado para a prévia
- * poder mostrar de onde vem cada parte.
+ * httputil's singleJoiningSlash: the destination's path glued to the path that
+ * came in, with a single slash between them. The destination's piece comes out
+ * separate so the preview can show where each part comes from.
  */
 function join(base: string, pieces: Piece[]): { base: string; rest: Piece[] } {
   const aslash = base.endsWith("/");
@@ -132,13 +133,13 @@ function join(base: string, pieces: Piece[]): { base: string; rest: Piece[] } {
   return { base, rest: pieces };
 }
 
-/** O destino declarado, já separado; null quando não dá para ler a URL. */
+/** The declared destination, already taken apart; null when the URL cannot be read. */
 export interface Destination {
-  /** "viacep.com.br" ou "127.0.0.1:9001". */
+  /** "zipapi.example.com" or "127.0.0.1:9001". */
   host: string;
-  /** O path próprio do destino: "/ws"; vazio quando ele não tem um. */
+  /** The destination's own path: "/ws"; empty when it has none. */
   path: string;
-  /** O destino está fora da máquina: nem localhost, nem IP privado. */
+  /** The destination is off this machine: neither localhost nor a private IP. */
   external: boolean;
   https: boolean;
 }
@@ -157,7 +158,7 @@ export function parseDestination(url: string): Destination | null {
   return { host: u.host, path, external: !isLocal(u.hostname), https: u.protocol === "https:" };
 }
 
-/** Endereços da própria máquina ou da rede local, onde o Host original costuma servir. */
+/** Addresses on this machine or on the local network, where the original Host usually serves. */
 function isLocal(hostname: string): boolean {
   const h = hostname.replace(/^\[|\]$/g, "").toLowerCase();
   if (h === "localhost" || h.endsWith(".localhost")) return true;
@@ -172,43 +173,43 @@ function isLocal(hostname: string): boolean {
 }
 
 export interface ForwardInput {
-  /** `match.path` do serviço: "/viacep/*", ou vazio para qualquer entrada. */
+  /** The service's `match.path`: "/zip/*", or empty for any entry. */
   path: string;
-  /** `match.host` do serviço, ou vazio para qualquer Host. */
+  /** The service's `match.host`, or empty for any Host. */
   host: string;
-  /** `upstream` do serviço: "http://viacep.com.br/ws". */
+  /** The service's `upstream`: "http://zipapi.example.com/ws". */
   destination: string;
   stripPrefix: boolean;
   rewriteHost: boolean;
-  /** Porta de tráfego do processo; sem ela, a do exemplo. */
+  /** The process's traffic port; without it, the example one. */
   trafficPort: number | undefined;
 }
 
 export interface Forwarding {
-  /** O endereço que o app chama: "localhost:8080" ou o host da entrada. */
+  /** The address the app calls: "localhost:8080" or the entry's host. */
   appHost: string;
   appPath: Piece[];
-  /** O que chega ao destino; null quando não há destino legível. */
+  /** What reaches the destination; null when there is no readable destination. */
   dest: {
     host: string;
-    /** O path próprio do destino, já com a barra da junção. */
+    /** The destination's own path, already with the joining slash. */
     base: string;
-    /** O que o gateway anexou a ele. */
+    /** What the gateway appended to it. */
     rest: Piece[];
-    /** O Host que o destino recebe. */
+    /** The Host the destination receives. */
     hostHeader: string;
   } | null;
-  /** O trecho inventado para o exemplo, para a linha que avisa disso. */
+  /** The stretch invented for the example, for the line that says so. */
   sample: string | null;
-  /** A entrada é um path exato: não existe prefixo para remover. */
+  /** The entry is an exact path: there is no prefix to strip. */
   exact: boolean;
   entry: EntryPattern;
 }
 
-/** A porta de tráfego do exemplo enquanto o estado do processo não chegou. */
+/** The example's traffic port while the process state has not arrived. */
 const EXAMPLE_PORT = 8080;
 
-/** Monta a requisição de exemplo e o que o destino recebe dela. */
+/** Builds the example request and what the destination receives of it. */
 export function forwarding(inp: ForwardInput): Forwarding {
   const entry = parseEntry(inp.path);
   const dest = parseDestination(inp.destination);
@@ -233,28 +234,28 @@ export function forwarding(inp: ForwardInput): Forwarding {
   };
 }
 
-/** O que a prévia mostra na linha do destino, para dica e leitor de tela. */
+/** What the preview shows on the destination line, for the tooltip and the screen reader. */
 export function destLine(f: Forwarding): string {
   return f.dest ? f.dest.host + f.dest.base + pieceText(f.dest.rest) : "";
 }
 
-// ---------- Padrões espertos do cadastro ----------
+// ---------- Smart defaults for the new-service form ----------
 
 export interface Suggestion {
   stripPrefix: boolean;
   rewriteHost: boolean;
-  /** Por que foi decidido assim, em uma linha. */
+  /** Why it was decided that way, in one line. */
   why: string;
 }
 
 /**
- * O que sugerir para as duas chaves a partir do destino, enquanto o usuário
- * não as tocar. Destino de fora da máquina, ou com path próprio, quase nunca
- * quer o prefixo da entrada colado ao path dele nem o Host do app (é o que
- * faz um nginx responder 301 para o lugar errado): manda só o que vem depois
- * do prefixo, com o Host dele. Destino local e sem path é o app do dev atrás
- * do gateway: o path inteiro e o Host de entrada, que ele costuma usar para
- * montar as URLs que devolve.
+ * What to suggest for the two keys from the destination alone, for as long as
+ * the user does not touch them. A destination off this machine, or one with a
+ * path of its own, almost never wants the entry's prefix glued to its path nor
+ * the app's Host (that is what makes an nginx answer 301 to the wrong place):
+ * send only what comes after the prefix, with its own Host. A local
+ * destination with no path is the dev's app behind the gateway: the whole path
+ * and the incoming Host, which it usually uses to build the URLs it returns.
  */
 export function suggest(destination: string): Suggestion | null {
   const d = parseDestination(destination);
@@ -263,18 +264,18 @@ export function suggest(destination: string): Suggestion | null {
     return {
       stripPrefix: true,
       rewriteHost: true,
-      why: `destino externo com path próprio (${d.path}): só o que vem depois do prefixo, com o Host dele`,
+      why: `external destination with a path of its own (${d.path}): only what comes after the prefix, with its Host`,
     };
   }
   if (d.external) {
-    return { stripPrefix: true, rewriteHost: true, why: "destino externo: enviando o Host dele e só o que vem depois do prefixo" };
+    return { stripPrefix: true, rewriteHost: true, why: "external destination: sending its Host and only what comes after the prefix" };
   }
   if (d.path) {
     return {
       stripPrefix: true,
       rewriteHost: true,
-      why: `o destino já tem o path ${d.path}: só o que vem depois do prefixo, para não repeti-lo`,
+      why: `the destination already has the path ${d.path}: only what comes after the prefix, so as not to repeat it`,
     };
   }
-  return { stripPrefix: false, rewriteHost: false, why: "destino local sem path: o path inteiro e o Host que o seu app mandou" };
+  return { stripPrefix: false, rewriteHost: false, why: "local destination with no path: the whole path and the Host your app sent" };
 }

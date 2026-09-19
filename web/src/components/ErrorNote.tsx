@@ -2,8 +2,8 @@ import type { ApiError } from "../api";
 import { CloseIcon } from "./Icons";
 
 /**
- * Erro de escrita, junto do controle que o causou: a mensagem da API como
- * veio, o campo e a posição no documento quando a API os informa.
+ * Write error, next to the control that caused it: the API message as it came,
+ * the field and the position in the document when the API reports them.
  */
 export function ErrorNote({ error, onDismiss, what }: { error: ApiError; onDismiss?: () => void; what: string }) {
   const b = error.body;
@@ -19,7 +19,7 @@ export function ErrorNote({ error, onDismiss, what }: { error: ApiError; onDismi
           </span>
         ) : null}
         {onDismiss ? (
-          <button type="button" className="icon-button err__close" aria-label="Dispensar o erro" onClick={onDismiss}>
+          <button type="button" className="icon-button err__close" aria-label="Dismiss the error" onClick={onDismiss}>
             <CloseIcon />
           </button>
         ) : null}
@@ -29,19 +29,19 @@ export function ErrorNote({ error, onDismiss, what }: { error: ApiError; onDismi
         <p className="dim">
           {b.field ? (
             <>
-              campo <span className="mono">{b.field}</span>
+              field <span className="mono">{b.field}</span>
             </>
           ) : null}
           {b.file ? (
             <>
               {" "}
-              em <span className="mono">{b.file}</span>
+              in <span className="mono">{b.file}</span>
             </>
           ) : null}
-          {b.line ? `, linha ${b.line}${b.column ? `, coluna ${b.column}` : ""}` : null}
+          {b.line ? `, line ${b.line}${b.column ? `, column ${b.column}` : ""}` : null}
           {b.env ? (
             <>
-              {b.field ? " · " : null}travado pela variável <span className="mono">{b.env}</span>
+              {b.field ? " · " : null}locked by the variable <span className="mono">{b.env}</span>
             </>
           ) : null}
         </p>

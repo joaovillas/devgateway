@@ -3,18 +3,29 @@ import { api, type Latency, type Override, type OverrideLiveState, type Override
 import { useStale, type OnOverrideState } from "../live";
 import type { CommentsGuard, GuardedDoc } from "../commentsGuard";
 import { WriteCancelled } from "../commentsGuard";
-import { clock, formatDuration, ms, parseDuration, PATH_HINT, rulePathProblem, seconds } from "../format";
+import { clock, formatDuration, latency as latencyText, ms, parseDuration, percent, PATH_HINT, rulePathProblem, seconds } from "../format";
+import {
+  chancePatch,
+  declaredEffects,
+  dropDeclared,
+  latencyPatch,
+  latencySpec,
+  migrateProbability,
+  neverApplies,
+  type Effect as DeclaredEffect,
+  type EffectKind,
+} from "../effects";
 import { RuleSelector } from "./PathText";
 import { toApiError, useResource } from "../hooks";
-import { mergeDiff, type MergePatch } from "../patch";
+import { composePatches, mergeDiff, type MergePatch } from "../patch";
 import { advancedFeatures, advancedNote, type DetailMode } from "../mode";
 import { isActive } from "../services";
 import { usePatchWriter } from "../writer";
 import {
   DurationField,
   DurationSlider,
+  FrequencyControl,
   IntField,
-  ProbabilityControl,
   Row,
   Segmented,
   Switch,
@@ -30,30 +41,39 @@ interface OverrideItemProps {
   doc: GuardedDoc;
   override: Override;
   state: OverrideLiveState | undefined;
-  /** Instante em que `state` chegou, base da contagem regressiva. */
+  /** Instant when `state` arrived, the base of the countdown. */
   at: number;
   now: number;
   guard: CommentsGuard;
-  /** Destaca a troca no tráfego (a lista a mostra quando ela está carregada). */
+  /** Highlights the exchange in the traffic list (it shows it when it is loaded). */
   onShowExchange: (id: string) => void;
-  /** Estado vivo devolvido pela escrita, aplicado já no painel e no mapa. */
+  /** Live state returned by the write, applied straight away in the panel and in the map. */
   onState?: OnOverrideState;
-  /** Simples mostra liga/desliga, nome, efeito e probabilidade; avançado, tudo. */
+  /** Simple shows the on/off switch, the name, the effects and their frequency; advanced, everything. */
   mode: DetailMode;
-  /** Leva ao modo avançado a partir da marca de recurso avançado. */
+  /** Leads to the advanced mode from the advanced-feature mark. */
   onAdvanced: () => void;
 }
 
-const CONTINUOUS = ["probability", "latency", "drop"];
+/** The keys of the effects: touching one of them on a rule that is off also turns it on. */
+const CONTINUOUS = ["respond", "latency", "drop"];
 
 type LatMode = "none" | "fixed" | "range";
 
 function latMode(l: Latency | undefined): LatMode {
-  if (l === undefined) return "none";
-  return typeof l === "string" ? "fixed" : "range";
+  const s = latencySpec(l);
+  if (!s) return "none";
+  return s.min !== undefined || s.max !== undefined ? "range" : "fixed";
 }
 
-/** Um override da rota: liga/desliga, controles contínuos e edição completa. */
+/** The name of an effect in a sentence: "response frequency of flaky". */
+const EFFECT_NAME: Record<EffectKind, string> = {
+  respond: "response",
+  latency: "delay",
+  drop: "drop",
+};
+
+/** One rule of the service: on/off, the frequency of each effect and the full edit. */
 export function OverrideItem({
   route,
   doc,
@@ -88,16 +108,27 @@ export function OverrideItem({
   const w = usePatchWriter<Override>(override, send);
   const o = w.value;
   const enabled = o.enabled !== false;
+  const never = neverApplies(o);
   const active = isActive(o, state, now, at);
   const ids = useId();
 
   /**
-   * Controle contínuo: num override desligado, o mesmo gesto o liga
-   * (a API não liga sozinha; ver PATCH em docs/api.md).
+   * Every write also migrates the legacy `probability`: each effect without a
+   * frequency of its own keeps the one it had, and the field leaves the
+   * document. On an already migrated rule this adds nothing.
+   */
+  const migrate = (patch: MergePatch) => composePatches(migrateProbability(o), patch);
+  const change = (patch: MergePatch) => w.change(migrate(patch));
+
+  /**
+   * Adjusting an effect: on a rule that is off, the same gesture turns it on
+   * (the API does not turn it on by itself; see PATCH in docs/api.md). What
+   * counts is the effect the gesture touched, not what the migration added.
    */
   const adjust = (patch: MergePatch, delay?: number) => {
     const touches = Object.keys(patch).some((k) => CONTINUOUS.includes(k));
-    w.change(touches && !enabled ? { ...patch, enabled: true } : patch, delay);
+    const full = migrate(patch);
+    w.change(touches && !enabled ? { ...full, enabled: true } : full, delay);
   };
 
   const [actionError, setActionError] = useState<ApiError | null>(null);
@@ -110,23 +141,26 @@ export function OverrideItem({
   };
 
   const latencyMode = latMode(o.latency);
-  const lat = o.latency;
-  const fixed = typeof lat === "string" ? lat : "200ms";
-  const range = typeof lat === "object" ? lat : null;
+  const lat = latencySpec(o.latency);
+  const chance = lat?.chance;
+  const fixed = lat?.fixed ?? "200ms";
+  const range = lat && (lat.min !== undefined || lat.max !== undefined) ? { min: lat.min ?? "0s", max: lat.max ?? lat.min ?? "0s" } : null;
   const ms0 = (d: string) => parseDuration(d) ?? 0;
 
   const setMode = (m: LatMode) => {
     if (m === latencyMode) return;
-    if (m === "none") adjust({ latency: null });
-    else if (m === "fixed") adjust({ latency: range ? range.min : "200ms" });
+    if (m === "none") adjust(latencyPatch(null));
+    else if (m === "fixed") adjust(latencyPatch({ fixed: range ? range.min : "200ms", chance }));
     else {
-      const base = typeof lat === "string" ? lat : "100ms";
-      adjust({ latency: { min: base, max: formatDuration(Math.max(ms0(base) * 2, 20)) } });
+      const base = lat?.fixed ?? "100ms";
+      adjust(latencyPatch({ min: base, max: formatDuration(Math.max(ms0(base) * 2, 20)), chance }));
     }
   };
 
-  // O que a regra usa e só o avançado edita: no simples vira a marca do
-  // cabeçalho, para nada ficar escondido sem aviso.
+  const effects = declaredEffects(o);
+
+  // What the rule uses that only advanced edits: in simple mode it becomes the
+  // mark in the header, so that nothing stays hidden without notice.
   const features = advancedFeatures(o);
   const note = features.length ? advancedNote(features) : null;
 
@@ -138,15 +172,15 @@ export function OverrideItem({
       <div className="ov__head">
         <Switch
           checked={enabled}
-          label={`Regra ${o.name}`}
-          onChange={(v) => w.change({ enabled: v })}
+          label={`Rule ${o.name}`}
+          onChange={(v) => change({ enabled: v })}
         />
         <span className="ov__name" id={`${ids}-name`}>
           {o.name}
         </span>
         {o.source ? (
-          <span className={`prov prov--${o.source.kind}`} title={o.source.kind === "learned" ? "Criada pelo modo aprendizado a partir de uma troca real" : "Derivada de uma troca capturada"}>
-            {o.source.kind === "learned" ? "aprendida" : "derivada"}
+          <span className={`prov prov--${o.source.kind}`} title={o.source.kind === "learned" ? "Created by learning mode from a real exchange" : "Derived from a captured exchange"}>
+            {o.source.kind === "learned" ? "learned" : "derived"}
           </span>
         ) : null}
         {simple ? (
@@ -157,10 +191,10 @@ export function OverrideItem({
         {simple && note ? (
           <button type="button" className="icon-button ov__adv" title={note} onClick={onAdvanced}>
             <SlidersIcon />
-            <span className="sr-only">{`A regra ${o.name} ${note}`}</span>
+            <span className="sr-only">{`The rule ${o.name} ${note}`}</span>
           </button>
         ) : null}
-        <LiveState enabled={enabled} active={active} state={state} now={now} at={at} busy={w.busy ? (guard.asking === doc.file ? "esperando a confirmação" : "gravando") : null} stale={stale} compact={simple} onReset={reset} />
+        <LiveState enabled={enabled} active={active} never={never} state={state} now={now} at={at} busy={w.busy ? (guard.asking === doc.file ? "waiting for confirmation" : "saving") : null} stale={stale} compact={simple} onReset={reset} />
       </div>
 
       {simple ? null : (
@@ -174,58 +208,73 @@ export function OverrideItem({
       )}
 
       <div className="ov__controls">
-        <Row label="probabilidade" htmlFor={`${ids}-p`}>
-          <ProbabilityControl
-            id={`${ids}-p`}
-            label={`Probabilidade de ${o.name}`}
-            value={o.probability ?? 1}
-            onChange={(p, delay) => adjust({ probability: p }, delay)}
-            onSettle={w.flush}
-          />
-        </Row>
+        {effects.length === 0 ? (
+          <p className="dim">
+            No effect declared: this rule lets the requests it selects go to the destination.
+          </p>
+        ) : (
+          effects.map((e) => (
+            <Row
+              key={e.kind}
+              label={<EffectLabel o={o} kind={e.kind} />}
+              htmlFor={`${ids}-${e.kind}`}
+              hint={e.chance <= 0 ? <span className="tone-drop">never applies (0%)</span> : undefined}
+            >
+              <FrequencyControl
+                id={`${ids}-${e.kind}`}
+                label={`${EFFECT_NAME[e.kind]} frequency of ${o.name}`}
+                value={e.chance}
+                lead="on"
+                tail="of calls"
+                onChange={(p, delay) => adjust(chancePatch(o, e.kind, p), delay)}
+                onSettle={w.flush}
+              />
+            </Row>
+          ))
+        )}
         {simple ? null : (
           <>
-          <Row label="latência">
+          <Row label="latency">
             <div className="lat">
               <Segmented<LatMode>
-                label={`Latência de ${o.name}`}
+                label={`Latency of ${o.name}`}
                 value={latencyMode}
                 onChange={setMode}
                 options={[
-                  { value: "none", label: "sem" },
-                  { value: "fixed", label: "fixa" },
-                  { value: "range", label: "intervalo" },
+                  { value: "none", label: "none" },
+                  { value: "fixed", label: "fixed" },
+                  { value: "range", label: "range" },
                 ]}
               />
               {latencyMode === "fixed" ? (
                 <DurationSlider
-                  label={`Latência fixa de ${o.name}`}
+                  label={`Fixed latency of ${o.name}`}
                   value={fixed}
-                  onChange={(d, delay) => adjust({ latency: d }, delay)}
+                  onChange={(d, delay) => adjust(latencyPatch({ fixed: d, chance }), delay)}
                   onSettle={w.flush}
                 />
               ) : null}
               {latencyMode === "range" && range ? (
                 <>
                   <span className="lat__bound">
-                    <span className="lat__label">mín</span>
+                    <span className="lat__label">min</span>
                     <DurationSlider
-                      label={`Latência mínima de ${o.name}`}
+                      label={`Minimum latency of ${o.name}`}
                       onSettle={w.flush}
                       value={range.min}
                       onChange={(d, delay) =>
-                        adjust({ latency: { min: d, max: ms0(d) > ms0(range.max) ? d : range.max } }, delay)
+                        adjust(latencyPatch({ min: d, max: ms0(d) > ms0(range.max) ? d : range.max, chance }), delay)
                       }
                     />
                   </span>
                   <span className="lat__bound">
-                    <span className="lat__label">máx</span>
+                    <span className="lat__label">max</span>
                     <DurationSlider
-                      label={`Latência máxima de ${o.name}`}
+                      label={`Maximum latency of ${o.name}`}
                       onSettle={w.flush}
                       value={range.max}
                       onChange={(d, delay) =>
-                        adjust({ latency: { min: ms0(d) < ms0(range.min) ? d : range.min, max: d } }, delay)
+                        adjust(latencyPatch({ min: ms0(d) < ms0(range.min) ? d : range.min, max: d, chance }), delay)
                       }
                     />
                   </span>
@@ -233,15 +282,15 @@ export function OverrideItem({
               ) : null}
             </div>
           </Row>
-          <Row label="queda">
+          <Row label="drop">
             <span className="inline">
               <Switch
-                checked={o.drop === true}
-                label={`Derrubar a conexão em ${o.name}`}
-                onChange={(v) => adjust({ drop: v ? true : null })}
+                checked={dropDeclared(o.drop)}
+                label={`Drop the connection in ${o.name}`}
+                onChange={(v) => adjust({ drop: v ? true : false })}
               />
-              <span className={o.drop ? "tone-drop" : "dim"}>
-                {o.drop ? "derruba a conexão sem responder" : "responde normalmente"}
+              <span className={dropDeclared(o.drop) ? "tone-drop" : "dim"}>
+                {dropDeclared(o.drop) ? "drops the connection without answering" : "responds normally"}
               </span>
             </span>
           </Row>
@@ -251,25 +300,25 @@ export function OverrideItem({
 
       {o.source ? <SourceLine source={o.source} onShowExchange={onShowExchange} /> : null}
 
-      {w.error ? <ErrorNote error={w.error} onDismiss={w.dismissError} what="A alteração não foi gravada" /> : null}
-      {actionError ? <ErrorNote error={actionError} onDismiss={() => setActionError(null)} what="A ação falhou" /> : null}
+      {w.error ? <ErrorNote error={w.error} onDismiss={w.dismissError} what="The change was not saved" /> : null}
+      {actionError ? <ErrorNote error={actionError} onDismiss={() => setActionError(null)} what="The action failed" /> : null}
 
       {simple ? null : (
         <details className="more">
           <summary>
-            <ChevronIcon /> critérios, resposta e limites
+            <ChevronIcon /> criteria, response and limits
           </summary>
           <OverrideForm
             o={o}
             ids={ids}
-            change={(p) => w.change(p)}
+            change={change}
             rename={(name) =>
               act(() => guard.guard(doc, () => api.replaceOverride(route, override.name, { ...o, name })))
             }
           />
           <div className="more__actions">
             <button type="button" className="text-button" onClick={reset}>
-              reiniciar TTL e contagem
+              restart the TTL and the count
             </button>
             {confirmDelete ? (
               <span className="inline">
@@ -279,15 +328,15 @@ export function OverrideItem({
                   autoFocus
                   onClick={() => act(() => guard.guard(doc, () => api.deleteOverride(route, override.name)))}
                 >
-                  confirmar remoção de {o.name}
+                  confirm removing {o.name}
                 </button>
                 <button type="button" className="text-button" onClick={() => setConfirmDelete(false)}>
-                  manter
+                  keep
                 </button>
               </span>
             ) : (
               <button type="button" className="text-button" onClick={() => setConfirmDelete(true)}>
-                remover regra
+                remove rule
               </button>
             )}
           </div>
@@ -297,25 +346,58 @@ export function OverrideItem({
   );
 }
 
-function Effect({ o }: { o: Override }) {
-  const parts = [];
-  if (o.drop) parts.push(<span key="d" className="tone-drop">queda</span>);
-  else if (o.respond) parts.push(<span key="s" className="tone-drop mono">{o.respond.status ?? 200}</span>);
-  if (o.latency) {
-    const l = typeof o.latency === "string" ? o.latency : `${o.latency.min}–${o.latency.max}`;
-    parts.push(<span key="l" className="tone-injected mono">+{l}</span>);
+/** What one effect does, without its frequency: "responds 503", "delays 3s–30s", "drops". */
+function EffectLabel({ o, kind }: { o: Override; kind: EffectKind }) {
+  if (kind === "respond") {
+    return (
+      <>
+        responds <span className="mono">{o.respond?.status ?? 200}</span>
+      </>
+    );
   }
-  // "destino" só quando não há mais nada a dizer: com atraso declarado, o
-  // resumo é o atraso, e ir ao destino é o que já se espera.
-  if (parts.length === 0) parts.push(<span key="u" className="dim">destino</span>);
+  if (kind === "latency") {
+    return (
+      <>
+        delays <span className="mono">{o.latency ? latencyText(o.latency) : ""}</span>
+      </>
+    );
+  }
+  return <>drops</>;
+}
+
+/** The effects of the rule in one line, each with its frequency when it is not every call. */
+function Effect({ o }: { o: Override }) {
+  const effects = declaredEffects(o);
+  // "destination" only when there is nothing else to say: with a declared
+  // effect, the summary is the effect, and going to the destination is what
+  // is already expected.
+  if (effects.length === 0) return <span className="dim">destination</span>;
   return (
     <>
-      {parts.map((p, i) => (
-        <span key={i}>
+      {effects.map((e, i) => (
+        <span key={e.kind}>
           {i > 0 ? <span className="dim"> · </span> : null}
-          {p}
+          <EffectMark o={o} e={e} />
         </span>
       ))}
+    </>
+  );
+}
+
+function EffectMark({ o, e }: { o: Override; e: DeclaredEffect }) {
+  let body: ReactNode;
+  if (e.kind === "respond") body = <span className="tone-drop mono">{o.respond?.status ?? 200}</span>;
+  else if (e.kind === "latency") body = <span className="tone-injected mono">+{latencyText(o.latency!)}</span>;
+  else body = <span className="tone-drop">drop</span>;
+  return (
+    <>
+      {body}
+      {e.chance === 1 ? null : (
+        <span className="dim mono">
+          {" · "}
+          {percent(e.chance)}
+        </span>
+      )}
     </>
   );
 }
@@ -323,6 +405,7 @@ function Effect({ o }: { o: Override }) {
 function LiveState({
   enabled,
   active,
+  never,
   state,
   now,
   at,
@@ -333,32 +416,40 @@ function LiveState({
 }: {
   enabled: boolean;
   active: boolean;
+  /** Every effect at 0%: the rule is on and within its limits, and still nothing happens. */
+  never: boolean;
   state: OverrideLiveState | undefined;
   now: number;
   at: number;
   busy: string | null;
-  /** Sem conexão: TTL e aplicações não estão sendo confirmados pelo servidor. */
+  /** No connection: the TTL and the applications are not being confirmed by the server. */
   stale: boolean;
   /**
-   * Modo simples: só o que se esgota (prazo, limite, expiração). "Ativa" e
-   * "desligada" o interruptor ao lado já diz, e repetir seria ruído.
+   * Simple mode: only what runs out (deadline, limit, expiry). "Active" and
+   * "off" are already said by the switch beside it, and repeating would be noise.
    */
   compact: boolean;
   onReset: () => void;
 }) {
   const parts: ReactNode[] = [];
   if (!enabled) {
-    if (!compact) parts.push(<span key="s">desligada</span>);
+    if (!compact) parts.push(<span key="s">off</span>);
+  } else if (never) {
+    parts.push(
+      <span key="s" className="ov__expired">
+        never applies (0%)
+      </span>,
+    );
   } else if (state && !active) {
     const why =
       state.expired === "applications" || (state.maxApplications !== null && state.applications >= state.maxApplications)
-        ? "esgotou as aplicações"
-        : "expirou pelo TTL";
+        ? "ran out of applications"
+        : "expired by TTL";
     parts.push(
       <span key="s" className="ov__expired">
         {why}{" "}
         <button type="button" className="link-button" onClick={onReset}>
-          reiniciar
+          restart
         </button>
       </span>,
     );
@@ -366,13 +457,13 @@ function LiveState({
     if (!compact) {
       parts.push(
         <span key="s" className="ov__on">
-          ativa
+          active
         </span>,
       );
     }
     if (state?.ttlRemainingMs != null) {
       parts.push(
-        <span key="t" className="mono" title="Tempo de vida restante">
+        <span key="t" className="mono" title="Lifetime remaining">
           {seconds(state.ttlRemainingMs - (now - at))}
         </span>,
       );
@@ -380,16 +471,16 @@ function LiveState({
   }
   if (state && (state.maxApplications !== null || (!compact && state.applications > 0))) {
     parts.push(
-      <span key="a" className="mono" title="Aplicações desde o início do relógio">
+      <span key="a" className="mono" title="Applications since the clock started">
         {state.applications}
-        {state.maxApplications !== null ? `/${state.maxApplications}` : ""} aplic.
+        {state.maxApplications !== null ? `/${state.maxApplications}` : ""} appl.
       </span>,
     );
   }
   if (stale && enabled && state && (!compact || parts.length > 0)) {
     parts.push(
-      <span key="p" title="Sem conexão com /api/events: estes números são da última atualização e não estão sendo confirmados">
-        parado
+      <span key="p" title="No connection to /api/events: these numbers are from the last update and are not being confirmed">
+        stopped
       </span>,
     );
   }
@@ -416,14 +507,14 @@ function SourceLine({
   return (
     <div className="src">
       <p className="src__line">
-        {source.kind === "learned" ? "aprendida" : "derivada"} da troca{" "}
+        {source.kind === "learned" ? "learned" : "derived"} from exchange{" "}
         <span className="mono" title={source.exchange}>
           …{source.exchange.slice(-8)}
         </span>
-        {source.at ? <span className="dim"> em {clock(source.at)}</span> : null}
-        {source.bodyIncomplete ? <span className="tone-injected"> · corpo incompleto na captura</span> : null}{" "}
+        {source.at ? <span className="dim"> at {clock(source.at)}</span> : null}
+        {source.bodyIncomplete ? <span className="tone-injected"> · body incomplete on capture</span> : null}{" "}
         <button type="button" className="link-button" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          {open ? "fechar a troca de origem" : "abrir a troca de origem"}
+          {open ? "close the originating exchange" : "open the originating exchange"}
         </button>
       </p>
       {open ? <ExchangePeek id={source.exchange} onShowExchange={onShowExchange} /> : null}
@@ -431,18 +522,18 @@ function SourceLine({
   );
 }
 
-/** A troca que originou a regra (override), lida do histórico se ainda estiver lá. */
+/** The exchange this rule came from, read from the history if it is still there. */
 function ExchangePeek({ id, onShowExchange }: { id: string; onShowExchange: (id: string) => void }) {
   const [ex] = useResource((s) => api.getExchange(id, s), [id]);
-  if (ex.kind === "loading") return <p className="src__peek dim">lendo a troca…</p>;
+  if (ex.kind === "loading") return <p className="src__peek dim">reading the exchange…</p>;
   if (ex.kind === "error") {
     const e = ex.error;
     const text =
       e.code === "not_found"
-        ? "A troca de origem já saiu do histórico (o backend guarda um número limitado de trocas)."
+        ? "The originating exchange has left the history (the backend keeps a limited number of exchanges)."
         : e.code === "history_disabled"
-          ? "O histórico está desabilitado (history.expose), então a troca de origem não pode ser lida."
-          : `Não foi possível ler a troca: ${e.message}`;
+          ? "The history is disabled (history.expose), so the originating exchange cannot be read."
+          : `The exchange could not be read: ${e.message}`;
     return <p className="src__peek dim">{text}</p>;
   }
   const x = ex.data;
@@ -451,26 +542,26 @@ function ExchangePeek({ id, onShowExchange }: { id: string; onShowExchange: (id:
     <div className="src__peek">
       <p className="mono">
         {x.method} {x.path}
-        {x.query ? "?" + x.query : ""} <span className="dim">→</span> {x.status || "sem resposta"}{" "}
+        {x.query ? "?" + x.query : ""} <span className="dim">→</span> {x.status || "no response"}{" "}
         <span className="dim">
           · {ms(x.timing.totalMs)} · {clock(x.start)}
         </span>
       </p>
       <p className="dim">
-        requisição {x.request.size} B{ct(x.request.headers) ? ` (${ct(x.request.headers)})` : ""} · resposta{" "}
+        request {x.request.size} B{ct(x.request.headers) ? ` (${ct(x.request.headers)})` : ""} · response{" "}
         {x.response.size} B{ct(x.response.headers) ? ` (${ct(x.response.headers)})` : ""}
-        {x.response.truncated ? ", truncada na captura" : ""}
+        {x.response.truncated ? ", truncated on capture" : ""}
       </p>
       <p>
         <button type="button" className="link-button" onClick={() => onShowExchange(x.id)}>
-          abrir a troca completa
+          open the full exchange
         </button>
       </p>
     </div>
   );
 }
 
-/** Todos os campos do override, com gravação ao sair de cada campo. */
+/** Every field of the rule, written when each field loses focus. */
 function OverrideForm({
   o,
   ids,
@@ -486,19 +577,19 @@ function OverrideForm({
   const r = o.respond;
   return (
     <div className="form">
-      <Row label="nome" htmlFor={`${ids}-name-in`}>
+      <Row label="name" htmlFor={`${ids}-name-in`}>
         <TextField
           id={`${ids}-name-in`}
-          label="Nome da regra"
+          label="Rule name"
           mono
           size="sm"
           value={o.name}
-          validate={(t) => (t.trim() ? null : "o nome é obrigatório")}
+          validate={(t) => (t.trim() ? null : "the name is required")}
           onCommit={(t) => rename(t.trim())}
         />
       </Row>
 
-      <h4 className="form__group">critérios</h4>
+      <h4 className="form__group">criteria</h4>
       <Row label="path" htmlFor={`${ids}-path`} hint={PATH_HINT}>
         <TextField
           id={`${ids}-path`}
@@ -506,7 +597,7 @@ function OverrideForm({
           mono
           size="sm"
           value={m.path ?? ""}
-          placeholder="qualquer"
+          placeholder="any"
           validate={rulePathProblem}
           onCommit={(t) => change({ match: { path: t.trim() || null } })}
         />
@@ -514,38 +605,38 @@ function OverrideForm({
       <Row label="path regex" htmlFor={`${ids}-rx`}>
         <TextField
           id={`${ids}-rx`}
-          label="Path por regex"
+          label="Path by regex"
           mono
           size="sm"
           value={m.pathRegex ?? ""}
-          placeholder="nenhuma"
+          placeholder="none"
           validate={(t) => {
             if (!t.trim()) return null;
             try {
               new RegExp(t);
               return null;
             } catch {
-              return "regex inválida";
+              return "invalid regex";
             }
           }}
           onCommit={(t) => change({ match: { pathRegex: t.trim() || null } })}
         />
       </Row>
-      <Row label="método" htmlFor={`${ids}-method`}>
+      <Row label="method" htmlFor={`${ids}-method`}>
         <TextField
           id={`${ids}-method`}
-          label="Método"
+          label="Method"
           mono
           size="sm"
           list="http-methods"
           value={m.method ?? ""}
-          placeholder="qualquer"
+          placeholder="any"
           onCommit={(t) => change({ match: { method: t.trim().toUpperCase() || null } })}
         />
       </Row>
-      <Row label="cabeçalhos">
+      <Row label="headers">
         <MapEditor
-          label="Critérios de cabeçalho"
+          label="Header criteria"
           keyPlaceholder="X-Tenant"
           entries={m.headers}
           onCommit={(next) => change({ match: { headers: next ? replaceWith(m.headers, next) : null } })}
@@ -553,29 +644,29 @@ function OverrideForm({
       </Row>
       <Row label="query">
         <MapEditor
-          label="Critérios de query"
+          label="Query criteria"
           keyPlaceholder="retry"
           entries={m.query}
           onCommit={(next) => change({ match: { query: next ? replaceWith(m.query, next) : null } })}
         />
       </Row>
-      <Row label="corpo">
+      <Row label="body">
         <BodyMatcherEditor
-          label="Critério do corpo"
+          label="Body criterion"
           value={m.body}
           onCommit={(next) => change({ match: { body: next === null ? null : replaceWith(m.body, next) } })}
         />
       </Row>
 
-      <h4 className="form__group">resposta</h4>
-      <Row label="sintetizar">
+      <h4 className="form__group">response</h4>
+      <Row label="synthesize">
         <span className="inline">
           <Switch
             checked={r !== undefined}
-            label="Sintetizar resposta"
+            label="Synthesize a response"
             onChange={(v) => change({ respond: v ? { status: 503 } : null })}
           />
-          <span className="dim">{r ? "o gateway responde no lugar do destino" : "redireciona ao destino"}</span>
+          <span className="dim">{r ? "the gateway answers instead of the destination" : "forwards to the destination"}</span>
         </span>
       </Row>
       {r ? (
@@ -591,10 +682,10 @@ function OverrideForm({
               onCommit={(n) => change({ respond: { status: n } })}
             />
           </Row>
-          <Row label="cabeçalhos">
+          <Row label="headers">
             <MapEditor
               plain
-              label="Cabeçalhos da resposta"
+              label="Response headers"
               keyPlaceholder="Retry-After"
               entries={r.headers}
               onCommit={(next) =>
@@ -602,22 +693,22 @@ function OverrideForm({
               }
             />
           </Row>
-          <Row label="corpo" htmlFor={`${ids}-body`} hint="JSON válido vira estrutura; o resto vai como texto">
+          <Row label="body" htmlFor={`${ids}-body`} hint="valid JSON becomes a structure; anything else goes as text">
             <BodyText id={`${ids}-body`} value={r.body} onCommit={(b) => change({ respond: { body: b === null ? null : replaceWith(r.body, b) } })} />
           </Row>
         </>
       ) : null}
 
-      <h4 className="form__group">limites</h4>
-      <Row label="TTL" htmlFor={`${ids}-ttl`} hint="vazio: sem prazo">
-        <DurationField id={`${ids}-ttl`} label="Tempo de vida" value={o.ttl} placeholder="sem prazo" onCommit={(d) => change({ ttl: d })} />
+      <h4 className="form__group">limits</h4>
+      <Row label="TTL" htmlFor={`${ids}-ttl`} hint="empty: no deadline">
+        <DurationField id={`${ids}-ttl`} label="Lifetime" value={o.ttl} placeholder="no deadline" onCommit={(d) => change({ ttl: d })} />
       </Row>
-      <Row label="máx. aplicações" htmlFor={`${ids}-max`} hint="vazio: sem limite">
+      <Row label="max. applications" htmlFor={`${ids}-max`} hint="empty: no limit">
         <IntField
           id={`${ids}-max`}
-          label="Limite de aplicações"
+          label="Application limit"
           value={o.maxApplications}
-          placeholder="sem limite"
+          placeholder="no limit"
           min={1}
           onCommit={(n) => change({ maxApplications: n })}
         />
@@ -625,14 +716,14 @@ function OverrideForm({
 
       {o.source ? (
         <>
-          <h4 className="form__group">origem</h4>
+          <h4 className="form__group">origin</h4>
           <Row label="source">
             <span className="inline">
               <span className="mono dim">
                 {o.source.kind} · {o.source.exchange}
               </span>
               <button type="button" className="text-button" onClick={() => change({ source: null })}>
-                tratar como declarado
+                treat as declared
               </button>
             </span>
           </Row>
@@ -643,9 +734,9 @@ function OverrideForm({
 }
 
 /**
- * Patch que troca um valor inteiro: entre dois objetos, a diferença com null
- * nas chaves que sumiram (senão o merge patch somaria o antigo ao novo);
- * em qualquer outro caso, o valor novo.
+ * Patch that replaces a whole value: between two objects, the difference with
+ * null on the keys that went away (otherwise the merge patch would add the old
+ * one to the new); in any other case, the new value.
  */
 function replaceWith(prev: unknown, next: unknown): unknown {
   const obj = (v: unknown) => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -663,7 +754,7 @@ function BodyText({ id, value, onCommit }: { id: string; value: unknown; onCommi
       value={shown}
       rows={Math.min(8, Math.max(2, shown.split("\n").length))}
       spellCheck={false}
-      placeholder="sem corpo"
+      placeholder="no body"
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
         if (draft === null || draft === text) {

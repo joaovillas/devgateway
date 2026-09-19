@@ -8,7 +8,7 @@ import { useNow } from "../hooks";
 import { seconds } from "../format";
 
 interface TopBarProps {
-  /** Porta de administração nova depois de uma escrita desta aba, ou null. */
+  /** New admin port after a write from this tab, or null. */
   movedTo: number | null;
   connection: ConnectionState;
   status: Load<Status>;
@@ -17,7 +17,7 @@ interface TopBarProps {
   onLearning: (enabled: boolean) => Promise<unknown>;
 }
 
-/** Barra fina: conexão com o processo, estado do histórico e o modo aprendizado. */
+/** Thin bar: connection to the process, history state and learning mode. */
 export function TopBar({ movedTo, connection, status, onRetry, learning, onLearning }: TopBarProps) {
   const retrying = connection.kind === "retrying";
   const now = useNow(retrying && movedTo === null, 500);
@@ -29,8 +29,8 @@ export function TopBar({ movedTo, connection, status, onRetry, learning, onLearn
         <span className="bar__name">gateway</span>
         <span className="bar__item bar__moved" role="alert">
           <span className="dot dot--fault" aria-hidden="true" />
-          A porta de administração passou a ser <span className="mono">:{movedTo}</span>; esta página parou de
-          atualizar. <a href={next}>Abrir o painel em :{movedTo}</a>
+          The admin port is now <span className="mono">:{movedTo}</span>; this page stopped updating.{" "}
+          <a href={next}>Open the panel on :{movedTo}</a>
         </span>
       </header>
     );
@@ -41,25 +41,25 @@ export function TopBar({ movedTo, connection, status, onRetry, learning, onLearn
       <span className="bar__name">gateway</span>
 
       <span className="bar__item" aria-live="polite">
-        <span className="bar__label">conexão</span>
+        <span className="bar__label">connection</span>
         {connection.kind === "open" ? (
           <>
             <span className="dot dot--healthy" aria-hidden="true" />
-            <span>ao vivo</span>
+            <span>live</span>
           </>
         ) : connection.kind === "connecting" ? (
           <>
             <span className="dot dot--idle dot--pulse" aria-hidden="true" />
-            <span>{connection.attempt > 0 ? `reconectando, tentativa ${connection.attempt + 1}` : "conectando"}</span>
+            <span>{connection.attempt > 0 ? `reconnecting, attempt ${connection.attempt + 1}` : "connecting"}</span>
           </>
         ) : (
           <>
             <span className="dot dot--fault" aria-hidden="true" />
             <span className="bar__alert" title={connection.reason}>
-              desconectada: o painel parou de atualizar. Nova tentativa em {seconds(connection.retryAt - now)}
+              disconnected: the panel stopped updating. Next attempt in {seconds(connection.retryAt - now)}
             </span>
             <button type="button" className="link-button" onClick={onRetry}>
-              tentar agora
+              try now
             </button>
           </>
         )}
@@ -73,7 +73,7 @@ export function TopBar({ movedTo, connection, status, onRetry, learning, onLearn
 
       {status.kind === "ready" ? (
         <span className="bar__item bar__ports mono">
-          <span className="bar__label">tráfego</span>:{status.data.ports.traffic}
+          <span className="bar__label">traffic</span>:{status.data.ports.traffic}
           <span className="bar__label">admin</span>:{status.data.ports.admin}
         </span>
       ) : null}
@@ -84,36 +84,37 @@ export function TopBar({ movedTo, connection, status, onRetry, learning, onLearn
 function HistoryItem({ status }: { status: Load<Status> }) {
   let body;
   if (status.kind === "loading") {
-    body = <span className="dim">lendo estado</span>;
+    body = <span className="dim">reading state</span>;
   } else if (status.kind === "error") {
-    body = <span title={status.error.message}>estado indisponível ({status.error.code})</span>;
+    body = <span title={status.error.message}>state unavailable ({status.error.code})</span>;
   } else {
     const h = status.data.history;
     body = !h.expose ? (
-      <span title="A leitura do histórico está desligada em history.expose">
-        desabilitado <span className="mono">(history.expose)</span>
+      <span title="Reading the history is off in history.expose">
+        disabled <span className="mono">(history.expose)</span>
       </span>
     ) : !h.record ? (
-      <span title="As trocas novas não são gravadas: history.record está desligado">
-        <span className="mono">{h.backend}</span> · registro desligado <span className="mono">(history.record)</span>
+      <span title="New exchanges are not recorded: history.record is off">
+        <span className="mono">{h.backend}</span> · recording off <span className="mono">(history.record)</span>
       </span>
     ) : (
       <span>
-        <span className="mono">{h.backend}</span> · gravando
+        <span className="mono">{h.backend}</span> · recording
       </span>
     );
   }
   return (
     <span className="bar__item">
-      <span className="bar__label">histórico</span>
+      <span className="bar__label">history</span>
       {body}
     </span>
   );
 }
 
 /**
- * Modo aprendizado em um gesto. Ligado, cada requisição a um path sem override
- * vira um override aprendido e desligado na rota (aparece sozinho no painel).
+ * Learning mode in one gesture. When on, every request to a path without an
+ * override becomes a learned, off override on the route (it shows up on its own
+ * in the panel).
  */
 function LearningItem({ learning, onLearning }: { learning: Load<LearningView>; onLearning: (enabled: boolean) => Promise<unknown> }) {
   const [pending, setPending] = useState<boolean | null>(null);
@@ -121,8 +122,8 @@ function LearningItem({ learning, onLearning }: { learning: Load<LearningView>; 
   if (learning.kind !== "ready") {
     return (
       <span className="bar__item">
-        <span className="bar__label">aprendizado</span>
-        <span className="dim">{learning.kind === "loading" ? "lendo" : `indisponível (${learning.error.code})`}</span>
+        <span className="bar__label">learning</span>
+        <span className="dim">{learning.kind === "loading" ? "reading" : `unavailable (${learning.error.code})`}</span>
       </span>
     );
   }
@@ -133,16 +134,16 @@ function LearningItem({ learning, onLearning }: { learning: Load<LearningView>; 
   return (
     <span className="bar__item">
       <span className="bar__label" id="learning-label">
-        aprendizado
+        learning
       </span>
       <Switch
         checked={on}
-        label="Modo aprendizado"
+        label="Learning mode"
         disabled={l.locked || pending !== null}
         title={
           l.locked
-            ? `Travado pela variável de ambiente ${envName ?? "GATEWAY_LEARNING"}`
-            : "Ligado, cada path novo vira uma regra aprendida, desligada, no serviço que o recebeu"
+            ? `Locked by the environment variable ${envName ?? "GATEWAY_LEARNING"}`
+            : "When on, every new path becomes a learned rule, off, in the service that received it"
         }
         onChange={(next) => {
           setPending(next);
@@ -156,16 +157,16 @@ function LearningItem({ learning, onLearning }: { learning: Load<LearningView>; 
           );
         }}
       />
-      <span className={on ? "bar__on" : "dim"}>{on ? "ligado" : "desligado"}</span>
+      <span className={on ? "bar__on" : "dim"}>{on ? "on" : "off"}</span>
       {l.locked ? (
-        <span className="bar__lock" title={`Travado pela variável de ambiente ${envName ?? "GATEWAY_LEARNING"}`}>
+        <span className="bar__lock" title={`Locked by the environment variable ${envName ?? "GATEWAY_LEARNING"}`}>
           <LockIcon /> <span className="mono">{envName ?? "GATEWAY_LEARNING"}</span>
         </span>
       ) : null}
-      {total > 0 ? <span className="dim">{total} {total === 1 ? "regra aprendida" : "regras aprendidas"}</span> : null}
+      {total > 0 ? <span className="dim">{total} {total === 1 ? "learned rule" : "learned rules"}</span> : null}
       {error ? (
         <span className="bar__alert" role="alert" title={error.message}>
-          não mudou: {error.message}
+          did not change: {error.message}
         </span>
       ) : null}
     </span>

@@ -1,8 +1,8 @@
 /*
- * Console Escuro de Dev (direction contract em .impeccable/surfaces/web.md).
- * Grafite ao fundo, painéis separados por costuras de 1px, sem sombra.
- * Cor só para estado: âmbar injetado, vermelho queda/sintetizado,
- * azul override/seleção, verde saudável. Nada decorativo usa essas cores.
+ * Dark Dev Console (direction contract in .impeccable/surfaces/web.md).
+ * Graphite in the background, panels separated by 1px seams, no shadow.
+ * Color only for state: amber injected, red drop/synthesized,
+ * blue override/selection, green healthy. Nothing decorative uses these colors.
  */
 @import "@fontsource-variable/source-sans-3/wght.css";
 @import "@fontsource-variable/jetbrains-mono/wght.css";
@@ -10,22 +10,22 @@
 :root {
   color-scheme: dark;
 
-  /* Superfícies */
+  /* Surfaces */
   --ground: #0d1117;
   --panel: #151a22;
   --panel-raised: #1b212b;
   --seam: #262e3a;
   --seam-strong: #354050;
-  /* Grade de pontos de 1px: a textura do campo do mapa */
+  /* 1px dot grid: the texture of the map's field */
   --grid-dot: #2a3340;
   --grid-step: 12px;
 
-  /* Tinta: contraste sobre --panel ≥ 4.5:1 até --ink-3 */
+  /* Ink: contrast over --panel ≥ 4.5:1 down to --ink-3 */
   --ink: #d8dee7;
   --ink-2: #a3aebb;
   --ink-3: #808c9b;
 
-  /* Estado */
+  /* State */
   --injected: #e5a53d;
   --injected-dim: rgb(229 165 61 / 0.16);
   --fault: #f26b64;
@@ -35,19 +35,19 @@
   --healthy: #4cc26a;
   --healthy-dim: rgb(76 194 106 / 0.14);
 
-  /* Segmentos neutros do waterfall */
+  /* Neutral waterfall segments */
   --time-upstream: #6d7f96;
   --time-gateway: #3e4a5a;
 
-  /* Tipo */
+  /* Type */
   --font-ui: "Source Sans 3 Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, "Cascadia Mono", Consolas, monospace;
-  --text-caps: 0.9375rem; /* 15px: versalete (all-small-caps encolhe para a altura-x) */
-  --text-sm: 0.75rem; /* 12px: mono de dados */
-  --text-md: 0.8125rem; /* 13px: texto de interface */
-  --text-lg: 0.9375rem; /* 15px: nome do serviço em foco */
+  --text-caps: 0.9375rem; /* 15px: small caps (all-small-caps shrinks to the x-height) */
+  --text-sm: 0.75rem; /* 12px: data mono */
+  --text-md: 0.8125rem; /* 13px: interface text */
+  --text-lg: 0.9375rem; /* 15px: name of the focused service */
 
-  /* Espaço */
+  /* Space */
   --s-1: 2px;
   --s-2: 4px;
   --s-3: 8px;

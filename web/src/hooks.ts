@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ApiError, type ConnectionState, type EventStream } from "./api";
 
-/** Estado de um recurso carregado da API. Nada de dado inventado no meio. */
+/** The state of a resource loaded from the API. No invented data in between. */
 export type Load<T> =
   | { kind: "loading" }
   | { kind: "ready"; data: T }
@@ -13,9 +13,9 @@ export function toApiError(e: unknown): ApiError {
 }
 
 /**
- * Carrega um recurso e recarrega quando `key` muda ou quando `reload()` é
- * chamado. Uma recarga mantém o dado anterior à vista até a resposta chegar,
- * para a tela não piscar em "carregando" a cada evento.
+ * Loads a resource and reloads it when `key` changes or when `reload()` is
+ * called. A reload keeps the previous data in view until the response arrives,
+ * so that the screen does not flash "loading" on every event.
  */
 export function useResource<T>(
   fetcher: (signal: AbortSignal) => Promise<T>,
@@ -29,7 +29,7 @@ export function useResource<T>(
   const lastKey = useRef(keyString);
 
   useEffect(() => {
-    // Chave nova: volta a "carregando", porque o dado anterior é de outra coisa.
+    // A new key: back to "loading", because the previous data is about something else.
     if (lastKey.current !== keyString) {
       lastKey.current = keyString;
       setState({ kind: "loading" });
@@ -42,9 +42,9 @@ export function useResource<T>(
       (e: unknown) => {
         if (ctl.signal.aborted) return;
         const error = toApiError(e);
-        // Recarga sem resposta da porta de administração (processo fora do
-        // ar): o dado anterior continua à vista, e a barra e os painéis já
-        // dizem que o painel parou de atualizar. A reconexão relê tudo.
+        // A reload with no response from the admin port (the process is down):
+        // the previous data stays in view, and the bar and the panels already
+        // say the panel stopped updating. Reconnecting re-reads everything.
         setState((prev) => (prev.kind === "ready" && error.code === "network" ? prev : { kind: "error", error }));
       },
     );
@@ -52,8 +52,9 @@ export function useResource<T>(
   }, [keyString, tick]);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
-  // No render em que a chave acabou de mudar, o estado ainda é o da chave
-  // anterior (o efeito que o zera roda depois): não devolve dado de outra coisa.
+  // On the render where the key has just changed, the state is still the one
+  // from the previous key (the effect that resets it runs afterwards): it does
+  // not hand back data about something else.
   return [lastKey.current === keyString ? state : { kind: "loading" }, reload];
 }
 
@@ -64,7 +65,7 @@ export function useConnection(stream: EventStream): ConnectionState {
   );
 }
 
-/** Relógio que só bate enquanto `active`, para contagens regressivas. */
+/** A clock that only ticks while `active`, for countdowns. */
 export function useNow(active: boolean, everyMs = 1000): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

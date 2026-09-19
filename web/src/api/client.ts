@@ -1,5 +1,5 @@
-// Cliente REST da API de administração. Cada função corresponde a uma
-// operação de docs/api.md, na mesma ordem.
+// REST client for the admin API. Each function matches one operation from
+// docs/api.md, in the same order.
 import type {
   ApiErrorBody,
   DeriveDraft,
@@ -21,7 +21,7 @@ import type {
   UpstreamHealth,
 } from "./types";
 
-/** Erro devolvido pela API, ou falha de rede (code "network"). */
+/** An error returned by the API, or a network failure (code "network"). */
 export class ApiError extends Error {
   readonly status: number;
   readonly body: ApiErrorBody;
@@ -42,11 +42,11 @@ export function isApiError(e: unknown, code?: string): e is ApiError {
   return e instanceof ApiError && (code === undefined || e.code === code);
 }
 
-/** Um documento bruto com a versão devolvida em ETag. */
+/** A raw document with the version returned in ETag. */
 export interface VersionedText {
   text: string;
   etag: string | null;
-  /** Falso quando o arquivo ainda não existe em disco (X-Gateway-File-Exists: false). */
+  /** False when the file does not exist on disk yet (X-Gateway-File-Exists: false). */
   exists: boolean;
 }
 
@@ -97,7 +97,7 @@ async function send(path: string, opts: RequestOptions = {}): Promise<Response> 
     if (e instanceof DOMException && e.name === "AbortError") throw e;
     throw new ApiError(0, {
       error: "network",
-      message: "sem resposta da porta de administração",
+      message: "no response from the admin port",
     });
   }
   if (!res.ok) throw await toError(res);
@@ -112,11 +112,11 @@ async function toError(res: Response): Promise<ApiError> {
       return new ApiError(res.status, parsed as ApiErrorBody);
     }
   } catch {
-    // corpo não é JSON: cai no erro genérico abaixo
+    // the body is not JSON: falls through to the generic error below
   }
   return new ApiError(res.status, {
     error: "http_" + res.status,
-    message: `${res.status} ${res.statusText || "resposta inesperada"} em ${new URL(res.url).pathname}`,
+    message: `${res.status} ${res.statusText || "unexpected response"} at ${new URL(res.url).pathname}`,
   });
 }
 
@@ -146,10 +146,10 @@ function filterQuery(f: ExchangeFilter = {}): RequestOptions["query"] {
 }
 
 export const api = {
-  // Processo
+  // Process
   status: (signal?: AbortSignal) => json<Status>("/status", { signal }),
 
-  // Rotas
+  // Routes
   listRoutes: (signal?: AbortSignal) =>
     json<{ items: RouteResource[] }>("/routes", { signal }).then((r) => r.items),
   getRoute: (route: string, signal?: AbortSignal) =>
@@ -192,8 +192,9 @@ export const api = {
       ifMatch,
     }),
   /**
-   * Merge patch. Para cumprir "ajustar liga no mesmo gesto", o chamador que
-   * mexe em probability, latency ou drop manda enabled: true junto.
+   * Merge patch. To honour "adjusting turns it on in the same gesture", the
+   * caller that touches a frequency, the latency or the drop sends
+   * enabled: true along.
    */
   patchOverride: (route: string, name: string, patch: Record<string, unknown>, ifMatch?: string) =>
     json<OverrideResource>(`/routes/${seg(route)}/overrides/${seg(name)}`, {
@@ -217,7 +218,7 @@ export const api = {
     }),
   overridesState: (signal?: AbortSignal) => json<OverrideStateList>("/overrides/state", { signal }),
 
-  // Configuração
+  // Configuration
   settings: (signal?: AbortSignal) => json<SettingsView>("/settings", { signal }),
   patchSettings: (patch: GatewayFilePatch) =>
     json<SettingsPatchResult>("/settings", { method: "PATCH", json: patch, contentType: MERGE }),
@@ -233,7 +234,7 @@ export const api = {
     json<LearningView>("/learning", { method: "PUT", json: { enabled } }),
   reload: () => json<ReloadResult>("/reload", { method: "POST" }),
 
-  // Histórico
+  // History
   listExchanges: (
     filter?: ExchangeFilter,
     page?: { limit?: number; cursor?: string },
@@ -244,10 +245,10 @@ export const api = {
       signal,
     }),
   getExchange: (id: string, signal?: AbortSignal) => json<Exchange>(`/exchanges/${seg(id)}`, { signal }),
-  /** Vizinha mais antiga; rejeita com ApiError "no_more" no fim. */
+  /** The older neighbour; rejects with ApiError "no_more" at the end. */
   olderExchange: (id: string, filter?: ExchangeFilter, signal?: AbortSignal) =>
     json<Exchange>(`/exchanges/${seg(id)}/older`, { query: filterQuery(filter), signal }),
-  /** Vizinha mais nova; rejeita com ApiError "no_more" no fim. */
+  /** The newer neighbour; rejects with ApiError "no_more" at the end. */
   newerExchange: (id: string, filter?: ExchangeFilter, signal?: AbortSignal) =>
     json<Exchange>(`/exchanges/${seg(id)}/newer`, { query: filterQuery(filter), signal }),
   clearExchanges: () => none("/exchanges", { method: "DELETE" }),
@@ -257,7 +258,7 @@ export const api = {
     json<{ items: UpstreamHealth[] }>("/upstreams", { signal }).then((r) => r.items),
 };
 
-/** Decodifica um corpo capturado (base64) para texto UTF-8. */
+/** Decodes a captured body (base64) into UTF-8 text. */
 export function decodeBody(b64: string | undefined): string {
   if (!b64) return "";
   const bin = atob(b64);

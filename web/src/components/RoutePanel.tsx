@@ -40,38 +40,38 @@ interface RoutePanelProps {
   onSelect: (s: Selection) => void;
   onRetry: () => void;
   learning: Load<LearningView>;
-  /** Abre uma troca no detalhe (a origem de um override aprendido ou derivado). */
+  /** Opens an exchange in the detail (the origin of a learned or derived override). */
   onShowExchange: (id: string) => void;
-  /** Muda a cada evento de configuração: a visão do processo relê as configurações. */
+  /** Changes on every settings event: the process view re-reads the settings. */
   version: number;
-  /** Troca aberta no detalhe (aba "troca"), ou null. */
+  /** Exchange opened in the detail (the "exchange" tab), or null. */
   exchange: OpenedExchange | null;
   onOpenExchange: (ex: OpenedExchange) => void;
   onCloseExchange: () => void;
-  /** Filtro ativo do tráfego, que a navegação item a item respeita. */
+  /** Active traffic filter, which the item-by-item navigation respects. */
   exchangeFilter: ExchangeFilter;
-  /** Saúde dos upstreams, mostrada quando um upstream está selecionado. */
+  /** Upstream health, shown when an upstream is selected. */
   upstreams: Load<UpstreamHealth[]>;
   onSettings: (r: SettingsPatchResult) => void;
   onOverrideState: OnOverrideState;
-  /** Identifica o projeto nas confirmações de comentários lembradas (diretório de rotas). */
+  /** Identifies the project in the remembered comment confirmations (routes directory). */
   guardScope: string;
-  /** Cadastro de serviço aberto: ocupa a aba do serviço mesmo com um selecionado. */
+  /** New-service form open: it takes over the service tab even with one selected. */
   creating: boolean;
   onCreate: () => void;
   onCreated: (name: string) => void;
   onCancelCreate: () => void;
-  /** Simples (o padrão) ou avançado, lembrado entre visitas. */
+  /** Simple (the default) or advanced, remembered between visits. */
   mode: DetailMode;
   onMode: (m: DetailMode) => void;
-  /** Porta de tráfego do processo: o endereço que o app chama na prévia do encaminhamento. */
+  /** The process's traffic port: the address the app calls in the forwarding preview. */
   trafficPort: number | undefined;
 }
 
 /**
- * Painel de detalhe, na coluna direita: o serviço selecionado no painel de serviços
- * (regras e campos da rota) ou o cadastro de um novo, o processo
- * (gateway.json) ou a troca aberta no tráfego.
+ * Detail panel, in the right column: the service selected in the services panel
+ * (the route's rules and fields) or the form for a new one, the process
+ * (gateway.json) or the exchange opened from the traffic.
  */
 export function RoutePanel(props: RoutePanelProps) {
   const { view, onView, routes, selection, exchange } = props;
@@ -80,7 +80,7 @@ export function RoutePanel(props: RoutePanelProps) {
   const res = routes.kind === "ready" && selected ? routes.data.find((r) => r.route.name === selected) : undefined;
   const tabsId = useId();
   const creating = props.creating && view === "route";
-  // Serviço recém-criado: até a releitura da lista trazê-lo, ele está chegando, não sumiu.
+  // Newly created service: until the list re-read brings it in, it is arriving, not gone.
   const [justCreated, setJustCreated] = useState<string | null>(null);
   const onCreated = props.onCreated;
   const created = useCallback(
@@ -92,10 +92,10 @@ export function RoutePanel(props: RoutePanelProps) {
   );
 
   return (
-    <section className="panel" aria-label="Detalhe">
+    <section className="panel" aria-label="Detail">
       <header className="panel__head">
         <Tabs id={tabsId} view={view} onView={onView} hasExchange={exchange !== null} />
-        {creating ? <span className="panel__sub">cadastro</span> : null}
+        {creating ? <span className="panel__sub">new service</span> : null}
         {view === "route" && !creating && res ? <span className="panel__sub">{res.route.name}</span> : null}
         {view === "process" ? <span className="panel__sub mono">gateway.json</span> : null}
         {view === "exchange" && exchange ? (
@@ -105,7 +105,7 @@ export function RoutePanel(props: RoutePanelProps) {
         ) : null}
         <div className="panel__tools">
           <Segmented<DetailMode>
-            label="Modo do detalhe"
+            label="Detail mode"
             value={props.mode}
             onChange={props.onMode}
             options={MODE_OPTIONS}
@@ -160,9 +160,9 @@ function Tabs({
 }) {
   const refs = useRef<Record<ControlView, HTMLButtonElement | null>>({ route: null, process: null, exchange: null });
   const tabs: { v: ControlView; label: string }[] = [
-    { v: "route", label: "serviço" },
-    { v: "process", label: "processo" },
-    ...(hasExchange ? [{ v: "exchange" as const, label: "troca" }] : []),
+    { v: "route", label: "service" },
+    { v: "process", label: "process" },
+    ...(hasExchange ? [{ v: "exchange" as const, label: "exchange" }] : []),
   ];
   const onKey = (e: KeyboardEvent) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
@@ -173,7 +173,7 @@ function Tabs({
     refs.current[next]?.focus();
   };
   return (
-    <div className="tabs" role="tablist" aria-label="Detalhe">
+    <div className="tabs" role="tablist" aria-label="Detail">
       {tabs.map((t) => (
         <button
           key={t.v}
@@ -197,7 +197,7 @@ function Tabs({
   );
 }
 
-/** A confirmação única antes de reescrever um documento com comentários. */
+/** The one-time confirmation before rewriting a document that has comments. */
 function CommentsPrompt({ guard }: { guard: CommentsGuard }) {
   const titleId = useId();
   const confirmRef = useRef<HTMLButtonElement>(null);
@@ -224,18 +224,18 @@ function CommentsPrompt({ guard }: { guard: CommentsGuard }) {
       }}
     >
       <p className="guard__title" id={titleId}>
-        <span className="mono" title={guard.asking ?? undefined}>{shortPath(guard.asking ?? "")}</span> tem comentários
+        <span className="mono" title={guard.asking ?? undefined}>{shortPath(guard.asking ?? "")}</span> has comments
       </p>
       <p id={`${titleId}-d`}>
-        Gravar pelo painel reescreve o arquivo inteiro: os comentários e a ordem das chaves se perdem. Esta pergunta
-        aparece uma vez por arquivo. Para manter os comentários, edite o arquivo no seu editor e recarregue.
+        Saving from the panel rewrites the whole file: the comments and the order of the keys are lost. This question
+        appears once per file. To keep the comments, edit the file in your editor and reload.
       </p>
       <p className="guard__actions">
         <button ref={confirmRef} type="button" className="button button--primary" onClick={guard.confirm}>
-          Gravar e perder os comentários
+          Save and lose the comments
         </button>
         <button type="button" className="button" onClick={guard.cancel}>
-          Cancelar a alteração
+          Cancel the change
         </button>
       </p>
     </div>
@@ -259,15 +259,15 @@ function RouteBody({
   onMode,
   trafficPort,
 }: RoutePanelProps & { guard: CommentsGuard; res: RouteResource | undefined; justCreated: string | null }) {
-  if (routes.kind === "loading") return <Empty title="Carregando os serviços" />;
+  if (routes.kind === "loading") return <Empty title="Loading the services" />;
   if (routes.kind === "error") {
     return (
-      <Empty title="Serviços indisponíveis">
+      <Empty title="Services unavailable">
         <p>
-          <span className="mono">GET /api/routes</span> falhou ({routes.error.code}). O detalhe está no painel de
-          serviços.{" "}
+          <span className="mono">GET /api/routes</span> failed ({routes.error.code}). The detail is in the services
+          panel.{" "}
           <button type="button" className="link-button" onClick={onRetry}>
-            Tentar de novo
+            Try again
           </button>
         </p>
       </Empty>
@@ -277,11 +277,11 @@ function RouteBody({
     const users = routes.data.filter((r) => r.route.upstream === selection.name);
     const health = upstreams.kind === "ready" ? upstreams.data.find((u) => u.upstream === selection.name) : undefined;
     return (
-      <Empty title="Filtro por destino">
+      <Empty title="Filter by destination">
         <UpstreamHealthBlock health={health} load={upstreams} />
         <p>
-          O tráfego mostra só o que foi para <span className="mono">{selection.name}</span>. As regras moram nos
-          serviços; escolha um dos que usam este destino:
+          The traffic shows only what went to <span className="mono">{selection.name}</span>. The rules live in the
+          services; pick one of the ones that use this destination:
         </p>
         <p className="inline inline--wrap">
           {users.map((r) => (
@@ -301,21 +301,21 @@ function RouteBody({
   if (selection?.kind !== "route") {
     return (
       <div className="state">
-        <p className="state__title">Nenhum serviço selecionado</p>
-        <p>Selecione um serviço no mapa ou na lista para ajustar as regras dele, ou cadastre um novo.</p>
+        <p className="state__title">No service selected</p>
+        <p>Select a service on the map or in the list to adjust its rules, or create a new one.</p>
         <p>
           <button type="button" className="text-button" onClick={onCreate}>
-            <PlusIcon /> serviço
+            <PlusIcon /> service
           </button>
         </p>
       </div>
     );
   }
-  if (!res && justCreated === selection.name) return <Empty title={`Abrindo o serviço ${selection.name}`} />;
+  if (!res && justCreated === selection.name) return <Empty title={`Opening the service ${selection.name}`} />;
   if (!res) {
     return (
-      <Empty title={`O serviço ${selection.name} não existe mais`}>
-        <p>Ele foi removido ou renomeado desde que foi selecionado.</p>
+      <Empty title={`The service ${selection.name} no longer exists`}>
+        <p>It was removed or renamed since it was selected.</p>
       </Empty>
     );
   }
@@ -363,9 +363,9 @@ function RouteDetail({
   const r = res.route;
   const overrides = r.overrides ?? [];
   const doc: GuardedDoc = useMemo(() => ({ file: res.file, hasComments: res.hasComments }), [res.file, res.hasComments]);
-  // Documento reescrito sem comentários: a confirmação antiga deixa de valer.
+  // Document rewritten without comments: the old confirmation no longer holds.
   useEffect(() => guard.observe(doc), [guard, doc]);
-  // Instante em que este estado vivo chegou: base da contagem regressiva do TTL.
+  // The instant this live state arrived: the base for the TTL countdown.
   const at = useMemo(() => Date.now(), [res]);
   const ticking = overrides.some((o) => res.state[o.name]?.ttlRemainingMs != null);
   const now = useNow(ticking);
@@ -393,19 +393,19 @@ function RouteDetail({
       ) : null}
       <div className="route__section">
         <h3 className="section-title">
-          regras
+          rules
           {overrides.length ? <span className="section-title__count mono">{overrides.length}</span> : null}
           {learned ? (
             <span className="section-title__note">
-              {learned} {learned === 1 ? "regra aprendida" : "regras aprendidas"}
+              {learned} {learned === 1 ? "learned rule" : "learned rules"}
             </span>
           ) : null}
         </h3>
         {overrides.length === 0 ? (
           <p className="dim">
             {r.upstream
-              ? "Nenhuma regra: o gateway redireciona tudo ao destino."
-              : "Nenhuma regra e nenhum destino: o gateway responde 501 às requisições deste serviço."}
+              ? "No rules: the gateway forwards everything to the destination."
+              : "No rules and no destination: the gateway answers 501 to this service's requests."}
           </p>
         ) : (
           <ul className="ovs">
@@ -429,17 +429,16 @@ function RouteDetail({
         )}
         {learned > 1 && !simple ? (
           <p className="hint">
-            O aprendizado já troca identificadores por <span className="mono path-param">:id</span>. Para cobrir
-            outros valores de uma vez (um slug, por exemplo), use <span className="mono path-param">:id</span> no
-            segmento que varia, ou um curinga de sufixo como <span className="mono">/users/*</span>, e remova as
-            aprendidas.
+            Learning already swaps identifiers for <span className="mono path-param">:id</span>. To cover other values
+            at once (a slug, for example), use <span className="mono path-param">:id</span> on the segment that varies,
+            or a suffix wildcard such as <span className="mono">/users/*</span>, and remove the learned ones.
           </p>
         ) : null}
         {adding ? (
           <NewOverrideForm route={r} doc={doc} guard={guard} onDone={() => setAdding(false)} />
         ) : (
           <button type="button" className="text-button" onClick={() => setAdding(true)}>
-            <PlusIcon /> regra
+            <PlusIcon /> rule
           </button>
         )}
       </div>
@@ -459,15 +458,15 @@ function RouteDetail({
 }
 
 /**
- * O serviço em uma linha no modo simples: nome, entrada e destino
- * ("payments · /payments/* → 127.0.0.1:9001"), com o que o encaminhamento
- * muda em tinta terciária. Editar esses campos é gesto do avançado.
+ * The service on one line in simple mode: name, entry and destination
+ * ("payments · /payments/* → 127.0.0.1:9001"), with what the forwarding changes
+ * in tertiary ink. Editing these fields is a gesture of the advanced mode.
  */
 function RouteSummary({ res, onAdvanced }: { res: RouteResource; onAdvanced: () => void }) {
   const r = res.route;
   const extras: string[] = [];
-  if (r.stripPrefix) extras.push("só o que vem depois do prefixo");
-  if (r.rewriteHost) extras.push("Host do destino");
+  if (r.stripPrefix) extras.push("only what comes after the prefix");
+  if (r.rewriteHost) extras.push("Host of the destination");
   if (r.timeout) extras.push(`timeout ${r.timeout}`);
   return (
     <p className="route__summary">
@@ -475,7 +474,7 @@ function RouteSummary({ res, onAdvanced }: { res: RouteResource; onAdvanced: () 
       <span className="dim" aria-hidden="true"> · </span>
       <span className="mono">
         {r.match.host ? <span className="route__summary-host">{r.match.host}</span> : null}
-        {r.match.path ? <PathText path={r.match.path} /> : <span className="dim">qualquer entrada</span>}
+        {r.match.path ? <PathText path={r.match.path} /> : <span className="dim">any entry</span>}
       </span>
       <span className="dim" aria-hidden="true"> → </span>
       {r.upstream ? (
@@ -483,54 +482,54 @@ function RouteSummary({ res, onAdvanced }: { res: RouteResource; onAdvanced: () 
           {destinationText(r.upstream)}
         </span>
       ) : (
-        <span className="dim">sem destino</span>
+        <span className="dim">no destination</span>
       )}
       {extras.length ? <span className="dim">{` · ${extras.join(" · ")}`}</span> : null}
       <button type="button" className="text-button route__summary-edit" onClick={onAdvanced}>
-        editar o serviço
+        edit the service
       </button>
     </p>
   );
 }
 
-/** Saúde do destino selecionado: o que na linha da lista só cabe na dica. */
+/** Health of the selected destination: what, on the list row, only fits in the tooltip. */
 function UpstreamHealthBlock({ health, load }: { health: UpstreamHealth | undefined; load: Load<UpstreamHealth[]> }) {
-  if (load.kind === "loading") return <p className="dim">Lendo o estado do destino.</p>;
+  if (load.kind === "loading") return <p className="dim">Reading the state of the destination.</p>;
   if (load.kind === "error") {
     return (
       <p className="dim">
-        Saúde desconhecida: <span className="mono">GET /api/upstreams</span> respondeu{" "}
+        Health unknown: <span className="mono">GET /api/upstreams</span> answered{" "}
         <span className="mono">{load.error.code}</span>.
       </p>
     );
   }
-  if (!health) return <p className="dim">Nenhuma requisição encaminhada a este destino ainda.</p>;
+  if (!health) return <p className="dim">No request forwarded to this destination yet.</p>;
   const state =
-    health.status === "down" ? "fora do ar" : health.status === "up" ? "no ar, respondendo" : "sem tentativas recentes";
+    health.status === "down" ? "down" : health.status === "up" ? "up, responding" : "no recent attempts";
   return (
     <dl className="uph">
-      <dt>estado</dt>
+      <dt>state</dt>
       <dd className={health.status === "down" ? "is-fault" : undefined}>{state}</dd>
-      <dt>recentes</dt>
+      <dt>recent</dt>
       <dd className="mono">
-        {health.recent.failures} {health.recent.failures === 1 ? "falha" : "falhas"} em {health.recent.attempts}{" "}
-        {health.recent.attempts === 1 ? "tentativa" : "tentativas"}
+        {health.recent.failures} {health.recent.failures === 1 ? "failure" : "failures"} in {health.recent.attempts}{" "}
+        {health.recent.attempts === 1 ? "attempt" : "attempts"}
       </dd>
       {health.lastError ? (
         <>
-          <dt>último erro</dt>
+          <dt>last error</dt>
           <dd className="mono">{health.lastError}</dd>
         </>
       ) : null}
       {health.lastFailureAt ? (
         <>
-          <dt>última falha</dt>
+          <dt>last failure</dt>
           <dd className="mono">{clock(health.lastFailureAt)}</dd>
         </>
       ) : null}
       {health.lastSuccessAt ? (
         <>
-          <dt>último sucesso</dt>
+          <dt>last success</dt>
           <dd className="mono">{clock(health.lastSuccessAt)}</dd>
         </>
       ) : null}
@@ -545,7 +544,7 @@ function strip(r: Route): RouteFieldsValue {
   return rest;
 }
 
-/** Os campos da própria rota, com gravação por PATCH ao sair de cada campo. */
+/** The route's own fields, saved by PATCH when leaving each field. */
 function RouteFields({
   res,
   doc,
@@ -582,8 +581,8 @@ function RouteFields({
 
   const text = (key: "upstream", t: string) => w.change({ [key]: t.trim() || null });
 
-  // A prévia acompanha a digitação, não a gravação: o que está no campo agora
-  // vale sobre o que foi gravado, até o valor gravado mudar.
+  // The preview follows the typing, not the saving: what is in the field now
+  // wins over what was saved, until the saved value changes.
   const [typing, setTyping] = useState<{ host?: string; path?: string; upstream?: string }>({});
   useEffect(() => setTyping({}), [v.match.host, v.match.path, v.upstream]);
   const preview = {
@@ -599,21 +598,21 @@ function RouteFields({
   return (
     <div className="route__section">
       <h3 className="section-title">
-        serviço
+        service
         <span className="section-title__note">
-          {res.order + 1}º em precedência · <span className="mono" title={res.file}>{shortPath(res.file)}</span>
-          {w.busy ? " · gravando" : ""}
+          #{res.order + 1} in precedence · <span className="mono" title={res.file}>{shortPath(res.file)}</span>
+          {w.busy ? " · saving" : ""}
         </span>
       </h3>
       <div className="form">
-        <Row label="nome" htmlFor={`${ids}-name`} hint="renomeia o serviço; o arquivo continua o mesmo">
+        <Row label="name" htmlFor={`${ids}-name`} hint="renames the service; the file stays the same">
           <TextField
             id={`${ids}-name`}
-            label="Nome do serviço"
+            label="Service name"
             mono
             size="sm"
             value={v.name}
-            validate={(t) => (t.trim() ? null : "o nome é obrigatório")}
+            validate={(t) => (t.trim() ? null : "the name is required")}
             onCommit={(t) =>
               act(
                 () => guard.guard(doc, () => api.replaceRoute(name, { ...res.route, name: t.trim() })),
@@ -622,15 +621,15 @@ function RouteFields({
             }
           />
         </Row>
-        <h4 className="form__group">entrada</h4>
-        <Row label="host" htmlFor={`${ids}-host`} hint="o Host que o seu app chama; vazio aceita qualquer um">
+        <h4 className="form__group">entry</h4>
+        <Row label="host" htmlFor={`${ids}-host`} hint="the Host your app calls; empty accepts any">
           <TextField
             id={`${ids}-host`}
-            label="Host de entrada"
+            label="Entry Host"
             mono
             size="sm"
             value={v.match.host ?? ""}
-            placeholder="qualquer"
+            placeholder="any"
             onDraft={(t) => setTyping((d) => ({ ...d, host: t }))}
             onCommit={(t) => w.change({ match: { host: t.trim() || null } })}
           />
@@ -641,40 +640,40 @@ function RouteFields({
           hint={
             pathExact ? (
               <>
-                só este path; use <span className="mono">{preview.path.trim().replace(/\/+$/, "")}/*</span> para tudo
-                abaixo
+                only this path; use <span className="mono">{preview.path.trim().replace(/\/+$/, "")}/*</span> for
+                everything below
               </>
             ) : (
-              "exato, ou curinga de sufixo: /api/x/*"
+              "exact, or a suffix wildcard: /api/x/*"
             )
           }
         >
           <TextField
             id={`${ids}-path`}
-            label="Path de entrada"
+            label="Entry path"
             mono
             size="sm"
             value={v.match.path ?? ""}
-            placeholder="qualquer"
+            placeholder="any"
             onDraft={(t) => setTyping((d) => ({ ...d, path: t }))}
             onCommit={(t) => w.change({ match: { path: t.trim() || null } })}
           />
         </Row>
-        <h4 className="form__group">destino</h4>
+        <h4 className="form__group">destination</h4>
         <Row
           label="url"
           htmlFor={`${ids}-up`}
-          hint={v.upstream ? "para onde o gateway redireciona" : "sem destino, só as regras respondem"}
+          hint={v.upstream ? "where the gateway forwards to" : "no destination, only the rules answer"}
         >
           <TextField
             id={`${ids}-up`}
-            label="Destino"
+            label="Destination"
             mono
             size="sm"
             value={v.upstream ?? ""}
             placeholder="http://localhost:9001"
             onDraft={(t) => setTyping((d) => ({ ...d, upstream: t }))}
-            validate={(t) => (t.trim() === "" || /^https?:\/\/.+/.test(t.trim()) ? null : "URL http:// ou https://")}
+            validate={(t) => (t.trim() === "" || /^https?:\/\/.+/.test(t.trim()) ? null : "an http:// or https:// URL")}
             onCommit={(t) => text("upstream", t)}
           />
         </Row>
@@ -683,20 +682,20 @@ function RouteFields({
           onStripPrefix={(b) => w.change({ stripPrefix: b ? true : null })}
           onRewriteHost={(b) => w.change({ rewriteHost: b ? true : null })}
         />
-        <Row label="timeout" htmlFor={`${ids}-to`} hint="vazio: sem limite próprio">
+        <Row label="timeout" htmlFor={`${ids}-to`} hint="empty: no limit of its own">
           <DurationField
             id={`${ids}-to`}
             label="Timeout"
             value={v.timeout}
-            placeholder="sem limite"
+            placeholder="no limit"
             onCommit={(d) => w.change({ timeout: d })}
           />
         </Row>
-        <h4 className="form__group">prévia</h4>
+        <h4 className="form__group">preview</h4>
         <ForwardPreview input={preview} />
       </div>
-      {w.error ? <ErrorNote error={w.error} onDismiss={w.dismissError} what="A alteração não foi gravada" /> : null}
-      {actionError ? <ErrorNote error={actionError} onDismiss={() => setActionError(null)} what="A ação falhou" /> : null}
+      {w.error ? <ErrorNote error={w.error} onDismiss={w.dismissError} what="The change was not saved" /> : null}
+      {actionError ? <ErrorNote error={actionError} onDismiss={() => setActionError(null)} what="The action failed" /> : null}
       <p className="route__danger">
         {confirmDelete ? (
           <span className="inline">
@@ -706,15 +705,15 @@ function RouteFields({
               autoFocus
               onClick={() => act(() => api.deleteRoute(name), onDeleted)}
             >
-              apagar {shortPath(res.file)} e o serviço {name}
+              delete {shortPath(res.file)} and the service {name}
             </button>
             <button type="button" className="text-button" onClick={() => setConfirmDelete(false)}>
-              manter
+              keep
             </button>
           </span>
         ) : (
           <button type="button" className="text-button" onClick={() => setConfirmDelete(true)}>
-            remover serviço
+            remove service
           </button>
         )}
       </p>
@@ -722,7 +721,7 @@ function RouteFields({
   );
 }
 
-/** Regra (override) nova: nasce desligada, e o primeiro ajuste contínuo a liga. */
+/** A new rule (override): it starts off, and the first continuous adjustment turns it on. */
 function NewOverrideForm({
   route,
   doc,
@@ -741,8 +740,9 @@ function NewOverrideForm({
   const [status, setStatus] = useState("503");
   const [error, setError] = useState<ApiError | null>(null);
   const [sending, setSending] = useState(false);
-  // O problema do path aparece ao sair do campo ou ao tentar criar, não a
-  // cada tecla: "/viacep/:" é um path inválido só até o nome do parâmetro.
+  // The path problem appears when leaving the field or when trying to create,
+  // not on every keystroke: "/zip/:" is an invalid path only until the
+  // parameter is named.
   const [pathTouched, setPathTouched] = useState(false);
   const localPathProblem = rulePathProblem(path);
   const serverPathProblem = error ? fieldProblem(error.body, "match.path") : null;
@@ -774,10 +774,10 @@ function NewOverrideForm({
   return (
     <form className="create" onSubmit={submit} aria-labelledby={`${ids}-t`}>
       <p className="create__title" id={`${ids}-t`}>
-        Nova regra em <span className="mono">{route.name}</span>
+        New rule in <span className="mono">{route.name}</span>
       </p>
       <div className="form">
-        <Row label="nome" htmlFor={`${ids}-n`}>
+        <Row label="name" htmlFor={`${ids}-n`}>
           <input id={`${ids}-n`} className="input input--mono input--sm" required autoFocus value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} />
         </Row>
         <Row
@@ -797,7 +797,7 @@ function NewOverrideForm({
             id={`${ids}-p`}
             className={"input input--mono input--sm" + (pathProblem ? " input--bad" : "")}
             value={path}
-            placeholder="qualquer"
+            placeholder="any"
             aria-invalid={pathProblem ? true : undefined}
             aria-describedby={pathProblem ? `${ids}-pe` : undefined}
             onChange={(e) => {
@@ -808,33 +808,34 @@ function NewOverrideForm({
             spellCheck={false}
           />
         </Row>
-        <Row label="método" htmlFor={`${ids}-m`}>
-          <input id={`${ids}-m`} className="input input--mono input--sm" list="http-methods" value={method} placeholder="qualquer" onChange={(e) => setMethod(e.target.value)} spellCheck={false} />
+        <Row label="method" htmlFor={`${ids}-m`}>
+          <input id={`${ids}-m`} className="input input--mono input--sm" list="http-methods" value={method} placeholder="any" onChange={(e) => setMethod(e.target.value)} spellCheck={false} />
         </Row>
-        <Row label="responde" htmlFor={`${ids}-s`}>
+        <Row label="answers" htmlFor={`${ids}-s`}>
           <input id={`${ids}-s`} className="input input--mono input--sm" inputMode="numeric" pattern="[1-5][0-9]{2}" value={status} onChange={(e) => setStatus(e.target.value)} />
         </Row>
       </div>
-      <p className="hint">Ela nasce desligada. Ajustar a probabilidade, a latência ou a queda a liga.</p>
-      {error && !serverPathProblem ? <ErrorNote error={error} what="A regra não foi criada" /> : null}
+      <p className="hint">It starts off. Adjusting a frequency, the latency or the drop turns it on.</p>
+      {error && !serverPathProblem ? <ErrorNote error={error} what="The rule was not created" /> : null}
       <p className="inline">
         <button type="submit" className="button button--primary" disabled={sending || !name.trim()}>
-          Criar regra
+          Create rule
         </button>
         <button type="button" className="button" onClick={onDone}>
-          Cancelar
+          Cancel
         </button>
       </p>
     </form>
   );
 }
 
-/** Quantos destinos conhecidos viram atalho de um clique no cadastro; o resto fica nas sugestões do campo. */
+/** How many known destinations become one-click shortcuts in the new-service form; the rest stay in the field's suggestions. */
 const QUICK_DESTINATIONS = 6;
 
 /**
- * Cadastro de serviço: nome, entrada e destino. Abre pelo "+ serviço" da
- * lista com ou sem um serviço selecionado; as regras vêm depois, no serviço.
+ * New-service form: name, entry and destination. It opens from the list's
+ * "+ service" with or without a service selected; the rules come later, in the
+ * service itself.
  */
 function NewServiceForm({
   routes,
@@ -855,9 +856,9 @@ function NewServiceForm({
   const [host, setHost] = useState("");
   const [showHost, setShowHost] = useState(false);
   const [dest, setDest] = useState("");
-  // As duas chaves do encaminhamento: enquanto ninguém as toca, elas seguem o
-  // que o destino pede (suggest); tocar em uma congela as duas no que está à
-  // vista, para a sugestão não puxar de volta o que foi escolhido.
+  // The two forwarding keys: while nobody touches them, they follow what the
+  // destination asks for (suggest); touching one freezes both at what is in
+  // view, so the suggestion does not pull back what was chosen.
   const [keys, setKeys] = useState<{ stripPrefix: boolean; rewriteHost: boolean } | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [sending, setSending] = useState(false);
@@ -916,13 +917,13 @@ function NewServiceForm({
         }}
       >
         <p className="create__title" id={`${ids}-t`}>
-          Novo serviço
+          New service
         </p>
         <div className="form">
           <Row
-            label="nome"
+            label="name"
             htmlFor={`${ids}-n`}
-            hint={taken ? <span className="field__problem">já existe um serviço com esse nome</span> : undefined}
+            hint={taken ? <span className="field__problem">a service with this name already exists</span> : undefined}
           >
             <input
               id={`${ids}-n`}
@@ -930,23 +931,23 @@ function NewServiceForm({
               required
               autoFocus
               value={name}
-              placeholder="pedidos"
+              placeholder="orders"
               aria-invalid={taken || undefined}
               onChange={(e) => setName(e.target.value)}
               spellCheck={false}
             />
           </Row>
-          <h4 className="form__group">entrada</h4>
+          <h4 className="form__group">entry</h4>
           <Row
             label="path"
             htmlFor={`${ids}-p`}
             hint={
               pathExact ? (
                 <>
-                  só este path; use <span className="mono">{p.replace(/\/+$/, "")}/*</span> para tudo abaixo
+                  only this path; use <span className="mono">{p.replace(/\/+$/, "")}/*</span> for everything below
                 </>
               ) : (
-                "o path que o seu app chama no gateway; exato ou curinga de sufixo"
+                "the path your app calls on the gateway; exact or a suffix wildcard"
               )
             }
           >
@@ -954,19 +955,19 @@ function NewServiceForm({
               id={`${ids}-p`}
               className="input input--mono input--sm"
               value={path}
-              placeholder="/pedidos/*"
+              placeholder="/orders/*"
               onChange={(e) => setPath(e.target.value)}
               spellCheck={false}
             />
           </Row>
           {showHost ? (
-            <Row label="host" htmlFor={`${ids}-h`} hint="vazio aceita qualquer Host">
+            <Row label="host" htmlFor={`${ids}-h`} hint="empty accepts any Host">
               <input
                 id={`${ids}-h`}
                 className="input input--mono input--sm"
                 autoFocus
                 value={host}
-                placeholder="pedidos.local"
+                placeholder="orders.local"
                 onChange={(e) => setHost(e.target.value)}
                 spellCheck={false}
               />
@@ -974,19 +975,19 @@ function NewServiceForm({
           ) : (
             <Row label="">
               <button type="button" className="text-button" onClick={() => setShowHost(true)}>
-                <PlusIcon /> host (opcional)
+                <PlusIcon /> host (optional)
               </button>
             </Row>
           )}
-          <h4 className="form__group">destino</h4>
+          <h4 className="form__group">destination</h4>
           <Row
             label="url"
             htmlFor={`${ids}-u`}
             hint={
               destBad ? (
-                <span className="field__problem">use uma URL http:// ou https://</span>
+                <span className="field__problem">use an http:// or https:// URL</span>
               ) : (
-                "para onde o gateway redireciona; vazio, só as regras respondem"
+                "where the gateway forwards to; empty, only the rules answer"
               )
             }
           >
@@ -1007,7 +1008,7 @@ function NewServiceForm({
             </datalist>
           </Row>
           {known.length ? (
-            <Row label="conhecidos">
+            <Row label="known">
               <span className="inline inline--wrap newsvc__known">
                 {known.slice(0, QUICK_DESTINATIONS).map((u) => (
                   <button
@@ -1015,14 +1016,14 @@ function NewServiceForm({
                     type="button"
                     className={"text-button mono" + (d === u ? " is-on" : "")}
                     aria-pressed={d === u}
-                    title={`Usar ${u} como destino`}
+                    title={`Use ${u} as the destination`}
                     onClick={() => setDest(u)}
                   >
                     {destinationText(u)}
                   </button>
                 ))}
                 {known.length > QUICK_DESTINATIONS ? (
-                  <span className="dim">+{known.length - QUICK_DESTINATIONS} nas sugestões do campo</span>
+                  <span className="dim">+{known.length - QUICK_DESTINATIONS} in the field's suggestions</span>
                 ) : null}
               </span>
             </Row>
@@ -1033,20 +1034,20 @@ function NewServiceForm({
             onStripPrefix={(b) => setKeys({ ...chosen, stripPrefix: b })}
             onRewriteHost={(b) => setKeys({ ...chosen, rewriteHost: b })}
           />
-          <h4 className="form__group">prévia</h4>
+          <h4 className="form__group">preview</h4>
           <ForwardPreview input={preview} />
         </div>
         <p className="hint">
-          Gravado em <span className="mono">routes/{n || "nome"}.yaml</span>. As regras de caos vêm depois, no próprio
-          serviço.
+          Saved to <span className="mono">routes/{n || "name"}.yaml</span>. The chaos rules come later, in the service
+          itself.
         </p>
-        {error ? <ErrorNote error={error} what="O serviço não foi criado" /> : null}
+        {error ? <ErrorNote error={error} what="The service was not created" /> : null}
         <p className="inline">
           <button type="submit" className="button button--primary" disabled={sending || !n || taken || destBad}>
-            {sending ? "Criando…" : "Criar serviço"}
+            {sending ? "Creating…" : "Create service"}
           </button>
           <button type="button" className="button" onClick={onCancel}>
-            Cancelar
+            Cancel
           </button>
         </p>
       </form>

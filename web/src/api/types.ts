@@ -1,12 +1,12 @@
-// Tipos da API de administração, espelhando docs/api.md e os tipos Go em
-// internal/config e internal/exchange. Mudou lá, muda aqui.
+// Types of the admin API, mirroring docs/api.md and the Go types in
+// internal/config and internal/exchange. When they change there, change here.
 
-/** Duração no formato do Go: "150ms", "2s", "1m30s". */
+/** Duration in Go's format: "150ms", "2s", "1m30s". */
 export type Duration = string;
-/** Instante RFC 3339 em UTC. */
+/** RFC 3339 instant in UTC. */
 export type Instant = string;
 
-// ---------- Erros ----------
+// ---------- Errors ----------
 
 export type ApiErrorCode =
   | "bad_request"
@@ -33,13 +33,13 @@ export interface ApiErrorDetail {
 }
 
 export interface ApiErrorBody extends ApiErrorDetail {
-  /** Código estável. Um servidor mais novo pode mandar códigos não listados. */
+  /** Stable code. A newer server may send codes not listed here. */
   error: ApiErrorCode | (string & {});
   env?: string;
   errors?: ApiErrorDetail[];
 }
 
-// ---------- Processo ----------
+// ---------- Process ----------
 
 export interface Status {
   version: string;
@@ -55,15 +55,36 @@ export interface Status {
 
 export type HistoryBackend = "memory" | "ndjson" | "sqlite";
 
-// ---------- Documento de rota (config.Route) ----------
+// ---------- Route document (config.Route) ----------
 
-/** config.Matcher: texto é igualdade; o objeto declara exatamente um operador. */
+/** config.Matcher: text is equality; the object declares exactly one operator. */
 export type Matcher =
   | string
   | { equals?: string; regex?: string; json?: unknown; contains?: string };
 
-/** config.Latency: fixa ("2s") ou intervalo sorteado. */
-export type Latency = Duration | { min: Duration; max: Duration };
+/**
+ * config.Latency in its long form: a fixed delay or a range drawn on every
+ * request, either of them carrying its own frequency.
+ */
+export interface LatencySpec {
+  fixed?: Duration;
+  min?: Duration;
+  max?: Duration;
+  /** How often the delay is injected, 0.0 to 1.0. Absent means every call. */
+  chance?: number;
+}
+
+/**
+ * config.Latency: the short form is a bare duration ("2s"), which holds on
+ * every selected request; the long form carries the frequency.
+ */
+export type Latency = Duration | LatencySpec;
+
+/**
+ * config.Drop: `true` drops every selected request, `false` is the same as not
+ * declaring it, and `{ chance }` drops that fraction of them.
+ */
+export type Drop = boolean | { chance?: number };
 
 export interface OverrideMatch {
   path?: string;
@@ -77,8 +98,10 @@ export interface OverrideMatch {
 export interface Respond {
   status?: number;
   headers?: Record<string, string>;
-  /** Texto ou estrutura serializada como JSON. */
+  /** Text, or a structure serialized as JSON. */
   body?: unknown;
+  /** How often the selected requests get this response, 0.0 to 1.0. Absent means all of them. */
+  chance?: number;
 }
 
 export interface OverrideSource {
@@ -90,14 +113,19 @@ export interface OverrideSource {
 
 export interface Override {
   name: string;
-  /** Ausente equivale a ligado. */
+  /** Absent means on. */
   enabled?: boolean;
   match: OverrideMatch;
   respond?: Respond;
-  /** Ausente equivale a 1.0. */
+  /**
+   * Legacy: it used to be the fraction of the selected requests where the
+   * whole override applied. It is still read, as the default frequency of
+   * every effect that declares none, and the panel migrates it to per-effect
+   * frequencies on the first adjustment.
+   */
   probability?: number;
   latency?: Latency;
-  drop?: boolean;
+  drop?: Drop;
   ttl?: Duration;
   maxApplications?: number;
   source?: OverrideSource;
@@ -119,7 +147,7 @@ export interface Route {
   overrides?: Override[];
 }
 
-/** Estado vivo de um override (sem route/override: vem aninhado). */
+/** Live state of one override (without route/override: it comes nested). */
 export interface OverrideLiveState {
   active: boolean;
   expired: null | "ttl" | "applications";
@@ -168,7 +196,7 @@ export interface DeriveDraft {
   warnings: string[];
 }
 
-// ---------- Configuração do processo ----------
+// ---------- Process configuration ----------
 
 export type Origin = "env" | "file" | "default";
 
@@ -203,7 +231,7 @@ export interface SettingsView {
   values: EffectiveValue[];
 }
 
-/** config.GatewayFile como merge patch: null remove a chave do arquivo. */
+/** config.GatewayFile as a merge patch: null removes the key from the file. */
 export interface GatewayFilePatch {
   schemaVersion?: number | null;
   ports?: { traffic?: number | null; admin?: number | null } | null;
@@ -239,14 +267,14 @@ export interface ReloadResult {
   warnings: string[];
 }
 
-// ---------- Histórico (exchange.Exchange) ----------
+// ---------- History (exchange.Exchange) ----------
 
 export type Outcome = "upstream" | "synthesized" | "dropped" | "gateway";
 export type Intervention = "synthesized" | "delayed" | "dropped";
 
 export interface Message {
   headers?: Record<string, string[]>;
-  /** Base64 (o Go serializa []byte assim). Ausente na listagem. */
+  /** Base64 (that is how Go serializes []byte). Absent in the listing. */
   body?: string;
   size: number;
   truncated?: boolean;
@@ -270,20 +298,20 @@ export interface Exchange {
   clientAddr?: string;
   route?: string;
   upstream?: string;
-  /** "rota/override". */
+  /** "route/override". */
   override?: string;
   interventions?: Intervention[];
   outcome: Outcome;
   dropMode?: "hijack" | "stream_reset";
   error?: string;
-  /** Zero quando não houve resposta. */
+  /** Zero when there was no response. */
   status?: number;
   request: Message;
   response: Message;
   timing: Timing;
 }
 
-/** exchange.Filter na query string. */
+/** exchange.Filter in the query string. */
 export interface ExchangeFilter {
   route?: string;
   upstream?: string;
@@ -316,7 +344,7 @@ export interface UpstreamHealth {
   lastError: string;
 }
 
-// ---------- Eventos SSE ----------
+// ---------- SSE events ----------
 
 export interface EventMap {
   hello: Status;

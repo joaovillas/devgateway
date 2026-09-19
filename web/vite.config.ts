@@ -1,9 +1,9 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// A porta de administração do gateway em desenvolvimento. O vite dev server
-// encaminha /api para ela, então o painel roda em :5173 falando com o
-// processo real, sem CORS.
+// The gateway's admin port in development. The vite dev server forwards
+// /api to it, so the panel runs on :5173 talking to the real process,
+// without CORS.
 const admin = process.env.GATEWAY_ADMIN_URL ?? "http://localhost:8081";
 
 export default defineConfig({
@@ -13,7 +13,7 @@ export default defineConfig({
       "/api": {
         target: admin,
         changeOrigin: false,
-        // SSE: sem buffer nem timeout, para /api/events chegar evento a evento.
+        // SSE: no buffering and no timeout, so /api/events arrives event by event.
         timeout: 0,
         proxyTimeout: 0,
       },
@@ -21,9 +21,9 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
-    // O build substitui o placeholder versionado; `npm run clean` o restaura.
+    // The build replaces the versioned placeholder; `npm run clean` restores it.
     emptyOutDir: true,
-    // Fontes sempre como arquivo: nada de data: URI gigante no CSS.
+    // Fonts always as files: no giant data: URI in the CSS.
     assetsInlineLimit: 0,
     sourcemap: false,
   },

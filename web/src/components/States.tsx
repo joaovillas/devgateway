@@ -4,7 +4,7 @@ import type { ApiError } from "../api";
 export function Loading({ what }: { what: string }) {
   return (
     <div className="state state--loading" role="status">
-      <p className="state__title">Carregando {what}</p>
+      <p className="state__title">Loading {what}</p>
     </div>
   );
 }
@@ -18,7 +18,7 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
   );
 }
 
-/** Falha de leitura na API, com o código e a mensagem exatos que ela devolveu. */
+/** API read failure, with the exact code and message it returned. */
 export function Failure({
   what,
   request,
@@ -34,11 +34,11 @@ export function Failure({
   return (
     <div className="state state--fault" role="alert">
       <p className="state__title">
-        {network ? "Sem resposta da porta de administração" : `Não foi possível ler ${what}`}
+        {network ? "No response from the admin port" : `Could not read ${what}`}
       </p>
       <p>
         <span className="mono">{request}</span>
-        {network ? " não recebeu resposta. " : " respondeu "}
+        {network ? " received no response. " : " answered "}
         {network ? null : (
           <span className="mono">
             {error.status} {error.code}
@@ -49,12 +49,12 @@ export function Failure({
       </p>
       {error.body.field ? (
         <p>
-          Campo <span className="mono">{error.body.field}</span>
+          Field <span className="mono">{error.body.field}</span>
           {error.body.file ? (
             <>
               {" "}
-              em <span className="mono">{error.body.file}</span>
-              {error.body.line ? `, linha ${error.body.line}` : null}
+              in <span className="mono">{error.body.file}</span>
+              {error.body.line ? `, line ${error.body.line}` : null}
             </>
           ) : null}
           .
@@ -63,7 +63,7 @@ export function Failure({
       {onRetry ? (
         <p>
           <button type="button" className="link-button" onClick={onRetry}>
-            Tentar de novo
+            Try again
           </button>
         </p>
       ) : null}

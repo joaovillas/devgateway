@@ -1,7 +1,8 @@
-// Conexão SSE com /api/events: reconexão com espera crescente, vigia de
-// heartbeat e estado de conexão observável. O EventSource nativo desiste de
-// vez quando a resposta não é text/event-stream (um 404, um proxy no meio),
-// então a reconexão é feita aqui, sempre, com a mesma regra.
+// SSE connection to /api/events: reconnection with a growing wait, a
+// heartbeat watchdog and an observable connection state. The native
+// EventSource gives up for good when the response is not text/event-stream (a
+// 404, a proxy in the middle), so reconnection is done here, always, by the
+// same rule.
 import type { EventMap, EventName } from "./types";
 
 export type ConnectionState =
@@ -21,9 +22,9 @@ const EVENTS: EventName[] = [
   "heartbeat",
 ];
 
-/** Sem nenhum evento por este tempo, a conexão é dada como perdida (heartbeat a cada 15 s). */
+/** With no event at all for this long, the connection is taken as lost (heartbeat every 15 s). */
 const SILENCE_MS = 45_000;
-/** Conexão que não abre nem falha (processo suspenso, porta que aceita e não responde). */
+/** A connection that neither opens nor fails (a suspended process, a port that accepts and does not answer). */
 const CONNECT_MS = 10_000;
 const BACKOFF_MIN_MS = 1_000;
 const BACKOFF_MAX_MS = 15_000;
@@ -78,7 +79,7 @@ export class EventStream {
     return () => set.delete(fn as Listener<EventName>);
   }
 
-  /** Tenta de novo agora, sem esperar o intervalo (usado pelo botão e pelo evento online). */
+  /** Tries again now, without waiting out the interval (used by the button and by the online event). */
   readonly retryNow = (): void => {
     if (this.stopped || this.state.kind === "open") return;
     window.clearTimeout(this.retryTimer);
@@ -95,8 +96,8 @@ export class EventStream {
     this.setState({ kind: "connecting", attempt: this.attempt });
     const es = new EventSource(this.url);
     this.es = es;
-    // Sem este vigia, uma conexão pendurada em "connecting" nunca falharia.
-    this.armSilence(CONNECT_MS, `/api/events não respondeu em ${CONNECT_MS / 1000} s`);
+    // Without this watchdog, a connection stuck in "connecting" would never fail.
+    this.armSilence(CONNECT_MS, `/api/events did not answer within ${CONNECT_MS / 1000} s`);
 
     es.onopen = () => {
       this.attempt = 0;
@@ -105,7 +106,7 @@ export class EventStream {
     };
     es.onerror = () => {
       if (this.es !== es) return;
-      this.fail("a conexão com /api/events caiu ou foi recusada");
+      this.fail("the connection to /api/events dropped or was refused");
     };
     for (const name of EVENTS) {
       es.addEventListener(name, (ev) => {
@@ -114,7 +115,7 @@ export class EventStream {
         try {
           data = JSON.parse((ev as MessageEvent<string>).data);
         } catch {
-          return; // evento malformado: ignorado, a conexão continua
+          return; // malformed event: ignored, the connection carries on
         }
         const set = this.listeners.get(name);
         if (set) for (const fn of set) fn(data as EventMap[EventName]);
@@ -122,7 +123,7 @@ export class EventStream {
     }
   }
 
-  private armSilence(ms = SILENCE_MS, reason = `nenhum evento em ${SILENCE_MS / 1000} s`): void {
+  private armSilence(ms = SILENCE_MS, reason = `no event in ${SILENCE_MS / 1000} s`): void {
     window.clearTimeout(this.silenceTimer);
     this.silenceTimer = window.setTimeout(() => this.fail(reason), ms);
   }

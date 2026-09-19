@@ -13,13 +13,13 @@ import type { ApiError } from "../api";
 
 export interface OpenedExchange {
   id: string;
-  /** Troca completa já em mãos (resultado da navegação); sem ela, o detalhe a lê por id. */
+  /** The full exchange already in hand (the result of navigating); without it, the detail reads it by id. */
   data?: Exchange;
 }
 
 interface ExchangeDetailProps {
   opened: OpenedExchange;
-  /** Filtro ativo da lista: a navegação item a item o respeita. */
+  /** The list's active filter: item-by-item navigation respects it. */
   filter: ExchangeFilter;
   onOpen: (ex: OpenedExchange) => void;
   onClose: () => void;
@@ -30,7 +30,7 @@ interface ExchangeDetailProps {
 
 type Dir = "newer" | "older";
 
-/** A troca aberta: requisição e resposta completas, tempo decomposto e navegação. */
+/** The open exchange: full request and response, time broken down and navigation. */
 export function ExchangeDetail({ opened, filter, onOpen, onClose, routes, guard, onShowRoute }: ExchangeDetailProps) {
   const { id, data } = opened;
   const [ex, reload] = useResource<Exchange>(
@@ -42,23 +42,23 @@ export function ExchangeDetail({ opened, filter, onOpen, onClose, routes, guard,
   const [created, setCreated] = useState<{ route: string; name: string; enabled: boolean } | null>(null);
   const root = useRef<HTMLDivElement>(null);
 
-  // Troca nova: o rascunho e os avisos da anterior não valem para ela.
+  // A new exchange: the previous one's draft and notices do not apply to it.
   useEffect(() => {
     setDrafting(false);
     setCreated(null);
     setNav(null);
   }, [id]);
 
-  // Troca aberta só pelo id (a origem de um override, por exemplo): lida a
-  // troca, quem a abriu fica sabendo da rota dela.
+  // An exchange opened by id alone (the origin of an override, for example):
+  // once the exchange is read, whoever opened it learns its route.
   useEffect(() => {
-    // Só a troca do id atual: a que ficou de uma abertura anterior não volta.
+    // Only the exchange of the current id: the one left over from an earlier opening does not come back.
     if (ex.kind === "ready" && !data && ex.data.id === id) onOpen({ id: ex.data.id, data: ex.data });
   }, [ex, data, id, onOpen]);
 
-  // Estreito, os painéis empilham e o detalhe fica abaixo da lista: abrir uma
-  // troca rola a página até ele. Espera a troca carregar: antes disso a página
-  // ainda é curta demais para chegar lá.
+  // When narrow, the panels stack and the detail sits below the list: opening
+  // an exchange scrolls the page to it. It waits for the exchange to load:
+  // before that the page is still too short to get there.
   const ready = ex.kind !== "loading";
   useEffect(() => {
     if (ready && window.matchMedia("(max-width: 900px)").matches) {
@@ -66,8 +66,8 @@ export function ExchangeDetail({ opened, filter, onOpen, onClose, routes, guard,
     }
   }, [id, ready]);
 
-  // Uma navegação por vez; trocar de troca ou fechar o detalhe a cancela, para
-  // uma resposta atrasada não reabrir nada nem chegar fora de ordem.
+  // One navigation at a time; switching exchange or closing the detail cancels
+  // it, so a late response does not reopen anything or arrive out of order.
   const navCtl = useRef<AbortController | null>(null);
   useEffect(
     () => () => {
@@ -104,12 +104,12 @@ export function ExchangeDetail({ opened, filter, onOpen, onClose, routes, guard,
     [id, filter, onOpen],
   );
 
-  // j e k percorrem as trocas de qualquer ponto da tela, fora de campos de texto.
+  // j and k move through the exchanges from anywhere on the screen, outside text fields.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key !== "j" && e.key !== "k") return;
-      if (navCtl.current) return; // já há uma navegação a caminho
+      if (navCtl.current) return; // a navigation is already on its way
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
       if (t?.closest("[role=alertdialog]")) return;
@@ -125,16 +125,16 @@ export function ExchangeDetail({ opened, filter, onOpen, onClose, routes, guard,
 
   const bar = (
     <div className="xd__bar">
-      <span className="xd__nav" role="group" aria-label="Percorrer as trocas">
+      <span className="xd__nav" role="group" aria-label="Move through the exchanges">
         <button
           type="button"
           className="button button--sm"
           onClick={() => go("newer")}
           disabled={busy}
           aria-keyshortcuts="k"
-          title="Troca mais nova com o filtro ativo (tecla k)"
+          title="Newer exchange with the active filter (k key)"
         >
-          <ArrowIcon dir="up" /> mais nova <kbd>k</kbd>
+          <ArrowIcon dir="up" /> newer <kbd>k</kbd>
         </button>
         <button
           type="button"
@@ -142,15 +142,15 @@ export function ExchangeDetail({ opened, filter, onOpen, onClose, routes, guard,
           onClick={() => go("older")}
           disabled={busy}
           aria-keyshortcuts="j"
-          title="Troca mais antiga com o filtro ativo (tecla j)"
+          title="Older exchange with the active filter (j key)"
         >
-          <ArrowIcon dir="down" /> mais antiga <kbd>j</kbd>
+          <ArrowIcon dir="down" /> older <kbd>j</kbd>
         </button>
       </span>
       <span className="xd__navnote" role="status">
-        {busy ? "lendo…" : nav?.message ? nav.message : filterText ? `filtro: ${filterText}` : "sem filtro"}
+        {busy ? "reading…" : nav?.message ? nav.message : filterText ? `filter: ${filterText}` : "no filter"}
       </span>
-      <button type="button" className="icon-button xd__close" onClick={onClose} aria-label="Fechar a troca">
+      <button type="button" className="icon-button xd__close" onClick={onClose} aria-label="Close the exchange">
         <CloseIcon />
       </button>
     </div>
@@ -158,26 +158,26 @@ export function ExchangeDetail({ opened, filter, onOpen, onClose, routes, guard,
 
   let body;
   if (ex.kind === "loading") {
-    body = <Loading what="a troca" />;
+    body = <Loading what="the exchange" />;
   } else if (ex.kind === "error") {
     const e = ex.error;
     body =
       e.code === "not_found" ? (
-        <Empty title="A troca saiu do histórico">
+        <Empty title="The exchange left the history">
           <p>
-            <span className="mono">…{id.slice(-8)}</span> não está mais no backend: ele guarda um número limitado de
-            trocas e descarta as mais antigas. As vizinhas ainda podem ser percorridas.
+            <span className="mono">…{id.slice(-8)}</span> is no longer in the backend: it keeps a limited number of
+            exchanges and discards the oldest. The neighboring ones can still be moved through.
           </p>
         </Empty>
       ) : e.code === "history_disabled" ? (
-        <Empty title="Histórico desabilitado">
+        <Empty title="History disabled">
           <p>{e.message}</p>
         </Empty>
       ) : (
         <div className="xd__pad">
-          <ErrorNote error={e} what={`GET /api/exchanges/${id} falhou`} />
+          <ErrorNote error={e} what={`GET /api/exchanges/${id} failed`} />
           <button type="button" className="link-button" onClick={reload}>
-            Tentar de novo
+            Try again
           </button>
         </div>
       );
@@ -210,8 +210,8 @@ export function ExchangeDetail({ opened, filter, onOpen, onClose, routes, guard,
           />
         ) : null}
         <TimeLanes x={x} />
-        <MessageSection title="requisição" m={x.request} x={x} kind="request" />
-        <MessageSection title="resposta" m={x.response} x={x} kind="response" />
+        <MessageSection title="request" m={x.request} x={x} kind="request" />
+        <MessageSection title="response" m={x.response} x={x} kind="response" />
         <Routing x={x} />
       </>
     );
@@ -232,7 +232,7 @@ export function ExchangeDetail({ opened, filter, onOpen, onClose, routes, guard,
       {bar}
       {nav?.error ? (
         <div className="xd__pad">
-          <ErrorNote error={nav.error} onDismiss={() => setNav(null)} what="A navegação falhou" />
+          <ErrorNote error={nav.error} onDismiss={() => setNav(null)} what="The navigation failed" />
         </div>
       ) : null}
       {body}
@@ -240,29 +240,29 @@ export function ExchangeDetail({ opened, filter, onOpen, onClose, routes, guard,
   );
 }
 
-/** "regra charge-declined do serviço payments", a partir do override "payments/charge-declined". */
+/** "charge-declined rule of the payments service", from the override "payments/charge-declined". */
 function ruleName(x: Exchange): string {
   const o = x.override ?? "";
   const route = x.route ?? "";
   const name = route && o.startsWith(route + "/") ? o.slice(route.length + 1) : o;
-  return route ? `regra ${name} do serviço ${route}` : `regra ${name}`;
+  return route ? `${name} rule of the ${route} service` : `${name} rule`;
 }
 
 function outcomeText(x: Exchange): { text: string; fault: boolean } {
-  const by = x.override ? ` pela ${ruleName(x)}` : "";
+  const by = x.override ? ` by the ${ruleName(x)}` : "";
   switch (x.outcome) {
     case "synthesized":
-      return { text: `resposta sintetizada${by}`, fault: true };
+      return { text: `response synthesized${by}`, fault: true };
     case "dropped":
       return {
-        text: `conexão derrubada${by}${x.dropMode === "stream_reset" ? " (stream HTTP/2 cancelado)" : ""}`,
+        text: `connection dropped${by}${x.dropMode === "stream_reset" ? " (HTTP/2 stream canceled)" : ""}`,
         fault: true,
       };
     case "gateway":
-      return { text: "erro do próprio gateway", fault: false };
+      return { text: "error from the gateway itself", fault: false };
     default:
       return {
-        text: (x.status ?? 0) >= 500 ? "erro do destino, repassado sem intervenção" : "respondida pelo destino",
+        text: (x.status ?? 0) >= 500 ? "error from the destination, passed on without intervention" : "answered by the destination",
         fault: false,
       };
   }
@@ -278,9 +278,9 @@ function Summary({ x, onShowRoute }: { x: Exchange; onShowRoute: (name: string) 
         {x.query ? <span className="dim">?{x.query}</span> : null}
       </p>
       <p className="xd__verdict">
-        <span className={"xd__status mono" + (o.fault ? " status--fault" : "")}>{x.status ? x.status : "sem status"}</span>
+        <span className={"xd__status mono" + (o.fault ? " status--fault" : "")}>{x.status ? x.status : "no status"}</span>
         <span className={o.fault ? "tone-drop" : undefined}>{o.text}</span>
-        {delayed ? <span className="tone-injected">atrasada {ms(x.timing.injectedMs)}</span> : null}
+        {delayed ? <span className="tone-injected">delayed {ms(x.timing.injectedMs)}</span> : null}
         <span className="dim mono">
           {ms(x.timing.totalMs)} · {clock(x.start)}
         </span>
@@ -289,27 +289,27 @@ function Summary({ x, onShowRoute }: { x: Exchange; onShowRoute: (name: string) 
       <p className="xd__meta dim">
         {x.route ? (
           <>
-            serviço{" "}
+            service{" "}
             <button type="button" className="text-button text-button--inline mono" onClick={() => onShowRoute(x.route!)}>
               {x.route}
             </button>
           </>
         ) : (
-          "nenhum serviço casou com a entrada"
+          "no service matched the entry"
         )}
         {x.upstream ? (
           <>
-            {" · "}destino <span className="mono">{x.upstream}</span>
+            {" · "}destination <span className="mono">{x.upstream}</span>
           </>
         ) : null}
-        {" · "}troca <span className="mono" title={x.id}>…{x.id.slice(-8)}</span>
+        {" · "}exchange <span className="mono" title={x.id}>…{x.id.slice(-8)}</span>
         <span className="mono"> #{x.seq}</span>
       </p>
     </header>
   );
 }
 
-/** Ação de criar regra (override), ou a razão de não poder, e o resultado da última criação. */
+/** The action to create a rule (override), or the reason it cannot be done, and the result of the last creation. */
 function DeriveBlock({
   x,
   routes,
@@ -328,10 +328,10 @@ function DeriveBlock({
   if (created) {
     return (
       <p className="xd__done" role="status">
-        Regra <span className="mono">{created.name}</span> criada no serviço <span className="mono">{created.route}</span>,{" "}
-        {created.enabled ? "já valendo" : "desligada"}.{" "}
+        Rule <span className="mono">{created.name}</span> created in service <span className="mono">{created.route}</span>,{" "}
+        {created.enabled ? "already in effect" : "switched off"}.{" "}
         <button type="button" className="link-button" onClick={() => onShowRoute(created.route)}>
-          Ajustar no serviço
+          Adjust it in the service
         </button>
       </p>
     );
@@ -339,40 +339,40 @@ function DeriveBlock({
   if (drafting) return null;
   const known = routes.kind === "ready" && x.route ? routes.data.some((r) => r.route.name === x.route) : true;
   const reason = !x.route
-    ? "Nenhum serviço casou com esta troca, e uma regra mora sempre num serviço."
+    ? "No service matched this exchange, and a rule always lives in a service."
     : !known
-      ? `O serviço ${x.route} não existe mais.`
+      ? `The service ${x.route} no longer exists.`
       : x.outcome === "synthesized"
-        ? "A resposta desta troca foi sintetizada por uma regra: não há resposta do destino para copiar."
+        ? "This exchange's response was synthesized by a rule: there is no response from the destination to copy."
         : x.outcome === "dropped"
-          ? "A conexão desta troca foi derrubada: não há resposta para copiar."
+          ? "This exchange's connection was dropped: there is no response to copy."
           : x.outcome === "gateway"
-            ? "Esta troca terminou em erro do gateway: não há resposta do destino para copiar."
+            ? "This exchange ended in an error from the gateway itself: there is no response from the destination to copy."
             : null;
   return (
     <div className="xd__derive">
       <button type="button" className="button" onClick={onDraft} disabled={reason !== null} aria-describedby={reason ? "xd-derive-why" : undefined}>
-        <PlusIcon /> Criar regra a partir desta troca
+        <PlusIcon /> Create a rule from this exchange
       </button>
       {reason ? (
         <span className="dim" id="xd-derive-why">
           {reason}
         </span>
       ) : (
-        <span className="dim">Monta um rascunho com esta requisição e esta resposta; nada é gravado até você confirmar.</span>
+        <span className="dim">Builds a draft with this request and this response; nothing is written until you confirm.</span>
       )}
     </div>
   );
 }
 
-// ---------- Tempo ----------
+// ---------- Time ----------
 
 /**
- * Passo "redondo" para as marcas do eixo: 1, 2 ou 5 vezes uma potência de 10.
- * É o menor passo que deixa no máximo `most` marcas além do zero (a largura
- * da faixa decide quantas cabem sem os rótulos se encostarem).
+ * A "round" step for the axis ticks: 1, 2 or 5 times a power of 10. It is the
+ * smallest step that leaves at most `most` ticks beyond zero (the width of the
+ * track decides how many fit without the labels touching each other).
  */
-/** Rótulo curto de uma marca redonda do eixo: "0", "200 ms", "1 s", "1,5 s". */
+/** Short label for a round axis tick: "0", "200 ms", "1 s", "1.5 s". */
 function tickLabel(v: number): string {
   if (v === 0) return "0";
   if (v >= 1000) {
@@ -390,17 +390,18 @@ function tickStep(total: number, most: number): number {
 }
 
 /**
- * Waterfall em escala verdadeira: um eixo de 0 ao total, e cada grandeza na
- * própria faixa, começando onde a anterior termina. A ordem é a do caminho da
- * requisição: o upstream responde, o atraso injetado vem depois da resposta
- * pronta, e o overhead do gateway (somado ao longo do caminho) fecha a conta.
+ * A waterfall at true scale: an axis from 0 to the total, and each quantity in
+ * its own lane, starting where the previous one ends. The order is that of the
+ * request's path: the upstream responds, the injected delay comes after the
+ * response is ready, and the gateway's overhead (summed along the path) closes
+ * the account.
  */
 function TimeLanes({ x }: { x: Exchange }) {
   const t = x.timing;
   const total = Math.max(t.totalMs, t.upstreamMs + t.injectedMs + t.gatewayMs, 0.001);
   const pct = (v: number) => (v / total) * 100;
-  // Uma marca a cada ~64px da faixa (rótulos curtos: "1 s", "200 ms"): em
-  // 390px sobram o zero e uma marca, e os rótulos nunca se encostam.
+  // One tick every ~64px of the track (short labels: "1 s", "200 ms"): at
+  // 390px only the zero and one tick are left, and the labels never touch.
   const track = useRef<HTMLTableCellElement>(null);
   const [trackWidth, setTrackWidth] = useState(0);
   useEffect(() => {
@@ -413,8 +414,8 @@ function TimeLanes({ x }: { x: Exchange }) {
   const step = tickStep(total, trackWidth > 0 ? Math.min(5, Math.floor(trackWidth / 64)) : 2);
   const ticks: number[] = [];
   for (let i = 0; i * step <= total + 1e-9; i++) ticks.push(Number((i * step).toPrecision(12)));
-  // Colada ao fim da faixa, a última marca alinha o rótulo pela direita para
-  // não vazar da borda.
+  // Stuck to the end of the track, the last tick aligns its label to the right
+  // so it does not spill past the edge.
   const endTick =
     ticks.length > 1 && trackWidth > 0 && (1 - ticks[ticks.length - 1]! / total) * trackWidth < 22
       ? ticks[ticks.length - 1]
@@ -422,39 +423,39 @@ function TimeLanes({ x }: { x: Exchange }) {
   const lanes = [
     {
       key: "upstream",
-      label: "destino",
+      label: "destination",
       value: t.upstreamMs,
       start: 0,
       empty:
         x.outcome === "synthesized"
-          ? "não consultado"
+          ? "not consulted"
           : x.outcome === "dropped"
-            ? "conexão derrubada"
+            ? "connection dropped"
             : x.outcome === "gateway"
-              ? "sem resposta"
+              ? "no response"
               : "0 ms",
     },
-    { key: "injected", label: "injetado", value: t.injectedMs, start: t.upstreamMs, empty: "sem atraso" },
+    { key: "injected", label: "injected", value: t.injectedMs, start: t.upstreamMs, empty: "no delay" },
     { key: "gateway", label: "gateway", value: t.gatewayMs, start: t.upstreamMs + t.injectedMs, empty: "0 ms" },
   ];
   const headId = useId();
   return (
     <section className="xd__section" aria-labelledby={headId}>
       <h3 className="section-title" id={headId}>
-        tempo
+        time
         <span className="section-title__note">
           total <span className="mono">{ms(t.totalMs)}</span>
           {t.injectedMs > 0 ? (
             <>
               {" "}
-              · <span className="tone-injected">{Math.round(pct(t.injectedMs))}% injetado</span>
+              · <span className="tone-injected">{Math.round(pct(t.injectedMs))}% injected</span>
             </>
           ) : null}
         </span>
       </h3>
       <table className="lanes">
         <caption className="sr-only">
-          Decomposição do tempo da troca, em escala linear de 0 a {ms(total)}
+          Breakdown of the exchange's time, on a linear scale from 0 to {ms(total)}
         </caption>
         <tbody>
           {lanes.map((l) => (
@@ -504,15 +505,15 @@ function TimeLanes({ x }: { x: Exchange }) {
       </table>
       {t.injectedMs > 0 ? (
         <p className="hint">
-          O atraso é aplicado depois que a resposta fica pronta, então soma ao tempo do destino em vez de se sobrepor a
-          ele.
+          The delay is applied after the response is ready, so it adds to the destination's time instead of overlapping
+          it.
         </p>
       ) : null}
     </section>
   );
 }
 
-// ---------- Requisição e resposta ----------
+// ---------- Request and response ----------
 
 function MessageSection({ title, m, x, kind }: { title: string; m: Message; x: Exchange; kind: "request" | "response" }) {
   const headId = useId();
@@ -529,10 +530,10 @@ function MessageSection({ title, m, x, kind }: { title: string; m: Message; x: E
           {kind === "request" ? (
             <span className="mono">
               {x.host}
-              {x.clientAddr ? ` · de ${x.clientAddr}` : ""}
+              {x.clientAddr ? ` · from ${x.clientAddr}` : ""}
             </span>
           ) : noResponse ? (
-            "nenhuma resposta foi escrita"
+            "no response was written"
           ) : (
             <span className="mono">status {x.status}</span>
           )}
@@ -556,7 +557,7 @@ function MessageSection({ title, m, x, kind }: { title: string; m: Message; x: E
               ))}
             </dl>
           ) : (
-            <p className="dim xd__pad-x">sem cabeçalhos</p>
+            <p className="dim xd__pad-x">no headers</p>
           )}
           <BodyView d={decoded} />
         </>
@@ -567,13 +568,13 @@ function MessageSection({ title, m, x, kind }: { title: string; m: Message; x: E
 
 function BodyView({ d }: { d: DecodedBody }) {
   const v = d.view;
-  const kindLabel = v.kind === "json" ? (v.partial ? "JSON incompleto" : "JSON") : v.kind === "text" ? "texto" : v.kind === "binary" ? "binário" : null;
+  const kindLabel = v.kind === "json" ? (v.partial ? "incomplete JSON" : "JSON") : v.kind === "text" ? "text" : v.kind === "binary" ? "binary" : null;
   return (
     <div className="body">
       <p className="body__head">
-        <span className="body__label">corpo</span>
+        <span className="body__label">body</span>
         {v.kind === "empty" ? (
-          <span className="dim">{d.size > 0 ? `${bytes(d.size)} não capturados` : "vazio"}</span>
+          <span className="dim">{d.size > 0 ? `${bytes(d.size)} not captured` : "empty"}</span>
         ) : (
           <span className="dim">
             {kindLabel}
@@ -584,19 +585,19 @@ function BodyView({ d }: { d: DecodedBody }) {
       </p>
       {d.truncated ? (
         <p className="body__cut" role="note">
-          <strong>Corpo cortado na captura:</strong> guardados <span className="mono">{bytes(d.captured, d.size)}</span> de{" "}
-          <span className="mono">{bytes(d.size)}</span> (limite <span className="mono">capture.maxBodyBytes</span>). O
-          final não aparece aqui e o JSON pode não fechar.
+          <strong>Body truncated on capture:</strong> kept <span className="mono">{bytes(d.captured, d.size)}</span> of{" "}
+          <span className="mono">{bytes(d.size)}</span> (limit <span className="mono">capture.maxBodyBytes</span>). The
+          end does not appear here and the JSON may not close.
         </p>
       ) : null}
       {v.kind === "json" || v.kind === "text" ? (
         <>
-          <pre className={"code" + (d.truncated ? " code--cut" : "")} tabIndex={0} aria-label="Conteúdo do corpo">
+          <pre className={"code" + (d.truncated ? " code--cut" : "")} tabIndex={0} aria-label="Body content">
             {v.text}
           </pre>
           {d.truncated ? (
             <p className="body__tail">
-              cortado aqui: faltam <span className="mono">{bytes(d.size - d.captured)}</span> que não foram capturados
+              truncated here: <span className="mono">{bytes(d.size - d.captured)}</span> more were not captured
             </p>
           ) : null}
         </>
@@ -604,10 +605,10 @@ function BodyView({ d }: { d: DecodedBody }) {
       {v.kind === "binary" ? (
         <>
           <p className="dim xd__pad-x">
-            Conteúdo binário: os primeiros {v.shown} bytes em hexadecimal
-            {d.captured > v.shown ? `, de ${bytes(d.captured)} capturados` : ""}.
+            Binary content: the first {v.shown} bytes in hexadecimal
+            {d.captured > v.shown ? `, of ${bytes(d.captured)} captured` : ""}.
           </p>
-          <pre className="code code--hex" tabIndex={0} aria-label="Início do corpo em hexadecimal">
+          <pre className="code code--hex" tabIndex={0} aria-label="Start of the body in hexadecimal">
             {v.hex}
           </pre>
         </>
@@ -619,17 +620,17 @@ function BodyView({ d }: { d: DecodedBody }) {
 function Routing({ x }: { x: Exchange }) {
   const headId = useId();
   const rows: [string, string | undefined][] = [
-    ["regra", x.override],
-    ["intervenções", (x.interventions ?? []).length ? (x.interventions ?? []).join(", ") : "nenhuma"],
-    ["resultado", x.outcome],
-    ["queda", x.dropMode],
-    ["início", x.start],
+    ["rule", x.override],
+    ["interventions", (x.interventions ?? []).length ? (x.interventions ?? []).join(", ") : "none"],
+    ["outcome", x.outcome],
+    ["drop", x.dropMode],
+    ["start", x.start],
     ["id", x.id],
   ];
   return (
     <section className="xd__section" aria-labelledby={headId}>
       <h3 className="section-title" id={headId}>
-        registro
+        record
       </h3>
       <dl className="hdrs">
         {rows

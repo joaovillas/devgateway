@@ -16,30 +16,31 @@ import { ErrorNote } from "./ErrorNote";
 import { LockIcon } from "./Icons";
 import { Failure, Loading } from "./States";
 
-// Configuração do processo (gateway.json), chave a chave, na ordem de
-// GET /api/settings. Cada controle grava por PATCH /api/settings, que aplica a
-// quente; um valor vindo do ambiente aparece travado com o nome da variável.
+// The process settings (gateway.json), key by key, in the order of
+// GET /api/settings. Each control saves through PATCH /api/settings, which
+// applies hot; a value coming from the environment shows up locked with the
+// name of the variable.
 
 const LABELS: Record<string, { label: string; hint?: string }> = {
-  "ports.traffic": { label: "porta de tráfego", hint: "reabre o listener; conexões em curso terminam na porta antiga" },
-  "ports.admin": { label: "porta de administração", hint: "o painel passa a viver na porta nova" },
-  seed: { label: "seed", hint: "vazio: sorteio não reproduzível" },
+  "ports.traffic": { label: "traffic port", hint: "reopens the listener; connections in flight end on the old port" },
+  "ports.admin": { label: "admin port", hint: "the panel moves to the new port" },
+  seed: { label: "seed", hint: "empty: the draw is not reproducible" },
   "history.backend": {
-    label: "backend do histórico",
-    hint: "trocar não migra as trocas já gravadas; as setas só escolhem, Espaço ou Enter aplica",
+    label: "history backend",
+    hint: "switching does not migrate the exchanges already recorded; the arrows only choose, Space or Enter applies",
   },
-  "history.path": { label: "arquivo do histórico", hint: "para ndjson e sqlite" },
-  "history.capacity": { label: "capacidade do histórico", hint: "trocas guardadas" },
-  "history.record": { label: "registro do histórico" },
-  "history.expose": { label: "exposição do histórico" },
-  "capture.maxBodyBytes": { label: "corpo capturado, máximo", hint: "em bytes; o excesso é truncado" },
-  "learning.enabled": { label: "modo aprendizado" },
-  routesDir: { label: "diretório dos serviços" },
+  "history.path": { label: "history file", hint: "for ndjson and sqlite" },
+  "history.capacity": { label: "history capacity", hint: "exchanges kept" },
+  "history.record": { label: "history recording" },
+  "history.expose": { label: "history exposure" },
+  "capture.maxBodyBytes": { label: "captured body, maximum", hint: "in bytes; the excess is truncated" },
+  "learning.enabled": { label: "learning mode" },
+  routesDir: { label: "services directory" },
 };
 
-/** O valor efetivo em uma palavra, para a leitura do modo simples. */
+/** The effective value in a single word, for reading in the simple mode. */
 function settingText(v: EffectiveValue): string {
-  if (typeof v.value === "boolean") return v.value ? "ligado" : "desligado";
+  if (typeof v.value === "boolean") return v.value ? "on" : "off";
   if (v.value === null || v.value === "") return "—";
   if (v.key === "capture.maxBodyBytes" && typeof v.value === "number") return bytes(v.value);
   return String(v.value);
@@ -52,40 +53,40 @@ export function ProcessBody({
   onAdvanced,
 }: {
   version: number;
-  /** Resultado de uma escrita das configurações (a porta de administração pode ter mudado). */
+  /** Result of a settings write (the admin port may have changed). */
   onSettings?: (r: SettingsPatchResult) => void;
-  /** Simples lê os valores efetivos; avançado edita cada um. */
+  /** Simple reads the effective values; advanced edits each one. */
   mode: DetailMode;
   onAdvanced: () => void;
 }) {
-  // Evento de configuração: relê mantendo os controles à vista. Voltar a
-  // "carregando" desmontaria os campos e perderia o que está sendo digitado.
+  // Settings event: re-read while keeping the controls in view. Going back to
+  // "loading" would unmount the fields and lose what is being typed.
   const [settings, reload] = useResource((s) => api.settings(s), []);
   const firstVersion = useRef(version);
   useEffect(() => {
     if (version !== firstVersion.current) reload();
   }, [version, reload]);
-  // A resposta do PATCH já traz a configuração nova; ela vale até a releitura.
+  // The PATCH response already carries the new settings; it holds until the re-read.
   const [latest, setLatest] = useState<SettingsView | null>(null);
   useEffect(() => setLatest(null), [settings]);
   const [notes, setNotes] = useState<string[]>([]);
   const [error, setError] = useState<{ key: string; error: ApiError } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  if (settings.kind === "loading") return <Loading what="a configuração do processo" />;
+  if (settings.kind === "loading") return <Loading what="the process settings" />;
   if (settings.kind === "error") {
-    return <Failure what="a configuração" request="GET /api/settings" error={settings.error} onRetry={reload} />;
+    return <Failure what="the settings" request="GET /api/settings" error={settings.error} onRetry={reload} />;
   }
   const view = latest ?? settings.data;
 
-  // Modo simples: os mesmos valores, só para ler. Nada sai da tela, mas
-  // trocar porta, backend do histórico ou seed é gesto do avançado.
+  // Simple mode: the same values, only to read. Nothing leaves the screen, but
+  // changing a port, the history backend or the seed is a gesture of the advanced mode.
   if (mode === "simple") {
     return (
       <div className="proc">
         <p className="proc__file">
-          Valores efetivos de <span className="mono">{view.file.path}</span>
-          {view.file.exists ? "" : " (o arquivo ainda não existe: tudo está no padrão ou no ambiente)"}.
+          Effective values of <span className="mono">{view.file.path}</span>
+          {view.file.exists ? "" : " (the file does not exist yet: everything is at the default or in the environment)"}.
         </p>
         <dl className="uph">
           {view.values.map((v) => (
@@ -94,7 +95,7 @@ export function ProcessBody({
               <dd className="mono">
                 {settingText(v)}
                 {v.locked ? (
-                  <span className="origin origin--env proc__lock" title={`Definido por ${v.env}`}>
+                  <span className="origin origin--env proc__lock" title={`Set by ${v.env}`}>
                     <LockIcon /> {v.env}
                   </span>
                 ) : null}
@@ -104,7 +105,7 @@ export function ProcessBody({
         </dl>
         <p>
           <button type="button" className="text-button" onClick={onAdvanced}>
-            abrir o avançado para editar
+            open advanced to edit
           </button>
         </p>
       </div>
@@ -133,12 +134,13 @@ export function ProcessBody({
       <p className="proc__file">
         {view.file.exists ? (
           <>
-            Valores efetivos. O que vem de <span className="mono">{view.file.path}</span> se altera aqui e vale na hora.
+            Effective values. What comes from <span className="mono">{view.file.path}</span> changes here and takes
+            effect right away.
           </>
         ) : (
           <>
-            <span className="mono">{view.file.path}</span> ainda não existe: tudo está no padrão ou no ambiente. A primeira
-            alteração cria o arquivo.
+            <span className="mono">{view.file.path}</span> does not exist yet: everything is at the default or in the
+            environment. The first change creates the file.
           </>
         )}
       </p>
@@ -169,7 +171,7 @@ export function ProcessBody({
 function Origin({ v }: { v: EffectiveValue }) {
   if (v.locked || v.source.origin === "env") {
     return (
-      <span className="origin origin--env" title={`Definido pela variável de ambiente ${v.source.name ?? v.env}, que vence gateway.json. Para mudar, altere a variável e reinicie o processo.`}>
+      <span className="origin origin--env" title={`Set by the environment variable ${v.source.name ?? v.env}, which beats gateway.json. To change it, alter the variable and restart the process.`}>
         <LockIcon /> <span className="mono">{v.source.name ?? v.env}</span>
       </span>
     );
@@ -182,7 +184,7 @@ function Origin({ v }: { v: EffectiveValue }) {
       </span>
     );
   }
-  return <span className="origin origin--default">padrão</span>;
+  return <span className="origin origin--default">default</span>;
 }
 
 function Setting({
@@ -210,7 +212,7 @@ function Setting({
       </label>
       <div className="setting__ctl">
         <Control v={v} id={id} locked={locked} onCommit={onCommit} describedBy={hintId} />
-        {busy ? <span className="dim">aplicando</span> : null}
+        {busy ? <span className="dim">applying</span> : null}
       </div>
       <div className="setting__origin">
         <Origin v={v} />
@@ -218,24 +220,24 @@ function Setting({
           <button
             type="button"
             className="text-button"
-            title={`Remove ${v.key} de gateway.json e volta ao valor padrão`}
+            title={`Removes ${v.key} from gateway.json and goes back to the default value`}
             onClick={() => onCommit(null)}
           >
-            usar o padrão
+            use the default
           </button>
         ) : null}
       </div>
       <p className="setting__hint" id={hintId}>
         {locked ? (
           <>
-            Travado por <span className="mono">{v.source.name ?? v.env}</span>. A API recusa alterar; mude a variável e
-            reinicie.
+            Locked by <span className="mono">{v.source.name ?? v.env}</span>. The API refuses to change it; alter the
+            variable and restart.
           </>
         ) : (
           meta.hint
         )}
       </p>
-      {error ? <ErrorNote error={error} onDismiss={onDismiss} what={`${v.key} não foi alterado`} /> : null}
+      {error ? <ErrorNote error={error} onDismiss={onDismiss} what={`${v.key} was not changed`} /> : null}
     </div>
   );
 }
@@ -258,7 +260,7 @@ function Control({
     return (
       <span className="inline">
         <Switch id={id} checked={v.value} label={label} disabled={locked} describedBy={describedBy} onChange={(b) => onCommit(b)} />
-        <span className="dim">{v.value ? "ligado" : "desligado"}</span>
+        <span className="dim">{v.value ? "on" : "off"}</span>
       </span>
     );
   }
@@ -292,7 +294,7 @@ function Control({
           disabled={locked}
           min={isPort ? 1 : 0}
           max={isPort ? 65535 : undefined}
-          placeholder={v.key === "seed" ? "aleatório" : undefined}
+          placeholder={v.key === "seed" ? "random" : undefined}
           describedBy={describedBy}
           onCommit={(n) => onCommit(n)}
         />
@@ -316,7 +318,7 @@ function Control({
   );
 }
 
-/** Paridade com editar os arquivos fora do painel: POST /api/reload. */
+/** Parity with editing the files outside the panel: POST /api/reload. */
 function ReloadFromDisk() {
   const [result, setResult] = useState<ReloadResult | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
@@ -342,14 +344,14 @@ function ReloadFromDisk() {
           );
         }}
       >
-        Reler os arquivos do disco
+        Re-read the files from disk
       </button>
-      <span className="dim">para quando gateway.json ou routes/ foram editados fora do painel</span>
+      <span className="dim">for when gateway.json or routes/ were edited outside the panel</span>
       {result ? (
         <p className="proc__notes" aria-live="polite">
-          {result.routes} {result.routes === 1 ? "serviço carregado" : "serviços carregados"}.
-          {result.changed.routes.length ? ` Serviços alterados: ${result.changed.routes.join(", ")}.` : " Nenhum serviço mudou."}
-          {result.changed.settings.length ? ` Configurações: ${result.changed.settings.join(", ")}.` : ""}
+          {result.routes} {result.routes === 1 ? "service loaded" : "services loaded"}.
+          {result.changed.routes.length ? ` Changed services: ${result.changed.routes.join(", ")}.` : " No service changed."}
+          {result.changed.settings.length ? ` Settings: ${result.changed.settings.join(", ")}.` : ""}
           {result.warnings.map((w, i) => (
             <span key={i} className="dim">
               {" "}
@@ -358,7 +360,7 @@ function ReloadFromDisk() {
           ))}
         </p>
       ) : null}
-      {error ? <ErrorNote error={error} onDismiss={() => setError(null)} what="A releitura falhou; a configuração anterior continua" /> : null}
+      {error ? <ErrorNote error={error} onDismiss={() => setError(null)} what="The re-read failed; the previous settings remain" /> : null}
     </div>
   );
 }
