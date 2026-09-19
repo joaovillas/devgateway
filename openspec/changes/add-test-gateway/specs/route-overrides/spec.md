@@ -1,303 +1,303 @@
 ## Purpose
 
-Intercepta paths específicos dentro de uma rota que, por padrão, apenas encaminha para o upstream, permitindo forçar uma resposta, atrasá-la, derrubá-la ou fazer tudo isso apenas em uma fração das chamadas — um único mecanismo no lugar da distinção entre mock e injeção de caos.
+Intercepts specific paths inside a route that otherwise just forwards to the upstream, making it possible to force a response, delay it, drop it, or do all of that in only a fraction of the calls — a single mechanism in place of the split between mocking and chaos injection.
 
 ## ADDED Requirements
 
-### Requirement: Interceptação seletiva com passthrough por padrão
+### Requirement: Selective interception with passthrough by default
 
-Uma rota sem nenhum override SHALL encaminhar todas as requisições ao seu upstream. Um override MUST interceptar somente as requisições que satisfazem seus critérios; as demais MUST seguir para o upstream sem qualquer alteração de comportamento.
+A route with no overrides SHALL forward every request to its upstream. An override MUST intercept only the requests that satisfy its criteria; all the others MUST go to the upstream with no change in behavior.
 
-#### Scenario: Rota sem override encaminha tudo
+#### Scenario: A route with no overrides forwards everything
 
-- **WHEN** uma rota com curinga `/api/payments/*` e nenhum override recebe requisições para três paths distintos
-- **THEN** as três são encaminhadas ao upstream e nenhuma resposta é sintetizada
+- **WHEN** a route with the wildcard `/api/payments/*` and no overrides receives requests for three distinct paths
+- **THEN** all three are forwarded to the upstream and no response is synthesized
 
-#### Scenario: Override intercepta apenas o que casa
+#### Scenario: An override intercepts only what it matches
 
-- **WHEN** existe um override para `/api/payments/bilulu` e chegam requisições para `/api/payments/bilulu` e para `/api/payments/charge`
-- **THEN** a primeira é respondida pelo override sem contatar o upstream e a segunda é encaminhada normalmente
+- **WHEN** an override exists for `/api/payments/bilulu` and requests arrive for `/api/payments/bilulu` and for `/api/payments/charge`
+- **THEN** the first is answered by the override without contacting the upstream and the second is forwarded normally
 
-#### Scenario: Rota sem upstream e sem override casado
+#### Scenario: A route with no upstream and no matching override
 
-- **WHEN** uma rota não declara upstream e chega uma requisição que nenhum override intercepta
-- **THEN** o gateway responde `501` com um corpo que informa a rota atingida e a ausência de upstream e de override correspondente
+- **WHEN** a route declares no upstream and a request arrives that no override intercepts
+- **THEN** the gateway responds `501` with a body reporting the route that was hit and the absence of an upstream and of a matching override
 
-### Requirement: Critérios de seleção do override
+### Requirement: Override selection criteria
 
-Um override SHALL selecionar requisições por path e MAY restringir adicionalmente por método, cabeçalhos, parâmetros de query e corpo. O path MUST aceitar forma exata, curinga de sufixo, parâmetros de segmento (`/viacep/:id/json`, em que cada `:nome` casa exatamente um segmento não vazio) e expressão regular. Os demais critérios MUST aceitar os operadores de igualdade exata, expressão regular, igualdade JSON e conteúdo de substring. Quando um override declara vários critérios, todos MUST casar.
+An override SHALL select requests by path and MAY further restrict by method, headers, query parameters and body. The path MUST accept the exact form, a suffix wildcard, segment parameters (`/zip/:id/json`, where each `:name` matches exactly one non-empty segment) and a regular expression. The remaining criteria MUST accept the operators exact equality, regular expression, JSON equality and substring containment. When an override declares several criteria, all of them MUST match.
 
-#### Scenario: Path exato
+#### Scenario: Exact path
 
-- **WHEN** um override declara o path `/api/payments/bilulu` e chega uma requisição para esse path
-- **THEN** o override casa
+- **WHEN** an override declares the path `/api/payments/bilulu` and a request for that path arrives
+- **THEN** the override matches
 
-#### Scenario: Path com parâmetro de segmento
+#### Scenario: Path with a segment parameter
 
-- **WHEN** um override declara o path `/viacep/:id/json` e chegam requisições para `/viacep/40415345/json` e para `/viacep/40415345/extra/json`
-- **THEN** o override casa com a primeira e não casa com a segunda
+- **WHEN** an override declares the path `/zip/:id/json` and requests arrive for `/zip/40415345/json` and for `/zip/40415345/extra/json`
+- **THEN** the override matches the first and does not match the second
 
-#### Scenario: Path com curinga
+#### Scenario: Path with a wildcard
 
-- **WHEN** um override declara o path `/api/payments/*` e chega uma requisição para `/api/payments/charge/42`
-- **THEN** o override casa
+- **WHEN** an override declares the path `/api/payments/*` and a request for `/api/payments/charge/42` arrives
+- **THEN** the override matches
 
-#### Scenario: Restrição por método
+#### Scenario: Restriction by method
 
-- **WHEN** um override declara o path `/api/payments/charge` restrito ao método `POST` e chega um `GET` para esse path
-- **THEN** o override não casa e a requisição é encaminhada ao upstream
+- **WHEN** an override declares the path `/api/payments/charge` restricted to the `POST` method and a `GET` for that path arrives
+- **THEN** the override does not match and the request is forwarded to the upstream
 
-#### Scenario: Igualdade JSON no corpo ignora a ordem das chaves
+#### Scenario: JSON equality on the body ignores key order
 
-- **WHEN** um override exige o corpo igual ao JSON `{"a":1,"b":2}` e chega uma requisição com corpo `{"b":2,"a":1}`
-- **THEN** o override casa
+- **WHEN** an override requires the body to equal the JSON `{"a":1,"b":2}` and a request arrives with the body `{"b":2,"a":1}`
+- **THEN** the override matches
 
-#### Scenario: Um critério que não casa impede a interceptação
+#### Scenario: One criterion that does not match prevents interception
 
-- **WHEN** um override exige o cabeçalho `X-Tenant: acme` e chega uma requisição sem esse cabeçalho
-- **THEN** o override não casa
+- **WHEN** an override requires the header `X-Tenant: acme` and a request arrives without that header
+- **THEN** the override does not match
 
-### Requirement: Precedência por especificidade
+### Requirement: Precedence by specificity
 
-Quando mais de um override casa com a mesma requisição, o gateway SHALL aplicar o mais específico. Um path exato MUST prevalecer sobre um path com parâmetros de segmento, que MUST prevalecer sobre um curinga (entre paths com parâmetros, prevalece o de mais segmentos literais), um curinga mais longo MUST prevalecer sobre um mais curto, e entre paths de igual especificidade MUST prevalecer o override com mais critérios declarados. Empates remanescentes MUST ser resolvidos pela ordem de declaração no documento da rota.
+When more than one override matches the same request, the gateway SHALL apply the most specific one. An exact path MUST prevail over a path with segment parameters, which MUST prevail over a wildcard (among paths with parameters, the one with more literal segments prevails), a longer wildcard MUST prevail over a shorter one, and among paths of equal specificity the override with more declared criteria MUST prevail. Remaining ties MUST be resolved by declaration order in the route document.
 
-#### Scenario: Path exato vence o curinga
+#### Scenario: An exact path beats a wildcard
 
-- **WHEN** existem overrides para `/api/payments/*` e para `/api/payments/bilulu`, e chega uma requisição para `/api/payments/bilulu`
-- **THEN** o override de path exato é aplicado
+- **WHEN** overrides exist for `/api/payments/*` and for `/api/payments/bilulu`, and a request for `/api/payments/bilulu` arrives
+- **THEN** the exact-path override is applied
 
-#### Scenario: Parâmetro de segmento entre exato e curinga
+#### Scenario: A segment parameter sits between exact and wildcard
 
-- **WHEN** existem overrides para `/viacep/*`, `/viacep/:id/json` e `/viacep/01001000/json`, e chegam requisições para `/viacep/01001000/json` e `/viacep/40415345/json`
-- **THEN** a primeira é atendida pelo override exato e a segunda pelo de parâmetro de segmento
+- **WHEN** overrides exist for `/zip/*`, `/zip/:id/json` and `/zip/01001000/json`, and requests arrive for `/zip/01001000/json` and `/zip/40415345/json`
+- **THEN** the first is served by the exact override and the second by the segment parameter one
 
-#### Scenario: Curinga mais longo vence o mais curto
+#### Scenario: A longer wildcard beats a shorter one
 
-- **WHEN** existem overrides para `/api/*` e `/api/payments/*` e chega uma requisição para `/api/payments/charge`
-- **THEN** o override de `/api/payments/*` é aplicado
+- **WHEN** overrides exist for `/api/*` and `/api/payments/*` and a request for `/api/payments/charge` arrives
+- **THEN** the `/api/payments/*` override is applied
 
-#### Scenario: Mais critérios vence entre paths equivalentes
+#### Scenario: More criteria wins among equivalent paths
 
-- **WHEN** dois overrides declaram o mesmo path e um deles também exige o método `POST`, e chega um `POST` para esse path
-- **THEN** o override que exige o método é aplicado
+- **WHEN** two overrides declare the same path and one of them also requires the `POST` method, and a `POST` for that path arrives
+- **THEN** the override that requires the method is applied
 
-### Requirement: Resposta declarada pelo override
+### Requirement: Response declared by the override
 
-Um override que intercepta SHALL responder com o status, os cabeçalhos e o corpo que declara. Quando o status não é informado, o gateway MUST usar `200`. O corpo MAY ser declarado como texto ou como estrutura JSON, e neste caso o gateway MUST serializá-lo e definir o tipo de conteúdo correspondente, salvo se o override declarar outro.
+An override that intercepts SHALL respond with the status, headers and body it declares. When the status is not given, the gateway MUST use `200`. The body MAY be declared as text or as a JSON structure, and in the latter case the gateway MUST serialize it and set the corresponding content type, unless the override declares another.
 
-#### Scenario: Resposta completa devolvida
+#### Scenario: Full response returned
 
-- **WHEN** um override declara status `200`, o cabeçalho `X-Source: override` e um corpo JSON, e intercepta uma requisição
-- **THEN** o cliente recebe exatamente esse status, esse cabeçalho e esse corpo, e o upstream não é contatado
+- **WHEN** an override declares status `200`, the header `X-Source: override` and a JSON body, and intercepts a request
+- **THEN** the client receives exactly that status, that header and that body, and the upstream is not contacted
 
-#### Scenario: Status padrão
+#### Scenario: Default status
 
-- **WHEN** um override declara apenas um corpo e intercepta uma requisição
-- **THEN** o cliente recebe status `200`
+- **WHEN** an override declares only a body and intercepts a request
+- **THEN** the client receives status `200`
 
-#### Scenario: Tipo de conteúdo inferido do corpo JSON
+#### Scenario: Content type inferred from a JSON body
 
-- **WHEN** um override declara o corpo como estrutura JSON e não declara tipo de conteúdo
-- **THEN** a resposta é serializada como JSON e carrega o tipo de conteúdo correspondente
+- **WHEN** an override declares the body as a JSON structure and declares no content type
+- **THEN** the response is serialized as JSON and carries the corresponding content type
 
-### Requirement: Frequência de cada efeito
+### Requirement: Frequency of each effect
 
-Cada efeito declarado por um override — a resposta declarada, a latência e a queda de conexão — MAY declarar sua própria frequência, entre `0.0` e `1.0`, e o gateway SHALL sortear cada efeito de forma independente a cada requisição que o override seleciona. Um efeito sem frequência declarada MUST valer sempre. Um efeito não sorteado MUST ser ignorado como se não estivesse declarado, e uma requisição em que nenhum efeito foi sorteado MUST seguir para o upstream sem alteração. Valores fora do intervalo MUST ser recusados na validação. Para compatibilidade, uma frequência declarada para o override inteiro MUST valer como padrão de todos os seus efeitos que não declaram a própria.
+Each effect an override declares — the declared response, the latency and the connection drop — MAY declare its own frequency, between `0.0` and `1.0`, and the gateway SHALL draw each effect independently on every request the override selects. An effect with no declared frequency MUST always apply. An effect that is not drawn MUST be ignored as if it were not declared, and a request where no effect was drawn MUST go to the upstream unchanged. Values outside the range MUST be refused during validation. For compatibility, a frequency declared for the whole override MUST act as the default for every one of its effects that does not declare its own.
 
-#### Scenario: Efeito sem frequência vale sempre
+#### Scenario: An effect with no frequency always applies
 
-- **WHEN** um override declara uma resposta sem frequência e intercepta 20 requisições
-- **THEN** as 20 são respondidas por ele
+- **WHEN** an override declares a response with no frequency and intercepts 20 requests
+- **THEN** all 20 are answered by it
 
-#### Scenario: Cada efeito tem a sua frequência
+#### Scenario: Each effect has its own frequency
 
-- **WHEN** um override declara resposta `503` com frequência `0.3` e latência de `1s` sem frequência, com seed fixo, e chegam 1000 requisições que ele seleciona
-- **THEN** a quantidade respondida com `503` fica dentro da tolerância estatística esperada para 30%, as demais são encaminhadas ao upstream, e todas as 1000 são atrasadas
+- **WHEN** an override declares a `503` response with frequency `0.3` and a latency of `1s` with no frequency, with a fixed seed, and 1000 requests it selects arrive
+- **THEN** the count answered with `503` falls within the statistical tolerance expected for 30%, the rest are forwarded to the upstream, and all 1000 are delayed
 
-#### Scenario: Queda com frequência própria
+#### Scenario: A drop with its own frequency
 
-- **WHEN** um override declara queda com frequência `0.05` e resposta declarada sem frequência, e chegam 1000 requisições que ele seleciona
-- **THEN** cerca de 5% das requisições são derrubadas e as demais recebem a resposta declarada
+- **WHEN** an override declares a drop with frequency `0.05` and a declared response with no frequency, and 1000 requests it selects arrive
+- **THEN** about 5% of the requests are dropped and the rest receive the declared response
 
-#### Scenario: Frequência zero nunca aplica
+#### Scenario: Frequency zero never applies
 
-- **WHEN** um efeito declara frequência `0.0` e chegam requisições que o override seleciona
-- **THEN** esse efeito nunca é aplicado, e os demais efeitos do override seguem valendo
+- **WHEN** an effect declares frequency `0.0` and requests the override selects arrive
+- **THEN** that effect is never applied, and the override's other effects keep applying
 
-#### Scenario: Frequência fora do intervalo é recusada
+#### Scenario: A frequency outside the range is refused
 
-- **WHEN** um documento de rota declara frequência `1.5` num efeito
-- **THEN** a configuração é recusada com uma mensagem que aponta o campo inválido
+- **WHEN** a route document declares frequency `1.5` on an effect
+- **THEN** the configuration is refused with a message pointing at the invalid field
 
-#### Scenario: Frequência do override vale para os efeitos sem a sua
+#### Scenario: The override's frequency applies to the effects without one
 
-- **WHEN** um override declara frequência `0.3` para si, uma resposta sem frequência própria e uma latência com frequência `1.0`
-- **THEN** a resposta é sorteada em 30% das requisições e a latência é aplicada em todas
+- **WHEN** an override declares frequency `0.3` for itself, a response with no frequency of its own and a latency with frequency `1.0`
+- **THEN** the response is drawn on 30% of the requests and the latency is applied on all of them
 
-### Requirement: Latência e queda de conexão
+### Requirement: Latency and connection drop
 
-Um override MAY declarar latência, como valor fixo ou como intervalo com mínimo e máximo sorteado uniformemente a cada requisição, e MAY declarar queda de conexão. A latência MUST ser aplicada depois de a resposta estar pronta e antes de entregá-la ao cliente. A queda MUST encerrar a conexão sem enviar resposta alguma e MUST ter precedência sobre a resposta declarada.
+An override MAY declare latency, either as a fixed value or as a range with a minimum and a maximum drawn uniformly on every request, and MAY declare a connection drop. The latency MUST be applied once the response is ready and before delivering it to the client. The drop MUST end the connection without sending any response and MUST take precedence over the declared response.
 
-#### Scenario: Latência fixa
+#### Scenario: Fixed latency
 
-- **WHEN** um override declara latência de `2s` e intercepta uma requisição
-- **THEN** a resposta chega ao cliente ao menos `2s` após a requisição
+- **WHEN** an override declares a latency of `2s` and intercepts a request
+- **THEN** the response reaches the client at least `2s` after the request
 
-#### Scenario: Latência sorteada no intervalo
+#### Scenario: Latency drawn from the range
 
-- **WHEN** um override declara latência com mínimo `100ms` e máximo `500ms` e intercepta 50 requisições
-- **THEN** todos os atrasos observados ficam entre `100ms` e `500ms` e não são todos iguais
+- **WHEN** an override declares latency with a minimum of `100ms` and a maximum of `500ms` and intercepts 50 requests
+- **THEN** every observed delay falls between `100ms` and `500ms` and they are not all the same
 
-#### Scenario: Intervalo invertido é recusado
+#### Scenario: An inverted range is refused
 
-- **WHEN** um documento de rota declara latência com mínimo `500ms` e máximo `100ms`
-- **THEN** a configuração é recusada com uma mensagem que aponta o campo inválido
+- **WHEN** a route document declares latency with a minimum of `500ms` and a maximum of `100ms`
+- **THEN** the configuration is refused with a message pointing at the invalid field
 
-#### Scenario: Queda encerra sem resposta
+#### Scenario: A drop ends with no response
 
-- **WHEN** um override declara queda de conexão e intercepta uma requisição
-- **THEN** o cliente observa a conexão encerrada sem receber status nem corpo
+- **WHEN** an override declares a connection drop and intercepts a request
+- **THEN** the client observes the connection closed without receiving a status or a body
 
-#### Scenario: Latência aplicada a uma rota sem interceptação
+#### Scenario: Latency applied to a route with no interception
 
-- **WHEN** um override declara apenas latência, sem resposta declarada, e seleciona uma requisição
-- **THEN** a requisição é encaminhada ao upstream normalmente e a resposta dele é entregue após o atraso
+- **WHEN** an override declares only latency, with no declared response, and selects a request
+- **THEN** the request is forwarded to the upstream normally and its response is delivered after the delay
 
-### Requirement: Expiração por tempo e por contagem
+### Requirement: Expiry by time and by count
 
-Um override MAY declarar um tempo de vida e MAY declarar um número máximo de aplicações. O gateway SHALL deixar de aplicá-lo quando qualquer um dos dois se esgota, sem intervenção do usuário, e MUST expor o tempo restante e a contagem de aplicações enquanto ele está ativo. Um override sem nenhum dos dois MUST permanecer ativo até ser removido.
+An override MAY declare a time to live and MAY declare a maximum number of applications. The gateway SHALL stop applying it when either one runs out, with no user intervention, and MUST expose the remaining time and the application count while it is active. An override with neither MUST stay active until it is removed.
 
-#### Scenario: Override expira pelo tempo
+#### Scenario: An override expires by time
 
-- **WHEN** um override com tempo de vida de `30s` é registrado e se passam mais de `30s`
-- **THEN** as requisições seguintes voltam a ser encaminhadas ao upstream, sem nenhuma ação do usuário
+- **WHEN** an override with a time to live of `30s` is registered and more than `30s` pass
+- **THEN** the following requests go back to being forwarded to the upstream, with no action from the user
 
-#### Scenario: Override expira pela contagem
+#### Scenario: An override expires by count
 
-- **WHEN** um override declara no máximo duas aplicações e chegam três requisições que ele seleciona
-- **THEN** as duas primeiras são respondidas pelo override e a terceira é encaminhada ao upstream
+- **WHEN** an override declares a maximum of two applications and three requests it selects arrive
+- **THEN** the first two are answered by the override and the third is forwarded to the upstream
 
-#### Scenario: Tempo restante e contagem consultáveis
+#### Scenario: Remaining time and count are queryable
 
-- **WHEN** um override com tempo de vida de `60s` e limite de cinco aplicações está ativo há `20s` e já aplicou duas vezes
-- **THEN** a consulta informa aproximadamente `40s` restantes e duas aplicações realizadas de um limite de cinco
+- **WHEN** an override with a time to live of `60s` and a limit of five applications has been active for `20s` and has already applied twice
+- **THEN** the query reports roughly `40s` remaining and two applications out of a limit of five
 
-#### Scenario: Override sem limites permanece
+#### Scenario: An override with no limits stays
 
-- **WHEN** um override sem tempo de vida e sem limite de contagem é registrado e se passa um período prolongado
-- **THEN** ele continua sendo aplicado até ser removido explicitamente
+- **WHEN** an override with no time to live and no count limit is registered and a long period passes
+- **THEN** it keeps being applied until it is explicitly removed
 
-### Requirement: Determinismo por seed
+### Requirement: Determinism by seed
 
-O gateway SHALL aceitar um seed para as decisões probabilísticas. Com o mesmo seed e a mesma sequência de requisições, o gateway MUST tomar exatamente as mesmas decisões de aplicação, efeito a efeito, na mesma ordem. Sem seed declarado, o gateway MUST usar uma origem de aleatoriedade não reproduzível.
+The gateway SHALL accept a seed for its probabilistic decisions. With the same seed and the same sequence of requests, the gateway MUST make exactly the same application decisions, effect by effect, in the same order. With no seed declared, the gateway MUST use a non-reproducible source of randomness.
 
-#### Scenario: Mesmo seed reproduz a mesma sequência
+#### Scenario: The same seed reproduces the same sequence
 
-- **WHEN** o gateway é executado duas vezes com o mesmo seed e recebe em cada execução a mesma sequência de 100 requisições
-- **THEN** o conjunto de requisições interceptadas é idêntico nas duas execuções
+- **WHEN** the gateway is run twice with the same seed and receives the same sequence of 100 requests in each run
+- **THEN** the set of intercepted requests is identical in both runs
 
-#### Scenario: Seeds distintos divergem
+#### Scenario: Different seeds diverge
 
-- **WHEN** o gateway é executado com dois seeds diferentes sobre a mesma sequência de requisições
-- **THEN** o conjunto de requisições interceptadas difere entre as execuções
+- **WHEN** the gateway is run with two different seeds over the same sequence of requests
+- **THEN** the set of intercepted requests differs between the runs
 
-### Requirement: Identificação da intervenção
+### Requirement: Intervention identification
 
-Toda resposta sintetizada ou atrasada por um override SHALL identificar, no cabeçalho `X-Gateway` definido pela spec `gateway-routing`, o override responsável e o tipo de intervenção aplicada. A troca correspondente MUST ser registrada como interceptada.
+Every response synthesized or delayed by an override SHALL identify, in the `X-Gateway` header defined by the `gateway-routing` spec, the override responsible and the kind of intervention applied. The corresponding exchange MUST be recorded as intercepted.
 
-#### Scenario: Resposta interceptada é identificável
+#### Scenario: An intercepted response is identifiable
 
-- **WHEN** um override sintetiza uma resposta `503`
-- **THEN** o cabeçalho `X-Gateway` da resposta indica o override responsável e que a resposta foi sintetizada pelo gateway
+- **WHEN** an override synthesizes a `503` response
+- **THEN** the response's `X-Gateway` header states the override responsible and that the response was synthesized by the gateway
 
-#### Scenario: Resposta do upstream não é marcada
+#### Scenario: An upstream response is not marked
 
-- **WHEN** o upstream responde `500` por conta própria e nenhum override interceptou a requisição
-- **THEN** o cabeçalho `X-Gateway` da resposta identifica apenas a rota, sem override nem intervenção
+- **WHEN** the upstream responds `500` on its own and no override intercepted the request
+- **THEN** the response's `X-Gateway` header identifies only the route, with no override and no intervention
 
-### Requirement: Override ligado e desligado
+### Requirement: Enabled and disabled overrides
 
-Um override SHALL poder ser declarado desligado. Um override desligado MUST NOT participar da seleção nem da precedência, e as requisições que ele selecionaria MUST seguir como se ele não existisse. A ausência do campo MUST equivaler a ligado. Desligar e religar um override MUST preservar todos os seus demais campos.
+An override SHALL be declarable as disabled. A disabled override MUST NOT take part in selection or in precedence, and the requests it would select MUST proceed as if it did not exist. The absence of the field MUST mean enabled. Disabling and re-enabling an override MUST preserve all of its other fields.
 
-#### Scenario: Override desligado não intercepta
+#### Scenario: A disabled override does not intercept
 
-- **WHEN** um override que sintetiza `503` está desligado e chega uma requisição que ele seleciona
-- **THEN** a requisição é encaminhada ao upstream
+- **WHEN** an override that synthesizes `503` is disabled and a request it selects arrives
+- **THEN** the request is forwarded to the upstream
 
-#### Scenario: Desligado não esconde o menos específico
+#### Scenario: A disabled override does not hide the less specific one
 
-- **WHEN** um override de path exato está desligado e um override de curinga que também casa está ligado
-- **THEN** o override de curinga é aplicado
+- **WHEN** an exact-path override is disabled and a wildcard override that also matches is enabled
+- **THEN** the wildcard override is applied
 
-#### Scenario: Religar restaura o comportamento
+#### Scenario: Re-enabling restores the behavior
 
-- **WHEN** o override desligado é religado sem outra alteração
-- **THEN** as requisições seguintes voltam a ser respondidas por ele com a mesma resposta declarada
+- **WHEN** the disabled override is re-enabled with no other change
+- **THEN** the following requests go back to being answered by it with the same declared response
 
-### Requirement: Aprendizado de endpoints
+### Requirement: Endpoint learning
 
-O gateway SHALL oferecer um modo aprendizado, desligado por padrão e alterável em tempo de execução. Com o modo desligado, o gateway MUST apenas aplicar a configuração existente, sem gravar nada além do histórico. Com o modo ligado, cada combinação de método e path ainda não conhecida numa rota, cuja requisição foi encaminhada e respondida pelo upstream, MUST ser gravada no documento dessa rota como um override desligado, com critério de método e de path generalizado — segmentos que identificam um registro (só dígitos, UUID, ou hexadecimal/alfanumérico com dígitos e ao menos 8 caracteres) substituídos por parâmetros de segmento `:id`, `:id2`… e os demais mantidos literais — e resposta declarada pré-preenchida com o status, todos os cabeçalhos e o corpo observados — excluídos apenas `Date`, `Content-Length` e cabeçalhos hop-by-hop. O override gravado MUST registrar a troca de origem e se o corpo foi truncado na captura. Uma combinação é conhecida quando a rota já possui override, ligado ou desligado, do mesmo método com path exato ou com parâmetros de segmento que casa com a requisição; overrides de curinga ou de expressão regular não tornam uma combinação conhecida. Ao gravar um override generalizado, os overrides aprendidos anteriormente com path exato do mesmo método cujo path generaliza para o dele MUST ser substituídos por ele, sem duplicar a regra, desde que continuem como foram aprendidos (desligados e sem critérios adicionais); um aprendido que o usuário ligou ou restringiu é preservado.
+The gateway SHALL offer a learning mode, off by default and changeable at runtime. With the mode off, the gateway MUST only apply the existing configuration, writing nothing beyond the history. With the mode on, every combination of method and path not yet known on a route, whose request was forwarded and answered by the upstream, MUST be written to that route's document as a disabled override, with a method criterion and a generalized path criterion — segments that identify a record (all digits, a UUID, or hexadecimal/alphanumeric with digits and at least 8 characters) replaced by the segment parameters `:id`, `:id2`… and the rest kept literal — and a declared response pre-filled with the status, all the headers and the body observed — excluding only `Date`, `Content-Length` and hop-by-hop headers. The override written MUST record the originating exchange and whether the body was truncated during capture. A combination is known when the route already has an override, enabled or disabled, of the same method with an exact path or with segment parameters that matches the request; wildcard or regular expression overrides do not make a combination known. When writing a generalized override, previously learned overrides with an exact path of the same method whose path generalizes to its own MUST be replaced by it, without duplicating the rule, provided they remain as they were learned (disabled and with no additional criteria); a learned override the user enabled or restricted is preserved.
 
-#### Scenario: Endpoints novos são aprendidos
+#### Scenario: New endpoints are learned
 
-- **WHEN** o modo aprendizado está ligado e chegam `GET /api/teste` e depois `GET /api/teste2` por uma rota com upstream
-- **THEN** o documento da rota passa a conter dois overrides desligados, um para cada path, cada um com a resposta real que o upstream devolveu
+- **WHEN** learning mode is on and `GET /api/test` and then `GET /api/test2` arrive through a route with an upstream
+- **THEN** the route document now holds two disabled overrides, one for each path, each with the real response the upstream returned
 
-#### Scenario: Endpoint aprendido não intercepta
+#### Scenario: A learned endpoint does not intercept
 
-- **WHEN** um endpoint foi aprendido e a mesma requisição chega de novo
-- **THEN** ela é encaminhada ao upstream normalmente, porque o override aprendido está desligado
+- **WHEN** an endpoint has been learned and the same request arrives again
+- **THEN** it is forwarded to the upstream normally, because the learned override is disabled
 
-#### Scenario: Endpoint conhecido não é duplicado
+#### Scenario: A known endpoint is not duplicated
 
-- **WHEN** o modo aprendizado está ligado e `GET /api/teste` chega pela segunda vez
-- **THEN** o documento da rota continua com um único override para `GET /api/teste`
+- **WHEN** learning mode is on and `GET /api/test` arrives for the second time
+- **THEN** the route document still holds a single override for `GET /api/test`
 
-#### Scenario: Modo desligado não grava
+#### Scenario: With the mode off nothing is written
 
-- **WHEN** o modo aprendizado está desligado e chegam requisições para paths novos
-- **THEN** nenhum documento de rota é modificado e as trocas constam apenas no histórico
+- **WHEN** learning mode is off and requests for new paths arrive
+- **THEN** no route document is modified and the exchanges appear only in the history
 
-#### Scenario: Somente respostas do upstream são aprendidas
+#### Scenario: Only upstream responses are learned
 
-- **WHEN** o modo aprendizado está ligado e a requisição é respondida por override, por `404` sem rota ou por `502` do gateway
-- **THEN** nenhum override é aprendido a partir dela
+- **WHEN** learning mode is on and the request is answered by an override, by a `404` with no route or by a `502` from the gateway
+- **THEN** no override is learned from it
 
-#### Scenario: Identificador vira parâmetro
+#### Scenario: An identifier becomes a parameter
 
-- **WHEN** o modo aprendizado está ligado e chegam `GET /viacep/40415345/json` e depois `GET /viacep/01001000/json`
-- **THEN** o documento da rota passa a conter um único override desligado com path `/viacep/:id/json`
+- **WHEN** learning mode is on and `GET /zip/40415345/json` and then `GET /zip/01001000/json` arrive
+- **THEN** the route document now holds a single disabled override with the path `/zip/:id/json`
 
-#### Scenario: Segmento literal preservado
+#### Scenario: A literal segment is preserved
 
-- **WHEN** o modo aprendizado está ligado e chegam `GET /api/users/me` e `GET /api/users/42`
-- **THEN** são aprendidos `/api/users/me` e `/api/users/:id` como overrides distintos
+- **WHEN** learning mode is on and `GET /api/users/me` and `GET /api/users/42` arrive
+- **THEN** `/api/users/me` and `/api/users/:id` are learned as distinct overrides
 
-#### Scenario: Aprendido exato é absorvido
+#### Scenario: An exact learned override is absorbed
 
-- **WHEN** a rota já tem um override aprendido com path `/viacep/40415345/json` e o aprendizado grava `/viacep/:id/json` para o mesmo método
-- **THEN** o override exato aprendido é substituído pelo generalizado e o documento passa a ter um só
+- **WHEN** the route already has a learned override with the path `/zip/40415345/json` and learning writes `/zip/:id/json` for the same method
+- **THEN** the exact learned override is replaced by the generalized one and the document ends up with a single one
 
-#### Scenario: Corpo truncado sinalizado
+#### Scenario: A truncated body is flagged
 
-- **WHEN** o modo aprendizado está ligado e a resposta observada excede o limite de captura
-- **THEN** o override aprendido registra que o corpo está incompleto
+- **WHEN** learning mode is on and the observed response exceeds the capture limit
+- **THEN** the learned override records that the body is incomplete
 
-### Requirement: Derivação de override a partir de troca capturada
+### Requirement: Deriving an override from a captured exchange
 
-O gateway SHALL permitir criar um override a partir de uma troca já registrada no histórico, preenchendo os critérios com os dados da requisição observada e a resposta declarada com o que o upstream devolveu. O override derivado MUST poder ser revisado antes de passar a valer.
+The gateway SHALL allow creating an override from an exchange already recorded in the history, filling the criteria with the data of the observed request and the declared response with what the upstream returned. The derived override MUST be reviewable before it takes effect.
 
-#### Scenario: Override derivado reproduz a troca observada
+#### Scenario: A derived override reproduces the observed exchange
 
-- **WHEN** um override é derivado de uma troca capturada e uma requisição equivalente chega em seguida
-- **THEN** o gateway responde com o mesmo status, cabeçalhos e corpo que o upstream havia devolvido naquela troca
+- **WHEN** an override is derived from a captured exchange and an equivalent request arrives afterwards
+- **THEN** the gateway responds with the same status, headers and body the upstream had returned in that exchange
 
-#### Scenario: Troca inexistente
+#### Scenario: Nonexistent exchange
 
-- **WHEN** é solicitada a derivação a partir de um identificador de troca que não existe no histórico
-- **THEN** a operação é recusada com um erro que informa que a troca não foi encontrada
+- **WHEN** derivation is requested from an exchange identifier that does not exist in the history
+- **THEN** the operation is refused with an error reporting that the exchange was not found
 
-#### Scenario: Derivação a partir de troca truncada
+#### Scenario: Derivation from a truncated exchange
 
-- **WHEN** é solicitada a derivação a partir de uma troca cujo corpo foi truncado na captura
-- **THEN** a operação é recusada ou o override é criado sinalizando explicitamente que o corpo está incompleto
+- **WHEN** derivation is requested from an exchange whose body was truncated during capture
+- **THEN** the operation is refused, or the override is created while explicitly flagging that the body is incomplete

@@ -1,6 +1,6 @@
 ---
 name: gateway
-description: Painel de controle do gateway de desenvolvimento, um console escuro de painéis fixos onde cor é sempre estado.
+description: Control panel for the development gateway, a dark console of fixed panels where color is always state.
 colors:
   ground: "#0d1117"
   panel: "#151a22"
@@ -158,170 +158,170 @@ components:
 
 ## Overview
 
-**Creative North Star: "A Bancada de Instrumentos"**
+**Creative North Star: "The Instrument Bench"**
 
-O painel é um console de painéis fixos sobre um chão grafite: serviços, tráfego, detalhe e controles, cada um com o seu lugar, separados por costuras de 1px e nunca empilhados em camadas. É uma bancada que o desenvolvedor consulta de relance numa segunda tela, então a densidade é alta, a tinta é quase toda neutra e a atenção vai para o único sinal que importa: o que o gateway está fazendo com o tráfego.
+The panel is a console of fixed panels on a graphite floor: services, traffic, detail and controls, each with its own place, separated by 1px seams and never stacked in layers. It is a bench the developer glances at on a second screen, so density is high, the ink is almost entirely neutral, and attention goes to the only signal that matters: what the gateway is doing to the traffic.
 
-A cor não decora nada. Azul, âmbar, vermelho e verde são quatro estados com significado fixo, e todo o resto se resolve em tons de grafite e tinta. Números são sempre tabulares, o dado é mono e os cabeçalhos são versalete discreto. A profundidade vem do tom (chão, painel, painel elevado), nunca de sombra. O movimento se limita a um momento: a troca que acabou de chegar.
+Color decorates nothing. Blue, amber, red and green are four states with fixed meaning, and everything else resolves into shades of graphite and ink. Numbers are always tabular, data is mono, and headings are discreet small caps. Depth comes from tone (ground, panel, raised panel), never from shadow. Motion is limited to one moment: the exchange that just arrived.
 
 **Key Characteristics:**
-- Painéis fixos em grade, separados por costuras de 1px na cor `seam` (o `gap: 1px` sobre fundo `seam`).
-- Cor exclusivamente semântica: azul seleção/override, âmbar injetado, vermelho queda/sintetizado, verde saudável.
-- Dados em JetBrains Mono 12px com algarismos tabulares e zero cortado; interface em Source Sans 3 a 13px.
-- Cantos quase retos (2px) e controles baixos (22 a 26px de altura).
-- Nenhuma sombra de elevação; estados de foco e seleção são traços de 1px.
-- Vocabulário do dev na tela: seu app → serviço → destino, com regras. Os termos internos (rota, upstream, override) ficam na API e nos arquivos.
-- Dois modos de detalhe: simples (o padrão) mostra o essencial de cada regra; avançado revela a edição completa. A escolha fica guardada no navegador.
+- Fixed panels on a grid, separated by 1px seams in the `seam` color (a `gap: 1px` over a `seam` background).
+- Color strictly semantic: blue for selection/override, amber for injected, red for drop/synthesized, green for healthy.
+- Data in JetBrains Mono 12px with tabular figures and a slashed zero; the interface in Source Sans 3 at 13px.
+- Near-square corners (2px) and low controls (22 to 26px tall).
+- No elevation shadow; focus and selection states are 1px strokes.
+- The dev's vocabulary on screen: your app → service → destination, with rules. The internal terms (route, upstream, override) stay in the API and in the files.
+- Two levels of detail: simple (the default) shows the essentials of each rule; advanced reveals the full editing surface. The choice is kept in the browser.
 
 ## Colors
 
-Grafite frio em três degraus de superfície, tinta em três degraus de contraste e quatro cores de estado que só aparecem quando há algo a dizer.
+Cold graphite in three surface steps, ink in three contrast steps, and four state colors that appear only when there is something to say.
 
 ### Primary
-- **Azul de Seleção** (`override`): tudo o que está selecionado, aberto ou sob override: serviço selecionado no mapa ou na lista, nó de serviço com regra ativa, caminho aceso no mapa, destino filtrado, linha aberta no tráfego, botão de cadastro com o formulário aberto, interruptor ligado, filtro ativo, anel de foco e cursor. Sua versão translúcida (`override-dim`) é o fundo de seleção, de texto selecionado e do brilho de chegada.
+- **Selection Blue** (`override`): everything selected, open or under an override: the service selected on the map or in the list, a service node with an active rule, the lit path on the map, a filtered destination, the open row in the traffic list, the register button with the form open, a switch turned on, an active filter, the focus ring and the cursor. Its translucent version (`override-dim`) is the background for selection, for selected text and for the arrival glow.
 
 ### Secondary
-- **Âmbar de Injeção** (`injected`): tempo e atrasos injetados pelo gateway: o segmento do waterfall, a etiqueta de atraso, o selo e o medidor da regra de atraso no mapa e na lista de serviços e o trilho do controle de latência.
+- **Injection Amber** (`injected`): time and delays injected by the gateway: the waterfall segment, the delay tag, the badge and the meter of the delay rule on the map and in the services list, and the track of the latency control.
 
 ### Tertiary
-- **Vermelho de Queda** (`fault`): o que o gateway derrubou ou sintetizou, e destino fora do ar: etiquetas, selo e medidor da regra, ponto, contorno e palavra "fora" no destino, ligação tracejada até ele no mapa, status sintetizado. `fault-dim` tinge a barra superior inteira quando a conexão com o painel cai e o fundo da marca de status no estreito.
-- **Verde Saudável** (`healthy`): somente o ponto de estado de destino no ar e de conexão saudável. Nunca preenche áreas.
+- **Drop Red** (`fault`): what the gateway dropped or synthesized, and a destination that is down: the tags, the rule badge and meter, the dot, the outline and the word "down" on the destination, the dashed connection to it on the map, and a synthesized status. `fault-dim` tints the entire top bar when the connection to the panel drops, and backs the status mark in the narrow layout.
+- **Healthy Green** (`healthy`): only the state dot for a destination that is up and for a healthy connection. It never fills areas.
 
 ### Neutral
-- **Chão Grafite** (`ground`): o fundo sob tudo, e o miolo recuado de campos, blocos de código e trilhos do waterfall.
-- **Painel** (`panel`): a superfície de cada painel fixo, da barra superior e dos cabeçalhos colantes.
-- **Painel Elevado** (`panel-raised`): botões, hover de linha, avisos de estado e rascunhos.
-- **Costura** (`seam`): as linhas de 1px entre painéis, linhas de tabela, divisões de seção. **Costura Forte** (`seam-strong`): contornos de controles e dos nós do mapa, ligações do mapa, trilho do medidor de regra, barra de rolagem. **Ponto da Grade** (`grid-dot`): a grade de pontos de 1px do campo do mapa, a cada 12px; textura, não estado.
-- **Tinta** (`ink`), **Tinta 2** (`ink-2`), **Tinta 3** (`ink-3`): texto primário, secundário (títulos de painel) e terciário (rótulos, metadados, gutter). `ink-3` é o piso: mantém 4.5:1 sobre `panel`, e nada legível fica abaixo dele.
-- **Tinta Plena** (`ink-bright`): só o hover de elementos já em tinta (botão principal, polegar do controle contínuo, link da barra). Hoje está literal no CSS; ao mexer, promova a variável.
-- **Tempo do Destino** (`time-upstream`) e **Tempo do Gateway** (`time-gateway`): os segmentos neutros do waterfall, para que só o âmbar injetado salte.
+- **Graphite Ground** (`ground`): the background under everything, and the recessed interior of fields, code blocks and waterfall tracks.
+- **Panel** (`panel`): the surface of each fixed panel, of the top bar and of the sticky headers.
+- **Raised Panel** (`panel-raised`): buttons, row hover, state notices and drafts.
+- **Seam** (`seam`): the 1px lines between panels, table rules, section dividers. **Strong Seam** (`seam-strong`): the outlines of controls and of map nodes, the map's connections, the rule meter's track, the scrollbar. **Grid Dot** (`grid-dot`): the map field's 1px dot grid, every 12px; texture, not state.
+- **Ink** (`ink`), **Ink 2** (`ink-2`), **Ink 3** (`ink-3`): primary text, secondary (panel titles) and tertiary (labels, metadata, gutter). `ink-3` is the floor: it holds 4.5:1 over `panel`, and nothing readable goes below it.
+- **Full Ink** (`ink-bright`): only the hover of elements already in ink (the primary button, the continuous control's thumb, the bar's link). It is currently literal in the CSS; when you touch it, promote it to a variable.
+- **Destination Time** (`time-upstream`) and **Gateway Time** (`time-gateway`): the neutral segments of the waterfall, so that only the injected amber stands out.
 
 ### Named Rules
-**A Regra da Cor Que Significa.** Azul, âmbar, vermelho e verde só aparecem para o estado que nomeiam. Um botão, um título ou uma falha de leitura do próprio painel não ganham cor de estado: o botão principal é tinta cheia e o erro de leitura tem título em `ink`.
+**The Rule of Color That Means.** Blue, amber, red and green appear only for the state they name. A button, a title or a read failure of the panel itself gets no state color: the primary button is full ink and the read error has its title in `ink`.
 
-**A Regra do Vermelho do Tráfego.** Vermelho é o que o gateway fez com o tráfego (queda, sintetizado) ou destino fora do ar. Erro vindo do destino é tinta com sublinhado pontilhado; erro do próprio gateway é `ink-2`. Nenhum dos dois rouba o vermelho.
+**The Rule of Traffic Red.** Red is what the gateway did to the traffic (a drop, a synthesized response) or a destination that is down. An error coming from the destination is ink with a dotted underline; an error from the gateway itself is `ink-2`. Neither of them steals the red.
 
-**A Regra do Recuo por Tom.** Fora da seleção, o que recua perde cor de estado e desce para `panel`, `seam` e `ink-3`, sem cair abaixo do contraste legível. Opacidade só é usada no ponto de estado de um serviço recuado (0.6), nas ligações recuadas do mapa (0.3) e em controles desabilitados (0.5).
+**The Rule of Receding by Tone.** Outside the selection, whatever recedes loses its state color and drops to `panel`, `seam` and `ink-3`, without falling below readable contrast. Opacity is used only on the state dot of a receded service (0.6), on the map's receded connections (0.3) and on disabled controls (0.5).
 
 ## Typography
 
-**Display Font:** nenhuma; o console não tem display.
-**Body Font:** Source Sans 3 Variable (com Segoe UI, system-ui)
-**Label/Mono Font:** JetBrains Mono Variable (com ui-monospace, Cascadia Mono, Consolas)
+**Display Font:** none; the console has no display type.
+**Body Font:** Source Sans 3 Variable (with Segoe UI, system-ui)
+**Label/Mono Font:** JetBrains Mono Variable (with ui-monospace, Cascadia Mono, Consolas)
 
-**Character:** uma sans humanista e compacta para a interface e uma mono de engenharia para tudo o que é dado. Ambas vêm embutidas no binário; nada é carregado da rede.
+**Character:** a humanist, compact sans for the interface and an engineering mono for everything that is data. Both ship embedded in the binary; nothing is loaded from the network.
 
 ### Hierarchy
-- **Título de painel** (600, 15px em versalete, espaçamento 0.1em, `ink-2`): o nome de cada painel no cabeçalho de 30px, as abas e os títulos de seção dentro do painel do serviço. Versalete encolhe para a altura-x, por isso o tamanho nominal é 15px.
-- **Rótulo** (600 ou 400, 15px em versalete, espaçamento 0.08em, `ink-3`): cabeçalhos de coluna do tráfego, do mapa e da lista de serviços, rótulos da barra superior e dos filtros, grupos de formulário. Sempre rotula o controle ou dado ao lado dele.
-- **Título** (600, 15px): o nome da regra e, em mono, a requisição e o status no detalhe da troca.
-- **Corpo** (400, 13px, 1.4): todo o texto de interface. Textos corridos de estado e aviso param em 62 a 64ch.
-- **Dado** (400, 12px mono, tabular e zero cortado): métodos, paths, status, durações, probabilidades, portas, etiquetas e campos numéricos.
-- **Corpo de mensagem** (400, 12px mono, 1.55): os corpos de requisição e resposta no detalhe da troca.
-- **Micro** (11px mono): apenas atalhos de teclado e marcas do eixo do waterfall.
+- **Panel title** (600, 15px in small caps, 0.1em tracking, `ink-2`): the name of each panel in the 30px header, the tabs and the section titles inside the service panel. Small caps shrink to the x-height, which is why the nominal size is 15px.
+- **Label** (600 or 400, 15px in small caps, 0.08em tracking, `ink-3`): column headers in the traffic list, the map and the services list, labels in the top bar and in the filters, form groups. It always labels the control or data next to it.
+- **Title** (600, 15px): the rule's name and, in mono, the request and the status in the exchange detail.
+- **Body** (400, 13px, 1.4): all interface text. Running state and warning text stops at 62 to 64ch.
+- **Data** (400, 12px mono, tabular with a slashed zero): methods, paths, statuses, durations, probabilities, ports, tags and numeric fields.
+- **Message body** (400, 12px mono, 1.55): the request and response bodies in the exchange detail.
+- **Micro** (11px mono): keyboard shortcuts and waterfall axis marks only.
 
 ### Named Rules
-**A Regra do Número Tabular.** O corpo inteiro roda com `tabular-nums`; o dado mono ainda acrescenta o zero cortado. Coluna de número alinha à direita.
+**The Rule of the Tabular Number.** The whole body runs with `tabular-nums`; mono data adds the slashed zero on top. Number columns align right.
 
-**A Regra do Dado em Mono.** Se o valor vai para um arquivo ou vem de uma requisição, ele é mono. Se é frase para o humano, é sans.
+**The Rule of Data in Mono.** If the value goes into a file or comes from a request, it is mono. If it is a sentence for a human, it is sans.
 
 ## Layout
 
-O console ocupa a viewport inteira sem rolagem de página: uma barra de 30px e, abaixo, duas colunas em 3fr/2fr (60/40). A coluna esquerda empilha o painel de serviços, em mapa ou lista (até metade da altura, ajustada ao que mostra, e dali em diante rola) e tráfego (o resto); a direita é inteira do serviço selecionado ou do cadastro de um novo, do processo ou do detalhe da troca. O YAML nunca aparece na tela. Os painéis se separam por `gap: 1px` sobre o fundo `seam`, e cada corpo de painel rola sozinho.
+The console fills the whole viewport with no page scroll: a 30px bar and, below it, two columns at 3fr/2fr (60/40). The left column stacks the services panel, as map or list (up to half the height, fitted to what it shows, scrolling from there on) and traffic (the rest); the right is entirely for the selected service or the form for a new one, for the process, or for the exchange detail. The YAML never appears on screen. The panels are separated by `gap: 1px` over a `seam` background, and each panel body scrolls on its own.
 
-A coluna direita tem dois modos, escolhidos na chave "simples | avançado" do cabeçalho e lembrados entre visitas. No **simples**, o padrão, o serviço vira uma linha-resumo ("payments · /payments/* → 127.0.0.1:9001") e cada regra mostra só interruptor, nome, efeito resumido, a marca de recurso avançado e a probabilidade; o processo vira uma lista de valores efetivos para ler. No **avançado**, tudo o que existe volta: latência, queda, critérios, resposta, tempo de vida, limite de aplicações, os campos do serviço e os controles do processo. O cadastro de serviço não depende do modo: vive no cabeçalho do painel de serviços.
+The right column has two modes, chosen with the "simple | advanced" switch in the header and remembered across visits. In **simple**, the default, the service becomes a summary line ("payments · /payments/* → 127.0.0.1:9001") and each rule shows only the switch, the name, the summarized effect, the advanced-feature mark and the probability; the process becomes a list of effective values to read. In **advanced**, everything that exists comes back: latency, drops, criteria, response, time to live, application limit, the service's fields and the process controls. Registering a service does not depend on the mode: it lives in the services panel header.
 
-O ritmo usa a escala de 2, 4, 8, 12 e 16px. Recuo lateral de painel é 12px; controles e células usam 8px; seções dentro de um painel se separam por 16px e uma costura. Linhas de formulário são grade de rótulo de 108px e controle; configurações do processo são grade de rótulo, controle e origem.
+The rhythm uses the 2, 4, 8, 12 and 16px scale. A panel's side inset is 12px; controls and cells use 8px; sections inside a panel are separated by 16px and a seam. Form rows are a grid of a 108px label and a control; process settings are a grid of label, control and origin.
 
-Abaixo de 900px os painéis empilham e a página rola; só o tráfego (até 70vh) e o painel de serviços (até 45vh) mantêm rolagem própria. Abaixo de 640px o painel de serviços perde o resumo do cabeçalho, o mapa reduz seu app e destinos à porta e tira a entrada dos nós, a lista perde a coluna de entrada, e o tráfego perde as colunas de hora e serviço (a marca da intervenção acompanha o status em qualquer largura).
+Below 900px the panels stack and the page scrolls; only traffic (up to 70vh) and the services panel (up to 45vh) keep their own scroll. Below 640px the services panel loses its header summary, the map reduces your app and the destinations to the port and drops the entry from the nodes, the list loses the entry column, and traffic loses the time and service columns (the intervention mark stays next to the status at any width).
 
 ## Elevation & Depth
 
-O sistema é plano. A profundidade vem de três tons de superfície (`ground` < `panel` < `panel-raised`) e de costuras de 1px. Não existe sombra projetada em lugar nenhum. O `box-shadow` só aparece como traço interno de 1px: o sublinhado da opção ativa no seletor segmentado e as bordas superior e inferior azuis da linha aberta ou focada no tráfego. O ponto ocioso usa o mesmo recurso como contorno.
+The system is flat. Depth comes from three surface tones (`ground` < `panel` < `panel-raised`) and from 1px seams. There is no drop shadow anywhere. `box-shadow` appears only as a 1px inner stroke: the underline of the active option in the segmented control and the blue top and bottom borders of the open or focused row in the traffic list. The idle dot uses the same device as an outline.
 
 ### Named Rules
-**A Regra da Costura, Não da Sombra.** Separação é costura de 1px ou mudança de tom. Sombra desfocada ou deslocada não pertence a este mundo; traço interno de 1px, sim.
+**The Rule of the Seam, Not the Shadow.** Separation is a 1px seam or a change of tone. A blurred or offset shadow does not belong to this world; a 1px inner stroke does.
 
-**A Regra do Colante Opaco.** Cabeçalhos colantes (tabela, barra do detalhe, aviso de comentários) têm fundo opaco de `panel` ou `panel-raised` e uma costura embaixo; o conteúdo passa por trás, nunca através.
+**The Rule of the Opaque Sticky.** Sticky headers (the table, the detail bar, the comments notice) have an opaque `panel` or `panel-raised` background and a seam underneath; content passes behind them, never through them.
 
 ## Shapes
 
-Quase tudo é retangular com cantos de 2px: botões, campos, chips, blocos de código, rascunhos. As exceções têm função: o ponto de estado é círculo de 7px, o interruptor é pílula (raio 8px) com botão circular, e o polegar do controle contínuo é uma barra vertical de 8×16px com canto de 1px sobre trilho de 2px.
+Almost everything is rectangular with 2px corners: buttons, fields, chips, code blocks, drafts. The exceptions have a function: the state dot is a 7px circle, the switch is a pill (8px radius) with a circular knob, and the continuous control's thumb is an 8×16px vertical bar with a 1px corner over a 2px track.
 
-O traço carrega significado. Contínuo é o normal; tracejado quer dizer "não é seu para mudar agora" ou "incompleto": campo travado pelo ambiente, seletor travado, procedência aprendida ou derivada, corpo cortado na captura, ligação do mapa até um destino fora do ar (vermelha). Pontilhado sob texto marca erro do destino.
+The stroke carries meaning. Solid is normal; dashed means "not yours to change right now" or "incomplete": a field locked by the environment, a locked selector, learned or derived provenance, a body cut during capture, the map's connection to a destination that is down (in red). Dotted under text marks an error from the destination.
 
 ## Components
 
 ### Buttons
-Discretos e baixos; nenhum usa cor de estado.
-- **Shape:** retângulo de canto quase reto (2px), 24px de altura, 22px no tamanho pequeno.
-- **Padrão:** `panel-raised` com contorno `seam-strong` e tinta `ink`; hover leva o contorno a `ink-3`.
-- **Principal:** tinta cheia (`ink`) com texto `ground` em 600; hover vai para `ink-bright`. Um por contexto.
-- **Texto:** sem caixa, `ink-2`, hover em `ink` com sublinhado de 1px. A variante destrutiva é `fault`, reservada para apagar regra ou serviço.
-- **Ícone:** 22px quadrado, `ink-3`, hover com fundo `panel-raised`.
-- **Foco:** contorno de 1px `override` com recuo de 1px. Desabilitado cai para 50% de opacidade.
+Discreet and low; none of them uses a state color.
+- **Shape:** a near-square rectangle (2px corners), 24px tall, 22px in the small size.
+- **Default:** `panel-raised` with a `seam-strong` outline and `ink` text; hover takes the outline to `ink-3`.
+- **Primary:** full ink (`ink`) with `ground` text at 600; hover goes to `ink-bright`. One per context.
+- **Text:** no box, `ink-2`, hover in `ink` with a 1px underline. The destructive variant is `fault`, reserved for deleting a rule or a service.
+- **Icon:** 22px square, `ink-3`, hover with a `panel-raised` background.
+- **Focus:** a 1px `override` outline with a 1px offset. Disabled drops to 50% opacity.
 
 ### Chips
-- **Style:** 20px de altura, contorno `seam-strong`, dado em mono `ink-2`.
-- **State:** o chip de filtro ativo (ex. filtro de destino) ganha contorno, texto e fundo azuis e um botão de fechar interno.
+- **Style:** 20px tall, `seam-strong` outline, data in mono `ink-2`.
+- **State:** the active filter chip (a destination filter, say) gets a blue outline, blue text and a blue background plus an internal close button.
 
 ### Cards / Containers
-O console não tem cards. Os contêineres são o **painel** (fundo `panel`, cabeçalho de 30px com título em versalete, subtítulo `ink-3` e ferramentas à direita, costura embaixo) e as **molduras internas**: aviso de erro de escrita, rascunho derivado e formulário de criação, todos com contorno `seam-strong`, canto de 2px e recuo de 12px, sobre `panel-raised` quando precisam se destacar do painel.
+The console has no cards. The containers are the **panel** (a `panel` background, a 30px header with a small-caps title, an `ink-3` subtitle and tools on the right, a seam underneath) and the **inner frames**: the write error notice, the derived draft and the creation form, all with a `seam-strong` outline, 2px corners and a 12px inset, over `panel-raised` when they need to stand out from the panel.
 
 ### Inputs / Fields
-- **Style:** 24px de altura (22 no pequeno), fundo `ground` recuado, contorno `seam-strong`, canto de 2px. Variante mono para qualquer valor de arquivo. O seletor nativo perde a caixa do navegador e ganha uma divisa de 1px em `ink-3`.
-- **Focus:** contorno e borda em `override`. Filtro ativo mantém a borda azul em repouso.
-- **Error / Disabled:** erro de validação pinta a borda de `fault` e mostra o problema em 12px vermelho abaixo. Travado pelo ambiente fica tracejado, transparente e com texto `ink-2`, acompanhado do cadeado.
+- **Style:** 24px tall (22 in the small size), a recessed `ground` background, a `seam-strong` outline, 2px corners. A mono variant for any value that comes from a file. The native select loses the browser's box and gets a 1px chevron in `ink-3`.
+- **Focus:** outline and border in `override`. An active filter keeps the blue border at rest.
+- **Error / Disabled:** a validation error paints the border `fault` and shows the problem in 12px red underneath. Locked by the environment means dashed, transparent and with `ink-2` text, next to the padlock.
 
-### Controles de escolha
-- **Interruptor:** pílula de 28×16px; ligado é fundo `override-dim`, contorno e botão `override`.
-- **Seletor segmentado:** opções de 20px em `ink-3` dentro de um contorno comum; a ativa ganha `panel-raised`, tinta `ink` e um sublinhado interno de 1px `ink-2`. Travado vira tracejado.
-- **Controle contínuo:** trilho de 2px preenchido até o valor na cor do que ele controla (azul para probabilidade, âmbar para latência, `ink-3` quando a regra está desligada), polegar de tinta e campo numérico mono alinhado à direita com unidade em `ink-3`.
+### Choice controls
+- **Switch:** a 28×16px pill; on is an `override-dim` background with an `override` outline and knob.
+- **Segmented control:** 20px options in `ink-3` inside a shared outline; the active one gets `panel-raised`, `ink` text and a 1px inner underline in `ink-2`. Locked becomes dashed.
+- **Continuous control:** a 2px track filled up to the value in the color of what it controls (blue for probability, amber for latency, `ink-3` when the rule is off), an ink thumb and a right-aligned mono numeric field with the unit in `ink-3`.
 
 ### Navigation
-Não há navegação de páginas nem sidebar. A barra superior de 30px leva o nome em mono 600, itens separados por costura vertical com rótulos em versalete e pontos de estado, e um espaçador empurra histórico e aprendizado para a direita. Desconectada, a barra inteira recebe o véu `fault-dim`. As abas do painel de controles são rótulos em versalete: ativa em `ink` com traço de 1px colado à costura do cabeçalho.
+There is no page navigation and no sidebar. The 30px top bar carries the name in mono 600, items separated by a vertical seam with small-caps labels and state dots, and a spacer pushing the history and learning to the right. When disconnected, the whole bar takes the `fault-dim` veil. The control panel's tabs are small-caps labels: the active one in `ink` with a 1px stroke against the header's seam.
 
-### Painel de serviços (assinatura)
-O modelo mental do dev: seu app chama a **entrada**, o gateway redireciona ao **destino** e aplica as **regras**. O cabeçalho do painel leva "serviços" com a contagem em mono (ou "12 de 54" com busca), o resumo de regras ativas e destinos fora, e, fixos à direita, a chave segmentada "mapa | lista" (a escolha fica guardada no navegador; o padrão é o mapa), o campo de busca (`/`, filtra por nome, entrada e destino nas duas visões) e o botão "+ serviço" (`n`), que abre o cadastro no painel ao lado com ou sem seleção, em qualquer visão.
+### Services panel (signature)
+The dev's mental model: your app calls the **entry**, the gateway redirects to the **destination** and applies the **rules**. The panel header carries "services" with the count in mono (or "12 of 54" when searching), the summary of active rules and destinations that are down, and, pinned to the right, the "map | list" segmented switch (the choice is kept in the browser; the default is the map), the search field (`/`, filtering by name, entry and destination in both views) and the "+ service" button (`n`), which opens the form in the panel next to it, with or without a selection, in either view.
 
-**Mapa (visão padrão).** Três colunas, "seu app", "serviços" e "destinos", com cabeçalho colante e opaco em versalete, sobre o campo com a grade de pontos de 1px (`grid-dot` a cada 12px). Entre as colunas, faixas de SVG com curvas de 1px em `seam-strong`: seu app liga a cada serviço, cada serviço liga ao seu destino. As curvas moram só nas faixas, então nunca passam sobre um rótulo. Nós são retângulos de 2px com contorno `seam-strong` sobre `panel-raised`: 34px de altura com 8px de folga até oito serviços, 26px com 4px acima disso. Seu app mostra a porta de tráfego em mono; o serviço mostra o nome em 600 e a entrada em mono `ink-2` ("qualquer" e "sem destino" em `ink-3`); o destino mostra o ponto de estado, host:porta em mono e a saúde à direita ("no ar", "fora", "sem tentativas", "2/5 falhas"). Cada destino fica na altura média dos serviços que apontam para ele, sem colidir com o vizinho.
+**Map (the default view).** Three columns, "your app", "services" and "destinations", with an opaque sticky small-caps header, over the field with its 1px dot grid (`grid-dot` every 12px). Between the columns, SVG lanes with 1px curves in `seam-strong`: your app connects to each service, each service connects to its destination. The curves live only in the lanes, so they never cross a label. Nodes are 2px rectangles with a `seam-strong` outline over `panel-raised`: 34px tall with 8px of clearance up to eight services, 26px with 4px above that. Your app shows the traffic port in mono; the service shows the name at 600 and the entry in mono `ink-2` ("any" and "no destination" in `ink-3`); the destination shows the state dot, host:port in mono and health on the right ("up", "down", "no attempts", "2/5 failures"). Each destination sits at the average height of the services pointing at it, without colliding with its neighbor.
 
-Regra ativa: contorno azul no nó do serviço, o selo à direita ("402 · 100%", "+2s · 30%", "+2" para as demais) na cor do efeito e um medidor de 2px na base do nó com a fração aplicada. Destino fora do ar: contorno e palavra "fora" em vermelho, e as ligações até ele em vermelho tracejado (3/3), porque ali o caminho está incompleto. Selecionar um serviço ou um destino acende o caminho em azul (nó em `override-dim` com contorno azul, curvas azuis) e recua o resto pelo tom: nós em `panel`/`seam`/`ink-3`, curvas a 30% de opacidade. Setas percorrem a coluna, → vai do serviço ao seu destino, ← volta ao primeiro serviço dele, Enter seleciona, Esc limpa.
+Active rule: a blue outline on the service node, the badge on the right ("402 · 100%", "+2s · 30%", "+2" for the rest) in the effect's color, and a 2px meter at the base of the node with the fraction applied. A destination that is down: outline and the word "down" in red, and the connections to it in dashed red (3/3), because the path is incomplete there. Selecting a service or a destination lights the path in blue (the node in `override-dim` with a blue outline, blue curves) and recedes the rest by tone: nodes in `panel`/`seam`/`ink-3`, curves at 30% opacity. Arrow keys walk the column, → goes from the service to its destination, ← goes back to its first service, Enter selects, Esc clears.
 
-Escala: com 50 ou mais serviços, a coluna de serviços rola dentro do painel e seu app e os destinos acompanham a janela visível como cabeçalhos colantes: ficam na altura natural enquanto ela está à vista e se prendem à borda da janela quando sairiam dela, mantendo ordem e espaçamento. Só os serviços à vista ganham curvas, então o feixe nunca atravessa a área visível rumo a nós escondidos. Abaixo de 640px, seu app vira só a porta, o serviço perde a entrada, o destino vira a porta (":9001") e a saúde some, menos "fora", que fica em texto.
+Scale: at 50 services or more, the services column scrolls inside the panel and your app and the destinations follow the visible window as sticky headers: they sit at their natural height while it is in view and pin to the window's edge when they would leave it, keeping their order and spacing. Only the services in view get curves, so the bundle never crosses the visible area toward hidden nodes. Below 640px, your app becomes just the port, the service loses its entry, the destination becomes the port (":9001") and the health disappears, except for "down", which stays as text.
 
-**Lista (visão alternativa).** Uma linha por serviço, com 26px, costura embaixo e colunas alinhadas sem tabela: ponto de estado do destino (verde no ar, vermelho fora, anel vazio sem tentativas), nome em 600, entrada em mono `ink-2` ("qualquer" em `ink-3` quando não casa host nem path), "→ destino" em mono (host:porta; "sem destino" em sans `ink-3`), com a palavra "fora" em vermelho quando o destino recusa conexões, e o selo da regra ativa alinhado à direita, na cor do efeito, sobre um medidor de 2px com trilho `seam-strong` e a fração aplicada. O cabeçalho de colunas é colante e opaco.
+**List (the alternative view).** One row per service, 26px, with a seam underneath and columns aligned without a table: the destination's state dot (green for up, red for down, an empty ring for no attempts), the name at 600, the entry in mono `ink-2` ("any" in `ink-3` when it matches neither host nor path), "→ destination" in mono (host:port; "no destination" in sans `ink-3`), with the word "down" in red when the destination refuses connections, and the active rule's badge aligned right, in the effect's color, over a 2px meter with a `seam-strong` track and the fraction applied. The column header is sticky and opaque.
 
-Selecionar na lista é o mesmo gesto do tráfego: fundo `override-dim` e traços azuis de 1px acima e abaixo. O destino é um botão próprio que filtra o tráfego por ele; filtrado, ganha contorno azul e os serviços que não vão para ele recuam para `ink-3`. Setas percorrem a coluna, → e ← alternam entre serviço e destino, Enter seleciona, Esc limpa. A lista rola sozinha e não sobrepõe nada com 50 ou mais serviços.
+Selecting in the list is the same gesture as in the traffic list: an `override-dim` background and blue 1px strokes above and below. The destination is a button of its own that filters the traffic by it; when filtered, it gets a blue outline and the services that do not go to it recede to `ink-3`. Arrow keys walk the column, → and ← switch between service and destination, Enter selects, Esc clears. The list scrolls on its own and overlaps nothing at 50 services or more.
 
-### Tráfego com waterfall (assinatura)
-Seis colunas e nada mais: hora, método, path, status, total e o waterfall. A sétima, o serviço, só aparece quando a lista não está filtrada por um: com o filtro, ela repetiria o mesmo nome em toda linha e o path fica com a largura. A intervenção não tem coluna: é um triângulo de 7px colado à esquerda do status, vermelho para sintetizado e queda, âmbar para atraso, com a dica nomeando a regra ("sintetizado por payments/charge-declined"). Por ser forma, e não só cor, ele sobrevive à tela estreita sem caixa auxiliar.
+### Traffic with a waterfall (signature)
+Six columns and nothing more: time, method, path, status, total and the waterfall. The seventh, the service, appears only when the list is not filtered by one: with the filter on, it would repeat the same name on every row and the path takes the width instead. The intervention has no column: it is a 7px triangle pinned to the left of the status, red for synthesized and dropped, amber for delayed, with a tooltip naming the rule ("synthesized by payments/charge-declined"). Being a shape and not just a color, it survives the narrow screen with no helper box.
 
-Tabela de linhas de 26px com cabeçalho colante em versalete e costura entre linhas. Hover em `panel-raised`, linha aberta em `override-dim` com traços azuis acima e abaixo. Cada linha termina num waterfall de 8px: destino em `time-upstream`, injetado em âmbar, gateway em `time-gateway`. No detalhe, o waterfall vira faixas de 12px sobre trilho `ground` com eixo e marcas mono de 11px.
+A table of 26px rows with a sticky small-caps header and a seam between rows. Hover in `panel-raised`, the open row in `override-dim` with blue strokes above and below. Each row ends in an 8px waterfall: the destination in `time-upstream`, injected in amber, the gateway in `time-gateway`. In the detail, the waterfall becomes 12px bands over a `ground` track with an axis and 11px mono marks.
 
-Os filtros ficam atrás de um único controle. Em repouso a barra é o botão "filtrar" e os filtros ativos, cada um num chip azul com o seu botão de fechar; "limpar" aparece a partir do segundo. Abrir o botão desce uma faixa separada por costura com serviço, método, status, intervenção e path, e fechá-la devolve a tela à lista sem apagar nada.
+The filters sit behind a single control. At rest the bar is the "filter" button and the active filters, each in a blue chip with its own close button; "clear" appears from the second one on. Opening the button drops a band separated by a seam with service, method, status, intervention and path, and closing it returns the screen to the list without erasing anything.
 
-### Painel do serviço em dois modos (assinatura)
-A chave "simples | avançado" mora à direita do cabeçalho do painel, no lugar das ferramentas, como a chave "mapa | lista" mora no painel de serviços. No simples, a regra ocupa duas linhas: o cabeçalho leva o interruptor, o nome em 600, o efeito resumido em mono ("402", "+200ms–900ms", "queda", combinados por "·") e, à direita, só o que se esgota (prazo restante e aplicações sobre o limite); abaixo, a probabilidade no controle contínuo com o número. Uma regra que usa algo que só o avançado edita — latência, queda, tempo de vida, limite de aplicações ou critérios além de path e método — ganha uma marca de 22px em `ink-3` ao lado do efeito, que diz na dica o que ela tem e leva ao avançado num clique. Nada fica escondido sem aviso.
+### Service panel in two modes (signature)
+The "simple | advanced" switch lives to the right of the panel header, in place of the tools, just as the "map | list" switch lives in the services panel. In simple, a rule takes two lines: the header carries the switch, the name at 600, the summarized effect in mono ("402", "+200ms–900ms", "drop", joined by "·") and, on the right, only what runs out (the remaining time and the applications against the limit); below it, the probability on the continuous control. A rule that uses something only advanced can edit — latency, a drop, a time to live, an application limit or criteria beyond path and method — gets a 22px mark in `ink-3` next to the effect, whose tooltip says what it has and which takes you to advanced in one click. Nothing is hidden without warning.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** separar regiões com costura de 1px (`seam`) ou degrau de tom; o console inteiro é `gap: 1px` sobre `seam`.
-- **Do** reservar azul para seleção e override, âmbar para tempo injetado, vermelho para queda, sintetizado e destino fora do ar, e verde para o ponto saudável.
-- **Do** pôr todo valor de arquivo ou requisição em JetBrains Mono 12px com algarismos tabulares e zero cortado.
-- **Do** rotular painéis, colunas e grupos em versalete de 15px com espaçamento de 0.08 a 0.1em, em `ink-2` ou `ink-3`.
-- **Do** manter controles entre 20 e 26px de altura e cantos em 2px.
-- **Do** dar ao modo simples só o que o dev ajusta de relance, e marcar toda regra que usa recurso do avançado.
-- **Do** usar traço tracejado para travado, derivado ou incompleto, e dar forma além de cor a todo estado que o estreito precisar distinguir.
-- **Do** limitar a animação à chegada de troca (1.6s, `cubic-bezier(0.16, 1, 0.3, 1)`), com transições de 120 a 160ms, e desligar tudo sob `prefers-reduced-motion`.
-- **Do** desenhar ícones como SVG de 10px com traço de 1.5px em `currentColor`.
+- **Do** separate regions with a 1px seam (`seam`) or a step in tone; the whole console is `gap: 1px` over `seam`.
+- **Do** reserve blue for selection and overrides, amber for injected time, red for drops, synthesized responses and destinations that are down, and green for the healthy dot.
+- **Do** set every value from a file or a request in JetBrains Mono 12px with tabular figures and a slashed zero.
+- **Do** label panels, columns and groups in 15px small caps with 0.08 to 0.1em tracking, in `ink-2` or `ink-3`.
+- **Do** keep controls between 20 and 26px tall with 2px corners.
+- **Do** give simple mode only what the dev adjusts at a glance, and mark every rule that uses an advanced feature.
+- **Do** use a dashed stroke for locked, derived or incomplete, and give a shape beyond color to every state the narrow screen has to distinguish.
+- **Do** limit animation to an exchange arriving (1.6s, `cubic-bezier(0.16, 1, 0.3, 1)`), with 120 to 160ms transitions, and turn it all off under `prefers-reduced-motion`.
+- **Do** draw icons as 10px SVGs with a 1.5px stroke in `currentColor`.
 
 ### Don't:
-- **Don't** usar sombra projetada ou desfocada; só traço interno de 1px.
-- **Don't** colorir botões, títulos ou falhas de leitura do próprio painel com cor de estado.
-- **Don't** pintar de vermelho erro do destino ou do gateway; o vermelho é do que o gateway fez com o tráfego.
-- **Don't** recuar elementos abaixo de `ink-3` nem com opacidade sobre texto legível.
-- **Don't** introduzir cards de métrica, gráficos decorativos ou sidebar de ícones.
-- **Don't** mostrar rota, upstream, override ou cliente como nome de conceito na tela; o dev lê serviço, destino, regra e seu app.
-- **Don't** carregar fontes ou recursos pela rede; tudo vai embutido no binário.
+- **Don't** use a drop or blurred shadow; only a 1px inner stroke.
+- **Don't** color buttons, titles or the panel's own read failures with a state color.
+- **Don't** paint an error from the destination or from the gateway red; red belongs to what the gateway did to the traffic.
+- **Don't** recede elements below `ink-3`, nor with opacity over readable text.
+- **Don't** introduce metric cards, decorative charts or an icon sidebar.
+- **Don't** show route, upstream, override or client as the name of a concept on screen; the dev reads service, destination, rule and your app.
+- **Don't** load fonts or assets over the network; everything ships embedded in the binary.

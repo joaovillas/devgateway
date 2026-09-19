@@ -1,134 +1,134 @@
 ## Purpose
 
-Recebe todo o tráfego de desenvolvimento numa porta única e encaminha cada requisição ao serviço upstream correto, para que os clientes deixem de conhecer as portas individuais de cada serviço.
+Receives all development traffic on a single port and forwards every request to the right upstream service, so that clients stop having to know each service's individual port.
 
 ## ADDED Requirements
 
-### Requirement: Roteamento por curinga de path
+### Requirement: Path wildcard routing
 
-O gateway SHALL encaminhar cada requisição para o upstream da rota cujo padrão de path casa com ela. O padrão MUST aceitar a forma de prefixo com curinga de sufixo, como `/api/payments/*`, e a forma de path exato. Quando mais de uma rota casa, o gateway MUST escolher a de padrão mais específico — path exato antes de curinga, e curinga mais longo antes de curinga mais curto. Cada rota MAY declarar a remoção do prefixo antes do encaminhamento.
+The gateway SHALL forward each request to the upstream of the route whose path pattern matches it. The pattern MUST accept the prefix form with a suffix wildcard, such as `/api/payments/*`, and the exact path form. When more than one route matches, the gateway MUST pick the most specific pattern — an exact path before a wildcard, and a longer wildcard before a shorter one. Each route MAY declare that the prefix is stripped before forwarding.
 
-#### Scenario: Curinga mais específico vence
+#### Scenario: The most specific wildcard wins
 
-- **WHEN** existem as rotas `/api/*` e `/api/payments/*` e chega uma requisição para `/api/payments/123`
-- **THEN** a requisição é encaminhada para o upstream da rota `/api/payments/*`
+- **WHEN** the routes `/api/*` and `/api/payments/*` both exist and a request for `/api/payments/123` arrives
+- **THEN** the request is forwarded to the upstream of the `/api/payments/*` route
 
-#### Scenario: Remoção do prefixo antes do encaminhamento
+#### Scenario: Prefix stripped before forwarding
 
-- **WHEN** a rota `/api/payments/*` está configurada para remover o prefixo e chega uma requisição para `/api/payments/123`
-- **THEN** o upstream recebe a requisição no path `/123`
+- **WHEN** the `/api/payments/*` route is configured to strip the prefix and a request for `/api/payments/123` arrives
+- **THEN** the upstream receives the request on the path `/123`
 
-#### Scenario: Prefixo preservado por padrão
+#### Scenario: Prefix preserved by default
 
-- **WHEN** a rota não declara remoção de prefixo e chega uma requisição para `/api/payments/123`
-- **THEN** o upstream recebe a requisição no path `/api/payments/123`
+- **WHEN** the route does not declare prefix stripping and a request for `/api/payments/123` arrives
+- **THEN** the upstream receives the request on the path `/api/payments/123`
 
-#### Scenario: Nenhuma rota casa
+#### Scenario: No route matches
 
-- **WHEN** chega uma requisição para um path que nenhuma rota cobre
-- **THEN** o gateway responde `404` com um corpo que informa que nenhuma rota casou e lista os padrões configurados
+- **WHEN** a request arrives for a path no route covers
+- **THEN** the gateway responds `404` with a body stating that no route matched and listing the configured patterns
 
-### Requirement: Roteamento por host
+### Requirement: Host routing
 
-O gateway SHALL permitir que uma rota exija um host específico, casando com o cabeçalho `Host` da requisição. Uma rota MAY combinar host e padrão de path, e nesse caso ambos os critérios MUST casar.
+The gateway SHALL allow a route to require a specific host, matching against the request's `Host` header. A route MAY combine host and path pattern, and in that case both criteria MUST match.
 
-#### Scenario: Roteamento apenas por host
+#### Scenario: Routing by host alone
 
-- **WHEN** existe uma rota para o host `payments.local` e chega uma requisição com `Host: payments.local`
-- **THEN** a requisição é encaminhada para o upstream dessa rota
+- **WHEN** a route exists for the host `payments.local` and a request arrives with `Host: payments.local`
+- **THEN** the request is forwarded to that route's upstream
 
-#### Scenario: Host e path combinados
+#### Scenario: Host and path combined
 
-- **WHEN** existe uma rota para o host `payments.local` com padrão `/v2/*` e chega uma requisição com `Host: payments.local` para o path `/v1/charge`
-- **THEN** essa rota não casa e a requisição segue a resolução das demais rotas
+- **WHEN** a route exists for the host `payments.local` with the pattern `/v2/*` and a request arrives with `Host: payments.local` for the path `/v1/charge`
+- **THEN** that route does not match and the request continues through the resolution of the remaining routes
 
-#### Scenario: Rota com host tem precedência sobre rota sem host
+#### Scenario: A route with a host takes precedence over one without
 
-- **WHEN** uma rota com host e uma rota apenas de path casam com a mesma requisição
-- **THEN** a rota com host é escolhida
+- **WHEN** a route with a host and a path-only route both match the same request
+- **THEN** the route with the host is chosen
 
-### Requirement: Encaminhamento de cabeçalhos
+### Requirement: Header forwarding
 
-O gateway SHALL repassar todos os cabeçalhos de entrada, inclusive o `Host` original, e MUST NOT remover nem alterar nenhum deles, salvo os cabeçalhos hop-by-hop que o protocolo HTTP proíbe repassar. O gateway SHALL acrescentar `X-Forwarded-For`, `X-Forwarded-Proto` e `X-Forwarded-Host`, preservando valores que já cheguem preenchidos. Uma rota MAY optar por substituir o `Host` pelo host do upstream.
+The gateway SHALL pass through every incoming header, including the original `Host`, and MUST NOT remove or alter any of them, except for the hop-by-hop headers the HTTP protocol forbids forwarding. The gateway SHALL add `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host`, preserving values that already arrive filled in. A route MAY choose to replace the `Host` with the upstream's host.
 
-#### Scenario: Cabeçalhos de encaminhamento acrescentados
+#### Scenario: Forwarding headers added
 
-- **WHEN** uma requisição sem cabeçalhos de encaminhamento é encaminhada para um upstream
-- **THEN** o upstream recebe `X-Forwarded-For` com o endereço do cliente, `X-Forwarded-Proto` com o esquema original e `X-Forwarded-Host` com o host original
+- **WHEN** a request with no forwarding headers is forwarded to an upstream
+- **THEN** the upstream receives `X-Forwarded-For` with the client's address, `X-Forwarded-Proto` with the original scheme and `X-Forwarded-Host` with the original host
 
-#### Scenario: Host original repassado por padrão
+#### Scenario: Original host passed through by default
 
-- **WHEN** a rota não declara substituição do host e chega uma requisição com `Host: payments.local`
-- **THEN** o upstream recebe `Host: payments.local`
+- **WHEN** the route does not declare host replacement and a request arrives with `Host: payments.local`
+- **THEN** the upstream receives `Host: payments.local`
 
-#### Scenario: Host substituído sob demanda
+#### Scenario: Host replaced on demand
 
-- **WHEN** a rota declara substituição do host
-- **THEN** o upstream recebe o host do seu próprio endereço no cabeçalho `Host`
+- **WHEN** the route declares host replacement
+- **THEN** the upstream receives the host of its own address in the `Host` header
 
-#### Scenario: X-Forwarded-For acumula a cadeia
+#### Scenario: X-Forwarded-For accumulates the chain
 
-- **WHEN** a requisição já chega com `X-Forwarded-For` preenchido
-- **THEN** o gateway acrescenta o endereço do cliente ao valor existente em vez de substituí-lo
+- **WHEN** the request already arrives with `X-Forwarded-For` filled in
+- **THEN** the gateway appends the client's address to the existing value instead of replacing it
 
-#### Scenario: X-Forwarded-Host e X-Forwarded-Proto preservados
+#### Scenario: X-Forwarded-Host and X-Forwarded-Proto preserved
 
-- **WHEN** a requisição já chega com `X-Forwarded-Host` e `X-Forwarded-Proto` preenchidos
-- **THEN** o upstream recebe esses valores como chegaram
+- **WHEN** the request already arrives with `X-Forwarded-Host` and `X-Forwarded-Proto` filled in
+- **THEN** the upstream receives those values as they arrived
 
-#### Scenario: Cabeçalhos arbitrários repassados
+#### Scenario: Arbitrary headers passed through
 
-- **WHEN** a requisição chega com cabeçalhos customizados, repetidos e de autorização
-- **THEN** o upstream recebe todos eles, com os mesmos valores e na mesma quantidade
+- **WHEN** the request arrives with custom, repeated and authorization headers
+- **THEN** the upstream receives all of them, with the same values and in the same quantity
 
-### Requirement: Cabeçalho de identificação do gateway
+### Requirement: Gateway identification header
 
-O gateway SHALL acrescentar um único cabeçalho próprio, `X-Gateway`, à requisição encaminhada ao upstream e à resposta entregue ao cliente, identificando a rota casada. Quando um override intervém, o mesmo cabeçalho na resposta MUST também identificar o override e o tipo de intervenção. O gateway MUST NOT acrescentar nenhum outro cabeçalho além deste e dos de encaminhamento.
+The gateway SHALL add a single header of its own, `X-Gateway`, to the request forwarded to the upstream and to the response delivered to the client, identifying the matched route. When an override intervenes, the same header on the response MUST also identify the override and the kind of intervention. The gateway MUST NOT add any header other than this one and the forwarding headers.
 
-#### Scenario: Identificação sem intervenção
+#### Scenario: Identification without an intervention
 
-- **WHEN** uma requisição é encaminhada pela rota `payments` sem intervenção
-- **THEN** o upstream recebe e o cliente recebe `X-Gateway` identificando a rota `payments`, sem override nem intervenção
+- **WHEN** a request is forwarded by the `payments` route with no intervention
+- **THEN** the upstream and the client both receive `X-Gateway` identifying the `payments` route, with no override and no intervention
 
-#### Scenario: Identificação com intervenção
+#### Scenario: Identification with an intervention
 
-- **WHEN** o override `flaky` da rota `payments` sintetiza a resposta
-- **THEN** o cliente recebe `X-Gateway` identificando a rota, o override `payments/flaky` e a intervenção `synthesized`
+- **WHEN** the `flaky` override of the `payments` route synthesizes the response
+- **THEN** the client receives `X-Gateway` identifying the route, the override `payments/flaky` and the intervention `synthesized`
 
-### Requirement: Tratamento de falha do upstream
+### Requirement: Upstream failure handling
 
-O gateway SHALL responder `502` quando não conseguir estabelecer conexão com o upstream e `504` quando o upstream exceder o tempo limite configurado para a rota. O corpo da resposta MUST identificar a rota e o upstream envolvidos.
+The gateway SHALL respond `502` when it cannot establish a connection to the upstream and `504` when the upstream exceeds the timeout configured for the route. The response body MUST identify the route and the upstream involved.
 
-#### Scenario: Upstream recusa a conexão
+#### Scenario: The upstream refuses the connection
 
-- **WHEN** o upstream de uma rota não está aceitando conexões e chega uma requisição para ela
-- **THEN** o gateway responde `502` com um corpo que nomeia a rota e o endereço do upstream
+- **WHEN** a route's upstream is not accepting connections and a request for it arrives
+- **THEN** the gateway responds `502` with a body naming the route and the upstream's address
 
-#### Scenario: Upstream excede o tempo limite
+#### Scenario: The upstream exceeds the timeout
 
-- **WHEN** o upstream demora mais que o tempo limite configurado para responder
-- **THEN** o gateway responde `504` e encerra a requisição ao upstream
+- **WHEN** the upstream takes longer than the configured timeout to respond
+- **THEN** the gateway responds `504` and ends the request to the upstream
 
-#### Scenario: Falha do upstream não derruba o gateway
+#### Scenario: An upstream failure does not bring the gateway down
 
-- **WHEN** um upstream falha repetidamente
-- **THEN** as demais rotas continuam sendo atendidas normalmente
+- **WHEN** an upstream fails repeatedly
+- **THEN** the remaining routes keep being served normally
 
-### Requirement: Transparência do tráfego encaminhado
+### Requirement: Transparency of forwarded traffic
 
-O gateway SHALL encaminhar qualquer método HTTP, preservando path, query, corpo, cabeçalhos de entrada e, na volta, status, cabeçalhos e corpo da resposta sem alteração, salvo os cabeçalhos acrescentados pelo próprio gateway, a remoção de prefixo declarada pela rota e as intervenções declaradas por override. Respostas em streaming MUST ser repassadas de forma incremental, sem aguardar o corpo completo.
+The gateway SHALL forward any HTTP method, preserving the path, query, body and incoming headers, and, on the way back, the response's status, headers and body unaltered, except for the headers the gateway itself adds, the prefix stripping declared by the route and the interventions declared by an override. Streaming responses MUST be passed through incrementally, without waiting for the complete body.
 
-#### Scenario: Método e corpo preservados
+#### Scenario: Method and body preserved
 
-- **WHEN** chega um `POST` com corpo binário e cabeçalho `Content-Type` específico
-- **THEN** o upstream recebe o mesmo método, o mesmo corpo byte a byte e o mesmo `Content-Type`
+- **WHEN** a `POST` arrives with a binary body and a specific `Content-Type` header
+- **THEN** the upstream receives the same method, the same body byte for byte and the same `Content-Type`
 
-#### Scenario: Status do upstream repassado
+#### Scenario: Upstream status passed through
 
-- **WHEN** o upstream responde `418`
-- **THEN** o cliente recebe `418` com os mesmos cabeçalhos e corpo
+- **WHEN** the upstream responds `418`
+- **THEN** the client receives `418` with the same headers and body
 
-#### Scenario: Resposta em streaming repassada incrementalmente
+#### Scenario: Streaming response passed through incrementally
 
-- **WHEN** o upstream responde com `text/event-stream` e emite eventos ao longo do tempo
-- **THEN** o cliente recebe cada evento conforme ele é emitido, sem esperar o encerramento da resposta
+- **WHEN** the upstream responds with `text/event-stream` and emits events over time
+- **THEN** the client receives each event as it is emitted, without waiting for the response to end

@@ -1,192 +1,192 @@
 ## Purpose
 
-Mantém a configuração do processo em `gateway.json` e cada rota em seu próprio documento sob `routes/`, versionáveis e com chaves em inglês, para que o ambiente do time viva no repositório, possa ser revisado rota a rota e não produza conflito quando duas pessoas criam serviços diferentes.
+Keeps the process configuration in `gateway.json` and each route in its own document under `routes/`, versionable and with English keys, so that the team's environment lives in the repository, can be reviewed route by route, and produces no conflict when two people create different services.
 
 ## ADDED Requirements
 
-### Requirement: Configuração do processo em gateway.json
+### Requirement: Process configuration in gateway.json
 
-O gateway SHALL carregar de `gateway.json` a configuração do processo: portas de tráfego e de administração, seed, backend e parâmetros de armazenamento do histórico, exposição e registro do histórico, limites de captura, modo aprendizado e o diretório de rotas. Todas as chaves MUST estar em inglês. Quando o arquivo não existe, o gateway MUST iniciar com os valores padrão e registrar um aviso identificando o caminho procurado.
+The gateway SHALL load the process configuration from `gateway.json`: the traffic and admin ports, the seed, the history storage backend and its parameters, history exposure and recording, capture limits, learning mode and the routes directory. Every key MUST be in English. When the file does not exist, the gateway MUST start with the default values and log a warning identifying the path it looked for.
 
-#### Scenario: Configuração do processo carregada
+#### Scenario: Process configuration loaded
 
-- **WHEN** o gateway inicia com um `gateway.json` declarando as duas portas e o seed
-- **THEN** o processo atende nessas portas e usa esse seed nas decisões probabilísticas
+- **WHEN** the gateway starts with a `gateway.json` declaring both ports and the seed
+- **THEN** the process serves on those ports and uses that seed for its probabilistic decisions
 
-#### Scenario: Arquivo do processo ausente
+#### Scenario: Process file missing
 
-- **WHEN** o gateway inicia e `gateway.json` não existe
-- **THEN** o gateway sobe com os valores padrão, registra um aviso identificando o caminho e segue operacional
+- **WHEN** the gateway starts and `gateway.json` does not exist
+- **THEN** the gateway comes up with the default values, logs a warning identifying the path and stays operational
 
-### Requirement: Um documento por rota
+### Requirement: One document per route
 
-O gateway SHALL carregar cada rota de um documento YAML próprio dentro do diretório de rotas, com chaves em inglês, e MUST fundir todos os documentos encontrados num único snapshot. Cada documento MUST declarar a rota completa — upstream, casamento e overrides. Um documento inválido MUST impedir a carga, identificando o arquivo responsável, em vez de ser ignorado silenciosamente.
+The gateway SHALL load each route from its own YAML document inside the routes directory, with English keys, and MUST merge every document it finds into a single snapshot. Each document MUST declare the complete route — upstream, matching and overrides. An invalid document MUST prevent the load, identifying the file responsible, rather than being silently ignored.
 
-#### Scenario: Documentos fundidos num snapshot
+#### Scenario: Documents merged into a snapshot
 
-- **WHEN** o diretório de rotas contém três documentos válidos
-- **THEN** as três rotas atendem tráfego após a inicialização
+- **WHEN** the routes directory contains three valid documents
+- **THEN** all three routes serve traffic after startup
 
-#### Scenario: Diretório de rotas vazio ou ausente
+#### Scenario: Routes directory empty or missing
 
-- **WHEN** o diretório de rotas está vazio ou não existe
-- **THEN** o gateway sobe sem nenhuma rota, registra um aviso e aceita rotas pela API de administração
+- **WHEN** the routes directory is empty or does not exist
+- **THEN** the gateway comes up with no routes, logs a warning and accepts routes through the admin API
 
-#### Scenario: Documento inválido identifica o arquivo
+#### Scenario: An invalid document identifies the file
 
-- **WHEN** um dos documentos do diretório declara um campo inválido
-- **THEN** a carga é recusada com uma mensagem que nomeia o arquivo, o campo e sua localização dentro dele
+- **WHEN** one of the documents in the directory declares an invalid field
+- **THEN** the load is refused with a message naming the file, the field and its location inside it
 
-#### Scenario: Arquivo sem extensão reconhecida é ignorado
+#### Scenario: A file without a recognized extension is ignored
 
-- **WHEN** o diretório de rotas contém um arquivo que não é um documento YAML
-- **THEN** esse arquivo é ignorado sem impedir a carga dos demais
+- **WHEN** the routes directory contains a file that is not a YAML document
+- **THEN** that file is ignored without preventing the load of the others
 
-### Requirement: Detecção de colisão entre documentos
+### Requirement: Collision detection between documents
 
-O gateway SHALL recusar a carga quando dois documentos de rota declaram o mesmo nome de rota, ou quando declaram o mesmo host e o mesmo padrão de path. A mensagem MUST nomear os dois arquivos em conflito.
+The gateway SHALL refuse the load when two route documents declare the same route name, or when they declare the same host and the same path pattern. The message MUST name both conflicting files.
 
-#### Scenario: Nomes de rota duplicados
+#### Scenario: Duplicate route names
 
-- **WHEN** dois documentos declaram rotas com o mesmo nome
-- **THEN** a carga é recusada informando os dois arquivos e o nome repetido
+- **WHEN** two documents declare routes with the same name
+- **THEN** the load is refused, reporting both files and the duplicated name
 
-#### Scenario: Padrões de casamento idênticos
+#### Scenario: Identical matching patterns
 
-- **WHEN** dois documentos declaram o mesmo host e o mesmo padrão de path
-- **THEN** a carga é recusada informando os dois arquivos e o padrão em conflito
+- **WHEN** two documents declare the same host and the same path pattern
+- **THEN** the load is refused, reporting both files and the conflicting pattern
 
-#### Scenario: Padrões distintos que se sobrepõem são permitidos
+#### Scenario: Distinct overlapping patterns are allowed
 
-- **WHEN** um documento declara `/api/*` e outro declara `/api/payments/*`
-- **THEN** ambos são carregados e a precedência por especificidade resolve o casamento
+- **WHEN** one document declares `/api/*` and another declares `/api/payments/*`
+- **THEN** both are loaded and precedence by specificity resolves the match
 
-### Requirement: Validação da configuração
+### Requirement: Configuration validation
 
-O gateway SHALL validar toda a configuração antes de aplicá-la e MUST recusar configuração inválida com uma mensagem que identifique o arquivo, o campo responsável e sua localização. O gateway MUST NOT iniciar com configuração inválida.
+The gateway SHALL validate the whole configuration before applying it and MUST refuse invalid configuration with a message identifying the file, the offending field and its location. The gateway MUST NOT start with invalid configuration.
 
-#### Scenario: Probabilidade fora do intervalo
+#### Scenario: Probability outside the range
 
-- **WHEN** um documento de rota declara probabilidade `1.5` num override
-- **THEN** a carga é recusada nomeando o arquivo, o campo e sua localização
+- **WHEN** a route document declares probability `1.5` on an override
+- **THEN** the load is refused, naming the file, the field and its location
 
-#### Scenario: Upstream inválido
+#### Scenario: Invalid upstream
 
-- **WHEN** um documento declara um upstream cujo endereço não é uma URL válida
-- **THEN** a carga é recusada informando o arquivo e o valor rejeitado
+- **WHEN** a document declares an upstream whose address is not a valid URL
+- **THEN** the load is refused, reporting the file and the rejected value
 
-#### Scenario: Portas iguais
+#### Scenario: Identical ports
 
-- **WHEN** `gateway.json` declara a mesma porta para tráfego e administração
-- **THEN** o gateway recusa iniciar informando o conflito
+- **WHEN** `gateway.json` declares the same port for traffic and administration
+- **THEN** the gateway refuses to start, reporting the conflict
 
-#### Scenario: Versão de schema superior à conhecida
+#### Scenario: Schema version higher than the one known
 
-- **WHEN** um documento declara uma versão de schema maior que a suportada pelo binário
-- **THEN** a carga é recusada com uma mensagem que nomeia as duas versões
+- **WHEN** a document declares a schema version higher than the binary supports
+- **THEN** the load is refused with a message naming both versions
 
-### Requirement: Variáveis de ambiente sobrepõem os arquivos
+### Requirement: Environment variables override the files
 
-O gateway SHALL aceitar variáveis de ambiente para a configuração do processo, e estas MUST ter precedência sobre `gateway.json`, que por sua vez MUST ter precedência sobre os valores padrão. A origem efetiva de cada valor MUST ser consultável, de modo que o usuário saiba se um valor veio do ambiente, do arquivo ou do padrão.
+The gateway SHALL accept environment variables for the process configuration, and these MUST take precedence over `gateway.json`, which in turn MUST take precedence over the default values. The effective origin of each value MUST be queryable, so that the user knows whether a value came from the environment, from the file or from the default.
 
-#### Scenario: Ambiente vence o arquivo
+#### Scenario: The environment beats the file
 
-- **WHEN** `gateway.json` declara o backend de histórico como memória e a variável de ambiente correspondente declara SQLite
-- **THEN** o gateway usa SQLite
+- **WHEN** `gateway.json` declares the history backend as memory and the corresponding environment variable declares SQLite
+- **THEN** the gateway uses SQLite
 
-#### Scenario: Arquivo vence o padrão
+#### Scenario: The file beats the default
 
-- **WHEN** nenhuma variável de ambiente é definida e `gateway.json` declara uma porta de tráfego diferente da padrão
-- **THEN** o gateway atende na porta declarada no arquivo
+- **WHEN** no environment variable is set and `gateway.json` declares a traffic port different from the default
+- **THEN** the gateway serves on the port declared in the file
 
-#### Scenario: Origem efetiva consultável
+#### Scenario: Effective origin is queryable
 
-- **WHEN** a configuração efetiva é consultada com a porta vinda do ambiente e o seed vindo do arquivo
-- **THEN** a consulta informa, para cada valor, se ele veio do ambiente, do arquivo ou do padrão
+- **WHEN** the effective configuration is queried with the port coming from the environment and the seed coming from the file
+- **THEN** the query reports, for each value, whether it came from the environment, from the file or from the default
 
-### Requirement: Recarga sem reinício
+### Requirement: Reload without restart
 
-O gateway SHALL aplicar qualquer alteração de configuração — recarga dos arquivos ou alteração pela API — sem encerrar o processo nem derrubar conexões em andamento, inclusive alterações de porta e de backend do histórico. Quando a configuração nova é inválida ou não pode ser aplicada, o gateway MUST preservar a configuração anterior em vigor e reportar o erro.
+The gateway SHALL apply any configuration change — a reload of the files or a change through the API — without terminating the process or dropping in-flight connections, including changes to ports and to the history backend. When the new configuration is invalid or cannot be applied, the gateway MUST keep the previous configuration in force and report the error.
 
-#### Scenario: Recarga aplica a nova configuração
+#### Scenario: A reload applies the new configuration
 
-- **WHEN** um novo documento de rota é acrescentado ao diretório e a recarga é solicitada
-- **THEN** a nova rota passa a atender sem que o processo seja reiniciado
+- **WHEN** a new route document is added to the directory and a reload is requested
+- **THEN** the new route starts serving without the process being restarted
 
-#### Scenario: Recarga inválida preserva a configuração anterior
+#### Scenario: An invalid reload preserves the previous configuration
 
-- **WHEN** um documento é editado com um valor inválido e a recarga é solicitada
-- **THEN** a recarga é recusada com a mensagem de validação e as rotas anteriores continuam atendendo
+- **WHEN** a document is edited with an invalid value and a reload is requested
+- **THEN** the reload is refused with the validation message and the previous routes keep serving
 
-#### Scenario: Requisições em andamento sobrevivem à recarga
+#### Scenario: In-flight requests survive the reload
 
-- **WHEN** há requisições em curso e uma recarga válida é aplicada
-- **THEN** as requisições em curso são concluídas sob a configuração que as iniciou
+- **WHEN** there are requests in flight and a valid reload is applied
+- **THEN** the in-flight requests complete under the configuration they started with
 
-#### Scenario: Porta trocada a quente
+#### Scenario: Port hot-swapped
 
-- **WHEN** a porta de tráfego é alterada para uma porta livre com requisições em curso na porta atual
-- **THEN** o gateway passa a atender na porta nova, deixa de aceitar conexões na antiga e conclui as requisições em curso, sem reiniciar o processo
+- **WHEN** the traffic port is changed to a free port while requests are in flight on the current one
+- **THEN** the gateway starts serving on the new port, stops accepting connections on the old one and completes the in-flight requests, without restarting the process
 
-#### Scenario: Porta nova indisponível preserva a atual
+#### Scenario: An unavailable new port preserves the current one
 
-- **WHEN** a porta de tráfego é alterada para uma porta já ocupada
-- **THEN** a alteração é recusada informando a porta e a causa, e o gateway segue atendendo na porta atual
+- **WHEN** the traffic port is changed to a port already in use
+- **THEN** the change is refused, reporting the port and the cause, and the gateway keeps serving on the current port
 
-#### Scenario: Backend do histórico trocado a quente
+#### Scenario: History backend hot-swapped
 
-- **WHEN** o backend do histórico é alterado de memória para SQLite com o gateway em execução
-- **THEN** o SQLite é inicializado antes da troca, as trocas seguintes passam a ser registradas nele e o histórico anterior não é migrado
+- **WHEN** the history backend is changed from memory to SQLite with the gateway running
+- **THEN** SQLite is initialized before the swap, the following exchanges are recorded in it and the previous history is not migrated
 
-#### Scenario: Backend novo indisponível preserva o atual
+#### Scenario: An unavailable new backend preserves the current one
 
-- **WHEN** o backend do histórico é alterado para um que não pode ser inicializado
-- **THEN** a alteração é recusada informando o backend e a causa, e o backend atual segue em uso
+- **WHEN** the history backend is changed to one that cannot be initialized
+- **THEN** the change is refused, reporting the backend and the cause, and the current backend stays in use
 
-### Requirement: API de administração
+### Requirement: Admin API
 
-O gateway SHALL expor uma API de administração que permita consultar e alterar tudo o que `gateway.json` e os documentos de rota configuram — rotas, overrides e configuração do processo — e consultar o histórico de tráfego. Uma alteração de rota MUST reescrever apenas o documento daquela rota, deixando os demais intactos, e uma alteração do processo MUST ser gravada em `gateway.json`. Um valor definido por variável de ambiente MUST NOT ser alterável pela API, e a recusa MUST nomear a variável responsável. Escritas concorrentes MUST ser serializadas de modo que nenhuma seja perdida, e a escrita de cada documento MUST ser atômica.
+The gateway SHALL expose an admin API that allows querying and changing everything `gateway.json` and the route documents configure — routes, overrides and the process configuration — and querying the traffic history. A route change MUST rewrite only that route's document, leaving the others untouched, and a process change MUST be written to `gateway.json`. A value set by an environment variable MUST NOT be changeable through the API, and the refusal MUST name the variable responsible. Concurrent writes MUST be serialized so that none is lost, and each document's write MUST be atomic.
 
-#### Scenario: Alteração atinge apenas o documento da rota
+#### Scenario: A change touches only the route's document
 
-- **WHEN** um override é acrescentado à rota `payments` pela API e os documentos do diretório são lidos em seguida
-- **THEN** somente `payments` foi reescrito e os demais documentos permanecem byte a byte iguais
+- **WHEN** an override is added to the `payments` route through the API and the directory's documents are read afterwards
+- **THEN** only `payments` was rewritten and the other documents stay byte for byte the same
 
-#### Scenario: Criação de rota gera documento próprio
+#### Scenario: Creating a route produces its own document
 
-- **WHEN** uma rota nova é criada pela API
-- **THEN** um documento correspondente passa a existir no diretório de rotas
+- **WHEN** a new route is created through the API
+- **THEN** a corresponding document appears in the routes directory
 
-#### Scenario: Escritas concorrentes são serializadas
+#### Scenario: Concurrent writes are serialized
 
-- **WHEN** duas alterações em rotas diferentes são submetidas simultaneamente
-- **THEN** ambas são aplicadas e os dois documentos refletem as alterações
+- **WHEN** two changes to different routes are submitted simultaneously
+- **THEN** both are applied and both documents reflect the changes
 
-#### Scenario: Configuração do processo alterada pela API
+#### Scenario: Process configuration changed through the API
 
-- **WHEN** o seed é alterado pela API
-- **THEN** o novo seed passa a valer sem reinício e `gateway.json` passa a declará-lo
+- **WHEN** the seed is changed through the API
+- **THEN** the new seed takes effect without a restart and `gateway.json` starts declaring it
 
-#### Scenario: Valor do ambiente é travado
+#### Scenario: A value from the environment is locked
 
-- **WHEN** a porta de tráfego vem de variável de ambiente e a API recebe uma alteração dessa porta
-- **THEN** a alteração é recusada nomeando a variável de ambiente responsável, e `gateway.json` não é modificado
+- **WHEN** the traffic port comes from an environment variable and the API receives a change to that port
+- **THEN** the change is refused, naming the environment variable responsible, and `gateway.json` is not modified
 
-#### Scenario: Alteração inválida é recusada sem tocar o disco
+#### Scenario: An invalid change is refused without touching the disk
 
-- **WHEN** a API recebe um override com latência mínima maior que a máxima
-- **THEN** a alteração é recusada com a mensagem de validação e nenhum documento é modificado
+- **WHEN** the API receives an override whose minimum latency is greater than its maximum
+- **THEN** the change is refused with the validation message and no document is modified
 
-### Requirement: Separação entre porta de tráfego e porta de administração
+### Requirement: Separation between the traffic port and the admin port
 
-O gateway SHALL atender o tráfego encaminhado e a administração em portas distintas. A API de administração e a interface MUST NOT ser acessíveis pela porta de tráfego, e nenhum path reservado MUST ser subtraído do espaço de rotas do usuário.
+The gateway SHALL serve forwarded traffic and administration on separate ports. The admin API and the interface MUST NOT be reachable on the traffic port, and no reserved path MUST be taken out of the user's route space.
 
-#### Scenario: Administração indisponível na porta de tráfego
+#### Scenario: Administration unavailable on the traffic port
 
-- **WHEN** uma requisição para um path da API de administração chega pela porta de tráfego
-- **THEN** ela é tratada como tráfego comum, sujeita à resolução de rotas configurada pelo usuário
+- **WHEN** a request for an admin API path arrives on the traffic port
+- **THEN** it is treated as ordinary traffic, subject to the route resolution the user configured
 
-#### Scenario: Tráfego indisponível na porta de administração
+#### Scenario: Traffic unavailable on the admin port
 
-- **WHEN** uma requisição para um path de rota configurada chega pela porta de administração
-- **THEN** ela não é encaminhada a nenhum upstream
+- **WHEN** a request for a configured route's path arrives on the admin port
+- **THEN** it is not forwarded to any upstream

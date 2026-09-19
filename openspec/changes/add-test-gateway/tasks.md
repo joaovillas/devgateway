@@ -1,98 +1,98 @@
-## 1. Fundação do projeto
+## 1. Project foundation
 
-- [x] 1.1 Inicializar o módulo Go e o layout `cmd/gateway`, `internal/...`, `web/`, e verificar que `go build ./...` conclui em um clone limpo
-- [x] 1.2 Versionar um `web/dist/index.html` mínimo e a diretiva `//go:embed all:web/dist`, e verificar que `go build ./...` conclui sem que o frontend tenha sido construído
-- [x] 1.3 Criar o `Makefile` (ou `Taskfile`) com alvos de build, teste e lint, e verificar que cada alvo roda do zero
-- [ ] 1.4 Configurar CI rodando build, `go vet` e testes com `-race`, e verificar que o pipeline passa no primeiro commit
+- [x] 1.1 Initialize the Go module and the `cmd/gateway`, `internal/...`, `web/` layout, and verify that `go build ./...` completes on a clean clone
+- [x] 1.2 Commit a minimal `web/dist/index.html` and the `//go:embed all:web/dist` directive, and verify that `go build ./...` completes without the frontend having been built
+- [x] 1.3 Create the `Makefile` (or `Taskfile`) with build, test and lint targets, and verify that each target runs from scratch
+- [ ] 1.4 Set up CI running the build, `go vet` and the tests with `-race`, and verify that the pipeline passes on the first commit
 
-## 2. Configuração
+## 2. Configuration
 
-- [x] 2.1 Definir as estruturas de `gateway.json` (portas, seed, armazenamento, exposição e registro do histórico, limites de captura, diretório de rotas, versão de schema) com chaves em inglês, e verificar por teste de serialização que um arquivo de exemplo carrega e reserializa sem perda de campos
-- [x] 2.2 Definir a estrutura do documento de rota (nome, upstream, casamento, overrides, versão de schema) com chaves em inglês, e verificar por teste que um documento de exemplo carrega e reserializa sem perda
-- [x] 2.3 Implementar a varredura do diretório de rotas e a fusão num snapshot, ignorando arquivos sem extensão reconhecida, e verificar pelos quatro cenários da requirement "Um documento por rota"
-- [x] 2.4 Implementar a detecção de colisão entre documentos (nome repetido, host e padrão idênticos), e verificar pelos três cenários da requirement correspondente
-- [x] 2.5 Implementar a validação com mensagem nomeando arquivo, campo e localização, incluindo a recusa por versão de schema superior, e verificar pelos quatro cenários da requirement de validação
-- [x] 2.6 Implementar a precedência ambiente sobre arquivo sobre padrão e a consulta de origem efetiva de cada valor, e verificar pelos três cenários da requirement correspondente
-- [x] 2.7 Implementar o snapshot imutável atrás de `atomic.Pointer` com índices pré-computados, e verificar por teste de concorrência com `-race` que leituras simultâneas à troca nunca observam estado parcial
-- [x] 2.8 Implementar a inicialização com portas separadas e recusa de portas iguais, e verificar pelos dois cenários da requirement de separação de portas e pelo cenário "Portas iguais" da validação
-- [x] 2.9 Acrescentar ao documento de rota o campo `enabled` do override (padrão ligado), o bloco `source` de origem (aprendido ou derivado, troca de origem, corpo incompleto) e a troca de `preserveHost` por `rewriteHost`, e ao `gateway.json` a chave `learning.enabled` com variável de ambiente, e verificar por teste de ida e volta e pelos cenários de validação
+- [x] 2.1 Define the `gateway.json` structures (ports, seed, history storage, exposure and recording, capture limits, routes directory, schema version) with English keys, and verify with a serialization test that a sample file loads and reserializes without losing fields
+- [x] 2.2 Define the route document structure (name, upstream, matching, overrides, schema version) with English keys, and verify with a test that a sample document loads and reserializes without loss
+- [x] 2.3 Implement the scan of the routes directory and the merge into a snapshot, ignoring files without a recognized extension, and verify against the four scenarios of the "One document per route" requirement
+- [x] 2.4 Implement collision detection between documents (duplicate name, identical host and pattern), and verify against the three scenarios of the corresponding requirement
+- [x] 2.5 Implement validation with a message naming the file, the field and its location, including the refusal on a higher schema version, and verify against the four scenarios of the validation requirement
+- [x] 2.6 Implement the environment-over-file-over-default precedence and the query for the effective origin of each value, and verify against the three scenarios of the corresponding requirement
+- [x] 2.7 Implement the immutable snapshot behind an `atomic.Pointer` with precomputed indexes, and verify with a concurrency test under `-race` that reads concurrent with the swap never observe partial state
+- [x] 2.8 Implement startup with separate ports and the refusal of identical ports, and verify against the two scenarios of the port separation requirement and the "Identical ports" scenario of the validation requirement
+- [x] 2.9 Add to the route document the override's `enabled` field (on by default), the `source` block (learned or derived, originating exchange, incomplete body) and the swap of `preserveHost` for `rewriteHost`, and to `gateway.json` the `learning.enabled` key with its environment variable, and verify with a round-trip test and against the validation scenarios
 
-## 3. Roteamento reverso
+## 3. Reverse routing
 
-- [x] 3.1 Implementar a resolução de rota por lista ordenada com curinga de sufixo e path exato (host antes de path, mais específico antes de menos), e verificar pelos cenários de precedência das requirements de roteamento por curinga e por host
-- [x] 3.2 Implementar o encaminhamento sobre `httputil.ReverseProxy` com remoção opcional de prefixo, e verificar pelos cenários de remoção e preservação de prefixo
-- [x] 3.3 Implementar os cabeçalhos de encaminhamento com acúmulo de `X-Forwarded-For` e preservação opcional do `Host`, e verificar pelos três cenários da requirement de encaminhamento de cabeçalhos
-- [x] 3.4 Implementar as respostas de falha do upstream (`502` sem conexão, `504` por tempo limite, `404` sem rota) com corpo diagnóstico, e verificar pelos cenários correspondentes
-- [x] 3.5 Verificar a transparência do tráfego com um teste de ponta a ponta que exercita método e corpo preservados, status repassado e resposta `text/event-stream` chegando incrementalmente
-- [x] 3.6 Tornar o encaminhamento transparente — `Host` original por padrão com `rewriteHost` opcional, `X-Forwarded-Host` e `X-Forwarded-Proto` preservados quando já presentes, cabeçalhos arbitrários e repetidos repassados — e acrescentar o cabeçalho `X-Gateway` na ida e na volta, e verificar pelos seis cenários da requirement de encaminhamento de cabeçalhos e pelos cenários da requirement de identificação do gateway (o cenário "Identificação com intervenção" depende dos overrides e é verificado de ponta a ponta em 6.10)
+- [x] 3.1 Implement route resolution by ordered list with suffix wildcards and exact paths (host before path, more specific before less), and verify against the precedence scenarios of the wildcard routing and host routing requirements
+- [x] 3.2 Implement forwarding on top of `httputil.ReverseProxy` with optional prefix stripping, and verify against the prefix stripping and preservation scenarios
+- [x] 3.3 Implement the forwarding headers with `X-Forwarded-For` accumulation and optional `Host` preservation, and verify against the three scenarios of the header forwarding requirement
+- [x] 3.4 Implement the upstream failure responses (`502` with no connection, `504` on timeout, `404` with no route) with a diagnostic body, and verify against the corresponding scenarios
+- [x] 3.5 Verify traffic transparency with an end-to-end test exercising a preserved method and body, a passed-through status and a `text/event-stream` response arriving incrementally
+- [x] 3.6 Make forwarding transparent — the original `Host` by default with an optional `rewriteHost`, `X-Forwarded-Host` and `X-Forwarded-Proto` preserved when already present, arbitrary and repeated headers passed through — and add the `X-Gateway` header on the way out and on the way back, and verify against the six scenarios of the header forwarding requirement and the scenarios of the gateway identification requirement (the "Identification with an intervention" scenario depends on overrides and is verified end to end in 6.10)
 
-## 4. Armazenamento do histórico
+## 4. History storage
 
-- [x] 4.1 Definir a interface de armazenamento (registrar, listar com filtros, buscar por identificador, navegar por cursor, limpar) e a bateria de testes de contrato que roda contra qualquer implementação, e verificar que a bateria falha contra uma implementação vazia
-- [x] 4.2 Implementar o backend em memória como anel de capacidade configurável, e verificar pela bateria de contrato e pelo cenário "Capacidade excedida em memória"
-- [x] 4.3 Implementar o backend NDJSON com escrita append e leitura indexada, e verificar pela bateria de contrato e pelo cenário de sobrevivência ao reinício
-- [x] 4.4 Implementar o backend SQLite com driver puro em Go, e verificar pela bateria de contrato, pelo cenário de sobrevivência ao reinício e por `go build` com `CGO_ENABLED=0` concluindo
-- [x] 4.5 Implementar a seleção do backend por variável de ambiente com memória como padrão e recusa de iniciar quando o backend falha, e verificar pelos cenários "Memória é o padrão" e "Backend indisponível impede a inicialização"
-- [x] 4.6 Implementar a troca a quente do backend do histórico (inicializa o novo, troca, fecha o antigo, sem migrar), e verificar pelos cenários "Backend do histórico trocado a quente" e "Backend novo indisponível preserva o atual"
+- [x] 4.1 Define the storage interface (record, list with filters, look up by identifier, navigate by cursor, clear) and the contract test battery that runs against any implementation, and verify that the battery fails against an empty implementation
+- [x] 4.2 Implement the in-memory backend as a ring of configurable capacity, and verify against the contract battery and the "Capacity exceeded in memory" scenario
+- [x] 4.3 Implement the NDJSON backend with append writes and indexed reads, and verify against the contract battery and the restart survival scenario
+- [x] 4.4 Implement the SQLite backend with a pure Go driver, and verify against the contract battery, the restart survival scenario and a `go build` with `CGO_ENABLED=0` completing
+- [x] 4.5 Implement backend selection by environment variable with memory as the default and a refusal to start when the backend fails, and verify against the "Memory is the default" and "An unavailable backend prevents startup" scenarios
+- [x] 4.6 Implement the hot swap of the history backend (initialize the new one, swap, close the old one, no migration), and verify against the "History backend hot-swapped" and "An unavailable new backend preserves the current one" scenarios
 
-## 5. Captura de tráfego
+## 5. Traffic capture
 
-- [x] 5.1 Implementar o registro da troca com identificador único, dados de requisição e resposta, rota, override e tamanhos, com truncamento de corpo no limite configurado, e verificar pelos três cenários da requirement de registro
-- [x] 5.2 Implementar a cronometragem decomposta em tempo total, tempo de upstream, tempo injetado e overhead do gateway, e verificar pelos três cenários da requirement de decomposição da latência
-- [x] 5.3 Implementar a consulta com ordem cronológica inversa, paginação e filtros combinados, e verificar pelos quatro cenários da requirement de consulta e filtragem
-- [x] 5.4 Implementar a leitura por identificador e a navegação item a item respeitando os filtros ativos, e verificar pelos quatro cenários da requirement de leitura individual e navegação por cursor
-- [x] 5.5 Implementar o desligamento independente de registro e de exposição, e a limpeza sob demanda, e verificar pelos três cenários da requirement de exposição configurável
+- [x] 5.1 Implement the exchange record with a unique identifier, request and response data, route, override and sizes, with body truncation at the configured limit, and verify against the three scenarios of the recording requirement
+- [x] 5.2 Implement the timing broken down into total time, upstream time, injected time and gateway overhead, and verify against the three scenarios of the latency breakdown requirement
+- [x] 5.3 Implement querying with reverse chronological order, pagination and combined filters, and verify against the four scenarios of the querying and filtering requirement
+- [x] 5.4 Implement reads by identifier and item-by-item navigation honoring the active filters, and verify against the four scenarios of the single read and cursor navigation requirement
+- [x] 5.5 Implement turning recording and exposure off independently, and clearing on demand, and verify against the three scenarios of the configurable exposure requirement
 
 ## 6. Overrides
 
-- [x] 6.1 Implementar os critérios de seleção (path exato, curinga e regex; método, cabeçalhos, query e corpo com os operadores de igualdade, regex, igualdade JSON e substring), e verificar pelos cinco cenários da requirement de critérios de seleção
-- [x] 6.2 Implementar a precedência por especificidade entre overrides, com desempate pela ordem de declaração, e verificar pelos três cenários da requirement de precedência
-- [x] 6.3 Implementar o passthrough por padrão e o `501` de rota sem upstream e sem override casado, e verificar pelos três cenários da requirement de interceptação seletiva
-- [x] 6.4 Implementar a resposta declarada com status padrão `200` e inferência do tipo de conteúdo para corpo JSON, e verificar pelos três cenários da requirement de resposta declarada, e verificar de novo, com resposta sintetizada por override real, o cenário "Resposta sintetizada não contabiliza tempo de upstream" da spec `traffic-capture` (em 5.2 ele foi verificado só pelo registro de captura, com a intervenção anotada à mão)
-- [x] 6.5 Implementar a fonte de aleatoriedade derivada de `(seed, número de sequência)` com `math/rand/v2`, e verificar pelos dois cenários da requirement de determinismo, com `-race` e requisições concorrentes
-- [x] 6.6 Implementar a probabilidade de aplicação com passthrough quando não sorteada, e verificar pelos quatro cenários da requirement correspondente, incluindo o teste estatístico de 1000 requisições a 30%
-- [x] 6.7 Implementar a latência fixa ou sorteada em intervalo, aplicada após a resposta estar pronta, inclusive no caso de override sem `respond`, e verificar pelos cinco cenários da requirement de latência e queda, e repetir com override real (latência de `2s`, upstream de `150ms`) o cenário "Tempo injetado separado do tempo real" da spec `traffic-capture`, que em 5.2 foi verificado pelo mesmo ponto de injeção acionado por gancho de teste
-- [x] 6.8 Implementar a queda de conexão via `http.Hijacker` com degradação documentada em HTTP/2, e verificar pelo cenário "Queda encerra sem resposta" e pelo cenário de queda da spec `traffic-capture`
-- [x] 6.9 Implementar a expiração por tempo de vida e por contagem de aplicações, com ambos consultáveis, e verificar pelos quatro cenários da requirement de expiração
-- [x] 6.10 Implementar o cabeçalho de identificação da intervenção e a marcação na troca capturada, e verificar pelos dois cenários da requirement de identificação, pelo cenário "Identificação com intervenção" da requirement de identificação do gateway da spec `gateway-routing` (o cliente recebe `X-Gateway: route=payments; override=payments/flaky; intervention=synthesized` quando o override sintetiza a resposta) e pelos três cenários da requirement de distinção da spec `traffic-capture`, e pelo cenário "Filtro por intervenção" da mesma spec com uma troca sintetizada por override real (em 5.3 a troca sintetizada foi registrada pelo caminho da captura, sem o motor de overrides)
-- [x] 6.11 Implementar o liga/desliga do override, com desligados fora da seleção e da precedência, e verificar pelos três cenários da requirement de override ligado e desligado
-- [x] 6.12 Implementar o modo aprendizado — detecção de método e path desconhecidos após resposta do upstream, geração do override desligado com resposta completa e origem, gravação atômica do documento e reconstrução do snapshot fora do caminho da requisição — e verificar pelos seis cenários da requirement de aprendizado de endpoints
-- [x] 6.13 Implementar parâmetros de segmento no path das regras (`/viacep/:id/json`), com precedência entre exato e expressão regular, e a generalização no aprendizado (detecção de identificadores, conhecimento por casamento, absorção dos aprendidos exatos cobertos), e verificar pelo cenário de path com parâmetro e pelos três cenários novos do aprendizado
-- [x] 6.14 Trocar a probabilidade única do override pela frequência por efeito (resposta, latência e queda, cada uma com a sua; ausente vale sempre; a do override vale como padrão das que faltam), com sorteio independente e determinístico por efeito, e verificar pelos seis cenários da requirement de frequência de cada efeito
+- [x] 6.1 Implement the selection criteria (exact path, wildcard and regex; method, headers, query and body with the equality, regex, JSON equality and substring operators), and verify against the five scenarios of the selection criteria requirement
+- [x] 6.2 Implement precedence by specificity between overrides, with ties broken by declaration order, and verify against the three scenarios of the precedence requirement
+- [x] 6.3 Implement passthrough by default and the `501` for a route with no upstream and no matching override, and verify against the three scenarios of the selective interception requirement
+- [x] 6.4 Implement the declared response with a default status of `200` and content type inference for a JSON body, and verify against the three scenarios of the declared response requirement, and verify again, with a response synthesized by a real override, the "A synthesized response records no upstream time" scenario of the `traffic-capture` spec (in 5.2 it was verified only through the capture record, with the intervention annotated by hand)
+- [x] 6.5 Implement the source of randomness derived from `(seed, sequence number)` with `math/rand/v2`, and verify against the two scenarios of the determinism requirement, under `-race` and with concurrent requests
+- [x] 6.6 Implement the application probability with passthrough when it is not drawn, and verify against the four scenarios of the corresponding requirement, including the statistical test of 1000 requests at 30%
+- [x] 6.7 Implement fixed latency or latency drawn from a range, applied once the response is ready, including for an override with no `respond`, and verify against the five scenarios of the latency and drop requirement, and repeat with a real override (latency of `2s`, upstream of `150ms`) the "Injected time separated from real time" scenario of the `traffic-capture` spec, which in 5.2 was verified through the same injection point triggered by a test hook
+- [x] 6.8 Implement the connection drop via `http.Hijacker` with the documented degradation on HTTP/2, and verify against the "A drop ends with no response" scenario and the drop scenario of the `traffic-capture` spec
+- [x] 6.9 Implement expiry by time to live and by application count, with both queryable, and verify against the four scenarios of the expiry requirement
+- [x] 6.10 Implement the intervention identification header and the marking on the captured exchange, and verify against the two scenarios of the identification requirement, against the "Identification with an intervention" scenario of the gateway identification requirement in the `gateway-routing` spec (the client receives `X-Gateway: route=payments; override=payments/flaky; intervention=synthesized` when the override synthesizes the response), against the three scenarios of the distinction requirement in the `traffic-capture` spec, and against the "Filter by intervention" scenario of that same spec with an exchange synthesized by a real override (in 5.3 the synthesized exchange was recorded through the capture path, without the override engine)
+- [x] 6.11 Implement the override on/off switch, with disabled ones out of selection and precedence, and verify against the three scenarios of the enabled and disabled override requirement
+- [x] 6.12 Implement learning mode — detecting unknown methods and paths after the upstream responds, generating the disabled override with the full response and its source, writing the document atomically and rebuilding the snapshot off the request path — and verify against the six scenarios of the endpoint learning requirement
+- [x] 6.13 Implement segment parameters in rule paths (`/zip/:id/json`), with precedence between exact and regular expression, and the generalization in learning (identifier detection, knowledge by matching, absorption of the exact learned overrides it covers), and verify against the segment parameter path scenario and the three new learning scenarios
+- [x] 6.14 Replace the override's single probability with a per-effect frequency (response, latency and drop, each with its own; absent means always; the override's own acts as the default for the ones that lack it), with an independent, deterministic draw per effect, and verify against the six scenarios of the per-effect frequency requirement
 
-## 7. API de administração
+## 7. Admin API
 
-- [x] 7.1 Implementar os endpoints de leitura e escrita de rotas e overrides, e verificar por testes de API que cada recurso é criado, alterado, lido e removido
-- [x] 7.2 Implementar a persistência por documento com escrita atômica e mutex de escrita, e verificar pelos quatro cenários da requirement de API de administração, incluindo a comparação byte a byte dos documentos não tocados
-- [x] 7.3 Implementar a recarga sob comando preservando a configuração anterior em caso de erro, e verificar pelos cenários de recarga, requisições em curso e recarga inválida da requirement de recarga sem reinício
-- [x] 7.4 Implementar os endpoints do histórico — listagem com filtros, leitura por identificador, navegação por cursor e limpeza — e verificar por teste de API que cada um respeita a configuração de exposição
-- [x] 7.5 Implementar o endpoint de configuração efetiva com a origem de cada valor, e verificar pelo cenário "Origem efetiva consultável"
-- [x] 7.6 Implementar a derivação de override a partir de uma troca capturada, incluindo a recusa para troca inexistente e o tratamento de corpo truncado, e verificar pelos três cenários da requirement de derivação
-- [x] 7.7 Implementar o fluxo SSE de trocas novas com agregação de no máximo uma atualização por segundo, e verificar por teste que um cliente conectado recebe as trocas em ordem e que a conexão sobrevive a períodos sem tráfego
-- [x] 7.8 Escrever a referência da API e verificar que cada operação das specs tem um exemplo executável por `curl`
-- [x] 7.9 Implementar os endpoints de leitura e escrita da configuração do processo com gravação em `gateway.json`, recusa nomeando a variável para valores do ambiente e liga/desliga do modo aprendizado, e verificar pelos cenários "Configuração do processo alterada pela API" e "Valor do ambiente é travado"
-- [x] 7.10 Implementar o supervisor de listeners com troca a quente das portas de tráfego e administração, e verificar pelos cenários "Porta trocada a quente" e "Porta nova indisponível preserva a atual"
+- [x] 7.1 Implement the read and write endpoints for routes and overrides, and verify with API tests that each resource is created, changed, read and removed
+- [x] 7.2 Implement per-document persistence with atomic writes and a write mutex, and verify against the four scenarios of the admin API requirement, including the byte-for-byte comparison of the untouched documents
+- [x] 7.3 Implement reload on command, preserving the previous configuration on error, and verify against the reload, in-flight requests and invalid reload scenarios of the reload-without-restart requirement
+- [x] 7.4 Implement the history endpoints — listing with filters, read by identifier, cursor navigation and clearing — and verify with API tests that each one honors the exposure configuration
+- [x] 7.5 Implement the effective configuration endpoint with the origin of each value, and verify against the "Effective origin is queryable" scenario
+- [x] 7.6 Implement deriving an override from a captured exchange, including the refusal for a nonexistent exchange and the handling of a truncated body, and verify against the three scenarios of the derivation requirement
+- [x] 7.7 Implement the SSE stream of new exchanges batched to at most one update per second, and verify with a test that a connected client receives the exchanges in order and that the connection survives periods with no traffic
+- [x] 7.8 Write the API reference and verify that every operation in the specs has an example runnable with `curl`
+- [x] 7.9 Implement the read and write endpoints for the process configuration, writing to `gateway.json`, refusing values that come from the environment by naming the variable, and toggling learning mode, and verify against the "Process configuration changed through the API" and "A value from the environment is locked" scenarios
+- [x] 7.10 Implement the listener supervisor with hot swapping of the traffic and admin ports, and verify against the "Port hot-swapped" and "An unavailable new port preserves the current one" scenarios
 
-## 8. Interface web
+## 8. Web interface
 
-- [x] 8.1 Montar o projeto Vite com React e TypeScript, o cliente da API e o build para `web/dist`, e verificar que o binário construído serve a interface na porta de administração sem acesso à rede externa, conforme os dois cenários da requirement de interface servida pelo próprio binário
-- [x] 8.2 Implementar o painel de serviços em duas visões, o mapa (seu app → serviços → destinos, ligados; visão padrão) e a lista (entrada → destino), com a escolha lembrada entre sessões, busca e "+ serviço" sempre visíveis nas duas, escala a 50+ serviços, destaque de regra ativa, sinalização de destino indisponível e filtragem por seleção de serviço ou destino, e verificar pelos oito cenários da requirement de serviços em mapa e lista
-- [x] 8.3 Implementar os controles contínuos do override aplicados imediatamente, com restante de tempo e de aplicações e desligamento em um gesto, e verificar pelos três cenários da requirement de controle direto
-- [x] 8.4 Implementar a lista e o detalhe de tráfego com waterfall separando tempo de upstream e tempo injetado, sinalização de intervenção, navegação item a item e exibição de corpos truncados, e verificar pelos quatro cenários da requirement de inspeção com waterfall
-- [x] 8.5 Implementar a indicação de histórico desabilitado distinta de histórico vazio, e verificar pelos dois cenários da requirement correspondente
-- [x] 8.6 Implementar a criação de override a partir de uma troca exibida, com revisão antes de valer, e verificar pelos dois cenários da requirement correspondente
-- [x] 8.7 Implementar o consumo do fluxo SSE com sinalização de desconexão e reconexão automática, e verificar pelos dois cenários da requirement de atualização em tempo real
-- [x] 8.8 Implementar o aviso de perda de comentários antes da primeira escrita num documento de rota que os contenha, e verificar que o aviso aparece uma vez e não reaparece após a confirmação
-- [ ] 8.9 Implementar a edição com paridade só por controles — todos os campos de rota, override e processo editáveis na interface, sem exibir o YAML ou JSON dos documentos, com erros de validação junto do controle e valores do ambiente travados — e verificar pelos quatro cenários da requirement de edição com paridade
-- [x] 8.10 Implementar o liga/desliga do override e do modo aprendizado, a distinção dos overrides aprendidos e o acesso à troca de origem, e verificar pelos três cenários da requirement correspondente
-- [x] 8.11 Adotar o vocabulário do usuário em toda a interface (seu app, serviço, entrada, destino e regra no lugar de cliente, rota, casamento, upstream e override), mantendo os termos internos só em identificadores, API e arquivos, e verificar pelo cenário da requirement de vocabulário do usuário
-- [x] 8.12 Exibir e editar paths com parâmetros de segmento na interface (os `:id` destacados como parâmetro, aceitos no cadastro e na edição de regra), e verificar criando uma regra `/viacep/:id/json` pela interface
-- [x] 8.13 Implementar o modo simples (padrão) e o modo avançado, com a escolha lembrada e o resumo indicando recursos avançados, e verificar pelos quatro cenários da requirement correspondente
-- [ ] 8.15 Exibir a frequência por efeito no painel ("responde 503 em 30% das chamadas"), sem probabilidade global, e marcar como inativa a regra cujos efeitos estão todos em 0%, e verificar pelos cenários correspondentes
-- [x] 8.14 Enxugar a inspeção de tráfego (colunas essenciais, intervenção junto do status, coluna de serviço só sem filtro, filtros recolhidos com os ativos visíveis), e verificar pelos três cenários da requirement de tráfego enxuto
+- [x] 8.1 Set up the Vite project with React and TypeScript, the API client and the build to `web/dist`, and verify that the built binary serves the interface on the admin port with no access to the external network, per the two scenarios of the requirement that the binary serves the interface itself
+- [x] 8.2 Implement the services panel in two views, the map (your app → services → destinations, connected; the default view) and the list (entry → destination), with the choice remembered across sessions, search and "+ service" always visible in both, scaling to 50+ services, highlighting for an active rule, flagging for an unavailable destination and filtering by service or destination selection, and verify against the eight scenarios of the services in map and list requirement
+- [x] 8.3 Implement the override's continuous controls applied immediately, with the remaining time and applications and turning it off in a single gesture, and verify against the three scenarios of the direct control requirement
+- [x] 8.4 Implement the traffic list and detail with a waterfall separating upstream time from injected time, intervention flagging, item-by-item navigation and display of truncated bodies, and verify against the four scenarios of the inspection with waterfall requirement
+- [x] 8.5 Implement the indication of a disabled history as distinct from an empty one, and verify against the two scenarios of the corresponding requirement
+- [x] 8.6 Implement creating an override from a displayed exchange, with review before it takes effect, and verify against the two scenarios of the corresponding requirement
+- [x] 8.7 Implement consuming the SSE stream with disconnection flagging and automatic reconnection, and verify against the two scenarios of the real-time update requirement
+- [x] 8.8 Implement the comment loss warning before the first write to a route document that contains comments, and verify that the warning appears once and does not reappear after confirmation
+- [ ] 8.9 Implement editing with parity through controls only — every route, override and process field editable in the interface, without showing the documents' YAML or JSON, with validation errors next to the control and values from the environment locked — and verify against the four scenarios of the editing with parity requirement
+- [x] 8.10 Implement the override and learning mode on/off switches, the distinction of learned overrides and access to the originating exchange, and verify against the three scenarios of the corresponding requirement
+- [x] 8.11 Adopt the user's vocabulary throughout the interface (your app, service, entry, destination and rule instead of client, route, matching, upstream and override), keeping the internal terms only in identifiers, the API and the files, and verify against the scenario of the user vocabulary requirement
+- [x] 8.12 Display and edit paths with segment parameters in the interface (the `:id` highlighted as a parameter, accepted when creating and editing a rule), and verify by creating a `/zip/:id/json` rule through the interface
+- [x] 8.13 Implement simple mode (the default) and advanced mode, with the choice remembered and the summary flagging advanced features, and verify against the four scenarios of the corresponding requirement
+- [ ] 8.15 Display the per-effect frequency in the panel ("responds 503 in 30% of the calls"), with no global probability, and mark as inactive a rule whose effects are all at 0%, and verify against the corresponding scenarios
+- [x] 8.14 Trim the traffic inspection (essential columns, the intervention next to the status, the service column only when unfiltered, filters collapsed with the active ones visible), and verify against the three scenarios of the trimmed traffic requirement
 
-## 9. Distribuição e documentação
+## 9. Distribution and documentation
 
-- [x] 9.1 Produzir binários por plataforma e a imagem Docker no mesmo build que embute o frontend, e verificar que a imagem sobe e atende nas duas portas
-- [x] 9.2 Escrever o README com instalação, `gateway.json` e documento de rota de exemplo, as variáveis de ambiente, o critério dos dois formatos, e os limites assumidos (perda de comentários na escrita e no aprendizado, determinismo por ordem de chegada, queda de conexão em HTTP/2, aprendizado de paths com identificadores, troca de backend sem migração), e verificar que um leitor consegue subir o gateway seguindo apenas o documento
-- [x] 9.3 Montar um ambiente de exemplo com dois serviços de brinquedo e documentos de rota prontos, e verificar de ponta a ponta que passthrough, override forçado, override probabilístico, latência em intervalo, waterfall, modo aprendizado e troca de porta a quente funcionam sobre ele
+- [x] 9.1 Produce per-platform binaries and the Docker image in the same build that embeds the frontend, and verify that the image comes up and serves on both ports
+- [x] 9.2 Write the README with installation, a sample `gateway.json` and route document, the environment variables, the criterion behind the two formats, and the assumed limits (comment loss on writes and on learning, determinism by arrival order, connection drops on HTTP/2, learning paths with identifiers, backend swaps without migration), and verify that a reader can bring the gateway up following the document alone
+- [x] 9.3 Set up an example environment with two toy services and ready-made route documents, and verify end to end that passthrough, a forced override, a probabilistic override, latency from a range, the waterfall, learning mode and a hot port swap all work on it

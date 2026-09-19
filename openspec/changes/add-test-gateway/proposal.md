@@ -1,50 +1,50 @@
 ## Why
 
-Em ambientes de desenvolvimento, cada serviço sobe numa porta diferente e o cliente precisa conhecer todas elas. Pior: não há como reproduzir sob demanda as condições que quebram o sistema em produção — upstream lento, erro intermitente, conexão derrubada — então código de retry, timeout e circuit breaker é escrito sem nunca ser exercitado.
+In a development environment every service comes up on a different port and the client has to know all of them. Worse: there is no way to reproduce on demand the conditions that break the system in production — a slow upstream, an intermittent error, a dropped connection — so retry, timeout and circuit breaker code gets written without ever being exercised.
 
-As ferramentas existentes resolvem isso pela metade. O MockServer tem o motor de caos completo (probabilidade de erro, TTL, waterfall de latência) mas espalha a função por 21 telas e roda sobre JVM. O Smocker é leve e se declara um API gateway, porém não tem taxa de erro percentual — só scripts Lua escritos à mão, mock a mock. Nenhum dos dois mostra a topologia da chamada: ambos entregam lista de log, não o caminho `cliente → rota → upstream`.
+The existing tools solve half of this. MockServer has the complete chaos engine (error probability, TTL, latency waterfall) but spreads the feature across 21 screens and runs on the JVM. Smocker is light and calls itself an API gateway, yet it has no percentage error rate — only hand-written Lua scripts, one mock at a time. Neither shows the topology of the call: both hand you a log list, not the `client → route → upstream` path.
 
-E as duas separam "mock" de "caos" como mecanismos distintos, quando na prática são o mesmo gesto com probabilidade diferente: forçar uma resposta é injetar caos com probabilidade `1.0`.
+And both separate "mock" from "chaos" as distinct mechanisms, when in practice they are the same gesture with a different probability: forcing a response is injecting chaos with probability `1.0`.
 
 ## What Changes
 
-- Novo produto: um gateway HTTP self-hosted para ambientes de desenvolvimento, distribuído como **binário Go único** sem dependências externas.
-- **Roteamento reverso** de N serviços upstream atrás de uma porta única, por prefixo de path (inclusive curinga) ou por host. **O gateway é transparente**: método, path, query, corpo, cabeçalhos e `Host` seguem como chegaram, e ele apenas acrescenta os `X-Forwarded-*` e um único cabeçalho próprio, `X-Gateway`.
-- **Passthrough por padrão, override cirúrgico por cima.** A rota encaminha tudo; `overrides` interceptam paths específicos. Um único conceito substitui a separação entre mock e caos: o override declara `respond`, e os campos `probability`, `latency`, `drop` e `ttl` determinam se ele vale sempre, às vezes ou por tempo limitado. Probabilidade `1.0` é resposta forçada; `0.3` é caos; o que não é sorteado segue para o upstream.
-- **Precedência por especificidade**: override mais específico vence o menos específico, que vence o curinga da rota.
-- **Seed determinístico** para tornar o comportamento probabilístico reproduzível entre execuções.
-- **Configuração em documentos separados**, com chaves em inglês: `gateway.json` para a configuração do processo e um documento YAML por rota sob `routes/`, fundidos num snapshot na carga. Escrever pela API reescreve apenas o documento da rota afetada.
-- **Captura de tráfego** com waterfall que separa o tempo real do upstream do tempo injetado pelo gateway.
-- **Armazenamento de log plugável**, escolhido por variável de ambiente: memória (padrão), arquivo NDJSON ou SQLite local.
-- **Exposição do log configurável**, com leitura individual por identificador e navegação por cursor, além da listagem paginada.
-- **Interface web** embutida no binário (`go:embed`), com mapa de topologia navegável e os controles do override diretamente sobre a rota.
-- **Reconfiguração total em tempo de execução**: rotas, overrides e toda a configuração do processo — inclusive portas e backend do histórico — mudam sem reiniciar o processo.
-- **Modo aprendizado**: ligado, cada endpoint novo que passa pelo gateway é salvo no documento da rota como um override desligado, já preenchido com a resposta real observada, pronto para receber caos ou resposta customizada. Desligado, o gateway só aplica o que está configurado.
-- **Paridade entre arquivo, API e interface**: tudo que se configura em `gateway.json` e nos documentos de rota também se configura pela API de administração e pela interface, que é apenas cliente dessa API.
+- New product: a self-hosted HTTP gateway for development environments, shipped as a **single Go binary** with no external dependencies.
+- **Reverse routing** of N upstream services behind a single port, by path prefix (wildcard included) or by host. **The gateway is transparent**: method, path, query, body, headers and `Host` go through as they arrived, and it only adds the `X-Forwarded-*` headers plus a single header of its own, `X-Gateway`.
+- **Passthrough by default, surgical override on top.** The route forwards everything; `overrides` intercept specific paths. A single concept replaces the split between mock and chaos: the override declares `respond`, and the fields `probability`, `latency`, `drop` and `ttl` decide whether it applies always, sometimes or for a limited time. Probability `1.0` is a forced response; `0.3` is chaos; whatever is not drawn goes on to the upstream.
+- **Precedence by specificity**: a more specific override beats a less specific one, which beats the route's wildcard.
+- **Deterministic seed** to make the probabilistic behavior reproducible across runs.
+- **Configuration in separate documents**, with English keys: `gateway.json` for the process configuration and one YAML document per route under `routes/`, merged into a snapshot on load. Writing through the API rewrites only the document of the affected route.
+- **Traffic capture** with a waterfall that separates the upstream's real time from the time the gateway injected.
+- **Pluggable log storage**, selected by environment variable: memory (the default), an NDJSON file or a local SQLite database.
+- **Configurable log exposure**, with reads of a single entry by identifier and cursor navigation, alongside the paginated listing.
+- **Web interface** embedded in the binary (`go:embed`), with a navigable topology map and the override's controls right on the route.
+- **Full runtime reconfiguration**: routes, overrides and the whole process configuration — ports and history backend included — change without restarting the process.
+- **Learning mode**: turned on, every new endpoint that goes through the gateway is saved to the route document as a disabled override, already filled in with the real response observed, ready to take chaos or a custom response. Turned off, the gateway applies only what is configured.
+- **Parity across file, API and interface**: everything configurable in `gateway.json` and in the route documents is also configurable through the admin API and through the interface, which is nothing more than a client of that API.
 
-Explicitamente fora de escopo nesta mudança: SLO, contract testing, load testing, gRPC, AsyncAPI, mocking de LLM, breakpoints ao vivo e clustering. São os eixos que inflaram o MockServer e não servem ao problema acima.
+Explicitly out of scope for this change: SLOs, contract testing, load testing, gRPC, AsyncAPI, LLM mocking, live breakpoints and clustering. These are the axes that bloated MockServer and they do not serve the problem above.
 
-Não há quebra de compatibilidade: o projeto não tem código nem consumidores.
+Nothing breaks: the project has no code and no consumers.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `gateway-routing`: recepção de requisições numa porta única e encaminhamento para o upstream correto por curinga de path ou host, incluindo enriquecimento de cabeçalhos e tratamento de falha do upstream.
-- `route-overrides`: interceptação seletiva de paths dentro de uma rota, com critérios de seleção, resposta declarada, probabilidade de aplicação, latência, queda de conexão, expiração por tempo e por contagem, liga/desliga, determinismo por seed, derivação a partir de uma troca capturada e aprendizado automático de endpoints.
-- `traffic-capture`: registro das trocas HTTP que passam pelo gateway, com decomposição do tempo em latência real versus latência injetada, armazenamento plugável e consulta por listagem, identificador ou cursor.
-- `gateway-config`: `gateway.json` e documentos de rota em `routes/` como fonte de verdade, com validação na carga, fusão em snapshot, reconfiguração a quente de tudo (inclusive portas e backend do histórico) e API de administração que lê e grava esses documentos e a configuração do processo.
-- `control-panel`: interface web servida pelo próprio binário, com mapa de topologia navegável, inspeção do tráfego capturado e edição de rotas e overrides.
+- `gateway-routing`: receiving requests on a single port and forwarding them to the right upstream by path wildcard or host, including header enrichment and upstream failure handling.
+- `route-overrides`: selective interception of paths within a route, with selection criteria, a declared response, an application probability, latency, connection drops, expiry by time and by count, on/off, determinism by seed, derivation from a captured exchange, and automatic endpoint learning.
+- `traffic-capture`: recording the HTTP exchanges that go through the gateway, with time broken down into real versus injected latency, pluggable storage, and querying by listing, identifier or cursor.
+- `gateway-config`: `gateway.json` and the route documents under `routes/` as the source of truth, with validation on load, merging into a snapshot, hot reconfiguration of everything (ports and history backend included), and an admin API that reads and writes those documents and the process configuration.
+- `control-panel`: a web interface served by the binary itself, with a navigable topology map, inspection of the captured traffic, and editing of routes and overrides.
 
 ### Modified Capabilities
 
-Nenhuma. O projeto ainda não possui specs.
+None. The project has no specs yet.
 
 ## Impact
 
-- **Código**: projeto greenfield. Cria o módulo Go (`cmd/`, `internal/`) e o frontend React + TypeScript embutido via `go:embed`.
-- **Dependências**: Go 1.26 e Node para construir o frontend em tempo de build. Em runtime, nenhuma: o driver de SQLite MUST ser uma implementação pura em Go, sem CGO, para preservar o binário estático.
-- **Configuração do ambiente**: variáveis de ambiente selecionam o backend de armazenamento do log e seus parâmetros, ligam ou desligam a exposição do log e o modo aprendizado; um valor vindo do ambiente vence o arquivo e fica travado para a API.
-- **Distribuição**: binário por plataforma e imagem Docker.
-- **Superfície externa**: duas portas — a do proxy (tráfego) e a de administração (API + UI), para que o painel nunca colida com as rotas encaminhadas.
-- **Ordem de construção**: o núcleo do proxy vem primeiro e a interface por último, de modo que cada capability seja verificável por API antes de existir tela.
+- **Code**: greenfield project. It creates the Go module (`cmd/`, `internal/`) and the React + TypeScript frontend embedded via `go:embed`.
+- **Dependencies**: Go 1.26 and Node to build the frontend at build time. At runtime, none: the SQLite driver MUST be a pure Go implementation, without CGO, to keep the binary static.
+- **Environment configuration**: environment variables select the log storage backend and its parameters, and turn log exposure and learning mode on or off; a value coming from the environment beats the file and stays locked against the API.
+- **Distribution**: a binary per platform and a Docker image.
+- **External surface**: two ports — the proxy port (traffic) and the admin port (API + UI), so the panel never collides with the forwarded routes.
+- **Build order**: the proxy core comes first and the interface last, so that every capability is verifiable through the API before any screen exists.

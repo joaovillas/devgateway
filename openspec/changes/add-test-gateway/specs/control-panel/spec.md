@@ -1,244 +1,244 @@
 ## Purpose
 
-Dá ao desenvolvedor uma visão navegável do caminho que a chamada percorre e controles diretos sobre os overrides, para que configurar "essa rota falha 30% das vezes" seja um gesto na tela e não a edição de um documento de configuração.
+Gives the developer a navigable view of the path a call takes and direct controls over the overrides, so that configuring "this route fails 30% of the time" is a gesture on screen and not an edit to a configuration document.
 
 ## ADDED Requirements
 
-### Requirement: Interface servida pelo próprio binário
+### Requirement: Interface served by the binary itself
 
-O gateway SHALL servir a interface web a partir do próprio executável, na porta de administração, sem exigir processo adicional, servidor externo ou acesso à rede pública.
+The gateway SHALL serve the web interface from the executable itself, on the admin port, without requiring an additional process, an external server or access to the public network.
 
-#### Scenario: Interface disponível sem dependências
+#### Scenario: Interface available with no dependencies
 
-- **WHEN** o binário é executado num ambiente sem acesso à internet e a porta de administração é aberta no navegador
-- **THEN** a interface carrega por completo, com todos os seus recursos estáticos
+- **WHEN** the binary is run in an environment with no internet access and the admin port is opened in a browser
+- **THEN** the interface loads completely, with all of its static assets
 
-#### Scenario: Interface reflete o estado atual
+#### Scenario: The interface reflects the current state
 
-- **WHEN** a interface é aberta com rotas e overrides já configurados
-- **THEN** ela exibe essas rotas e overrides sem exigir nenhuma ação de sincronização
+- **WHEN** the interface is opened with routes and overrides already configured
+- **THEN** it displays those routes and overrides without requiring any synchronization step
 
-### Requirement: Serviços em mapa e lista
+### Requirement: Services in map and list
 
-A interface SHALL apresentar a configuração em duas visões do mesmo conjunto de serviços, em que cada serviço corresponde a uma rota e mostra seu nome, a entrada (o casamento de host e path pelo qual o app chama o gateway) e o destino (o upstream para onde o gateway redireciona). A visão padrão MUST ser o mapa, com o seu app, os serviços e os destinos em colunas ligadas; a lista densa MUST estar disponível como visão alternativa, e a escolha entre elas MUST ser lembrada entre sessões. A busca por nome, entrada ou destino e a ação de cadastrar um novo serviço MUST valer nas duas visões e estar sempre visíveis, qualquer que seja a seleção. As duas visões MUST continuar legíveis e operáveis com ao menos 50 serviços. Serviços com regra ativa MUST ser visualmente distinguíveis dos demais, e selecionar um serviço ou um destino MUST filtrar a inspeção de tráfego para ele.
+The interface SHALL present the configuration in two views of the same set of services, where each service corresponds to a route and shows its name, the entry (the host and path matching through which the app calls the gateway) and the destination (the upstream the gateway redirects to). The default view MUST be the map, with your app, the services and the destinations in connected columns; the dense list MUST be available as an alternative view, and the choice between them MUST be remembered across sessions. Search by name, entry or destination and the action to register a new service MUST work in both views and be visible at all times, whatever the selection. Both views MUST stay readable and operable with at least 50 services. Services with an active rule MUST be visually distinguishable from the rest, and selecting a service or a destination MUST filter the traffic inspection to it.
 
-#### Scenario: Topologia exibida
+#### Scenario: Topology displayed
 
-- **WHEN** existem três serviços apontando para dois destinos e o painel é aberto pela primeira vez
-- **THEN** o mapa exibe o seu app ligado aos três serviços, cada serviço com sua entrada e ligado ao seu destino, e os dois destinos, um para cada grupo de serviços
+- **WHEN** three services point at two destinations and the panel is opened for the first time
+- **THEN** the map shows your app connected to the three services, each service with its entry and connected to its destination, and the two destinations, one per group of services
 
-#### Scenario: Lista como visão alternativa
+#### Scenario: The list as an alternative view
 
-- **WHEN** a visão em lista é escolhida e o painel é recarregado
-- **THEN** a lista exibe os mesmos serviços, cada um com sua entrada e seu destino, e continua sendo a visão exibida
+- **WHEN** the list view is chosen and the panel is reloaded
+- **THEN** the list shows the same services, each with its entry and its destination, and remains the view on display
 
-#### Scenario: Muitos serviços
+#### Scenario: Many services
 
-- **WHEN** existem 50 serviços
-- **THEN** o mapa e a lista os exibem sem sobreposição nem perda de legibilidade, com a coluna de serviços rolando dentro do painel e o seu app e os destinos ligados aos serviços à vista
+- **WHEN** there are 50 services
+- **THEN** the map and the list display them with no overlap and no loss of readability, with the services column scrolling inside the panel and your app and the destinations connected to the services in view
 
-#### Scenario: Busca nas duas visões
+#### Scenario: Search in both views
 
-- **WHEN** existem 50 serviços e o nome de um deles é digitado na busca
-- **THEN** a visão exibida passa a mostrar só os serviços que casam com o texto e, no mapa, só os destinos deles
+- **WHEN** there are 50 services and the name of one of them is typed into the search
+- **THEN** the view on display narrows to the services matching the text and, on the map, to their destinations only
 
-#### Scenario: Novo serviço sempre alcançável
+#### Scenario: A new service is always reachable
 
-- **WHEN** um serviço está selecionado, no mapa ou na lista
-- **THEN** a ação de cadastrar um novo serviço continua visível e abre o cadastro sem exigir desfazer a seleção
+- **WHEN** a service is selected, on the map or in the list
+- **THEN** the action to register a new service stays visible and opens the form without requiring the selection to be undone
 
-#### Scenario: Serviço com regra ativa é destacado
+#### Scenario: A service with an active rule is highlighted
 
-- **WHEN** um serviço possui regra ativa
-- **THEN** ele é exibido com destaque visual que o diferencia dos demais, indicando o tipo de intervenção e a probabilidade aplicada
+- **WHEN** a service has an active rule
+- **THEN** it is displayed with a visual highlight that sets it apart from the rest, stating the kind of intervention and the probability applied
 
-#### Scenario: Seleção filtra o tráfego
+#### Scenario: The selection filters the traffic
 
-- **WHEN** um serviço é selecionado no mapa ou na lista
-- **THEN** a inspeção de tráfego passa a exibir somente as trocas desse serviço, e o mapa recua o que não pertence ao caminho selecionado
+- **WHEN** a service is selected on the map or in the list
+- **THEN** the traffic inspection narrows to that service's exchanges, and the map recedes whatever is not part of the selected path
 
-#### Scenario: Destino indisponível é sinalizado
+#### Scenario: An unavailable destination is flagged
 
-- **WHEN** um destino vem recusando conexões nas requisições recentes
-- **THEN** o mapa sinaliza o destino e as ligações até ele como indisponíveis, e a lista sinaliza o destino dos serviços afetados
+- **WHEN** a destination has been refusing connections on recent requests
+- **THEN** the map flags the destination and the connections to it as unavailable, and the list flags the destination of the affected services
 
-### Requirement: Vocabulário do usuário
+### Requirement: The user's vocabulary
 
-A interface SHALL nomear os conceitos pelo que o desenvolvedor reconhece, e não pelos termos internos do gateway: "seu app" para quem chama, "serviço" para cada rota cadastrada, "entrada" para o casamento de host e path, "destino" para o upstream e "regra" para cada override. Os documentos em disco e a API de administração MAY manter os termos internos (rota, upstream, override).
+The interface SHALL name the concepts by what the developer recognizes, not by the gateway's internal terms: "your app" for the caller, "service" for each registered route, "entry" for the host and path matching, "destination" for the upstream and "rule" for each override. The documents on disk and the admin API MAY keep the internal terms (route, upstream, override).
 
-#### Scenario: Termos internos fora da tela
+#### Scenario: Internal terms off the screen
 
-- **WHEN** a interface é aberta com serviços e regras configurados
-- **THEN** nenhum rótulo, título ou botão visível usa "rota", "upstream" ou "override" como nome desses conceitos
+- **WHEN** the interface is opened with services and rules configured
+- **THEN** no visible label, title or button uses "route", "upstream" or "override" as the name of those concepts
 
 
-### Requirement: Controle direto do override na rota
+### Requirement: Direct override control on the route
 
-A interface SHALL permitir ajustar probabilidade, latência e queda de conexão diretamente sobre o override, no painel do serviço selecionado no mapa ou na lista, por controle contínuo, aplicando a alteração imediatamente, sem etapa separada de confirmação ou salvamento. Quando o override possui tempo de vida ou limite de aplicações, a interface MUST exibir o restante de cada um.
+The interface SHALL allow adjusting probability, latency and connection drops directly on the override, in the panel of the service selected on the map or in the list, through a continuous control, applying the change immediately, with no separate confirmation or save step. When the override has a time to live or an application limit, the interface MUST display what is left of each.
 
-#### Scenario: Ajuste aplicado imediatamente
+#### Scenario: The adjustment is applied immediately
 
-- **WHEN** a probabilidade de um override é ajustada para 30% no controle contínuo
-- **THEN** as requisições seguintes já seguem a nova proporção, sem nenhuma ação adicional de salvamento
+- **WHEN** an override's probability is adjusted to 30% on the continuous control
+- **THEN** the following requests already follow the new proportion, with no additional save action
 
-#### Scenario: Restante de tempo e de aplicações exibido
+#### Scenario: Remaining time and applications displayed
 
-- **WHEN** um override com tempo de vida de `60s` e limite de cinco aplicações está ativo
-- **THEN** a interface exibe o tempo restante decrescendo e a contagem de aplicações, e remove o destaque da rota quando qualquer um se esgota
+- **WHEN** an override with a time to live of `60s` and a limit of five applications is active
+- **THEN** the interface shows the remaining time counting down and the application count, and removes the route's highlight when either one runs out
 
-#### Scenario: Desligar o override em um gesto
+#### Scenario: Turning the override off in one gesture
 
-- **WHEN** um override é desligado pela interface
-- **THEN** as requisições seguintes voltam a ser encaminhadas ao upstream e o destaque da rota é removido
+- **WHEN** an override is turned off through the interface
+- **THEN** the following requests go back to being forwarded to the upstream and the route's highlight is removed
 
-### Requirement: Modo simples e modo avançado
+### Requirement: Simple mode and advanced mode
 
-A interface SHALL oferecer dois modos de detalhe, com o modo simples como padrão. No modo simples, cada regra MUST mostrar apenas liga/desliga, nome, o efeito resumido (status sintetizado, latência ou queda) e a probabilidade; o modo avançado MUST revelar latência, queda, critérios de seleção, resposta declarada, tempo de vida e limite de aplicações, e os campos completos do serviço e do processo. A escolha do modo MUST ser lembrada entre visitas. Uma regra que usa recursos revelados só no avançado MUST continuar indicando isso no modo simples, para que nada fique escondido sem aviso.
+The interface SHALL offer two levels of detail, with simple mode as the default. In simple mode, each rule MUST show only the on/off switch, the name, the summarized effect (synthesized status, latency or drop) and the probability; advanced mode MUST reveal latency, drops, selection criteria, declared response, time to live and application limit, plus the complete fields of the service and of the process. The choice of mode MUST be remembered across visits. A rule that uses features revealed only in advanced mode MUST keep saying so in simple mode, so that nothing is hidden without warning.
 
-#### Scenario: Simples é o padrão
+#### Scenario: Simple is the default
 
-- **WHEN** a interface é aberta pela primeira vez com um serviço selecionado
-- **THEN** cada regra mostra apenas liga/desliga, nome, efeito e probabilidade
+- **WHEN** the interface is opened for the first time with a service selected
+- **THEN** each rule shows only the on/off switch, the name, the effect and the probability
 
-#### Scenario: Avançado revela o resto
+#### Scenario: Advanced reveals the rest
 
-- **WHEN** o modo avançado é acionado
-- **THEN** latência, queda, critérios, resposta, tempo de vida e limite de aplicações passam a ser editáveis na mesma tela
+- **WHEN** advanced mode is turned on
+- **THEN** latency, drops, criteria, response, time to live and application limit become editable on the same screen
 
-#### Scenario: Modo lembrado
+#### Scenario: The mode is remembered
 
-- **WHEN** o modo avançado é acionado e a página é recarregada
-- **THEN** a interface volta no modo avançado
+- **WHEN** advanced mode is turned on and the page is reloaded
+- **THEN** the interface comes back in advanced mode
 
-#### Scenario: Recurso avançado visível no simples
+#### Scenario: An advanced feature is visible in simple mode
 
-- **WHEN** uma regra declara latência e limite de aplicações e o modo simples está ativo
-- **THEN** a regra indica esses ajustes no resumo, mesmo sem exibir seus controles
+- **WHEN** a rule declares latency and an application limit and simple mode is active
+- **THEN** the rule flags those settings in its summary, even without showing their controls
 
-### Requirement: Tráfego enxuto
+### Requirement: Trimmed traffic
 
-A lista de trocas SHALL mostrar por padrão apenas hora, método, path, status, tempo e a representação temporal, com a intervenção sinalizada junto do status. A coluna do serviço MUST aparecer somente quando a lista não está filtrada por um serviço. Os filtros MUST ficar recolhidos atrás de um único controle, e os filtros ativos MUST permanecer visíveis e removíveis um a um.
+The exchange list SHALL show by default only the time, method, path, status, duration and the temporal representation, with the intervention flagged next to the status. The service column MUST appear only when the list is not filtered by a service. The filters MUST stay collapsed behind a single control, and the active filters MUST stay visible and removable one by one.
 
-#### Scenario: Colunas enxutas
+#### Scenario: Trimmed columns
 
-- **WHEN** a inspeção de tráfego é aberta filtrada por um serviço
-- **THEN** a lista mostra hora, método, path, status, tempo e o waterfall, sem a coluna do serviço
+- **WHEN** the traffic inspection is opened filtered by a service
+- **THEN** the list shows the time, method, path, status, duration and the waterfall, without the service column
 
-#### Scenario: Filtros recolhidos
+#### Scenario: Filters collapsed
 
-- **WHEN** a inspeção de tráfego é aberta sem nenhum filtro
-- **THEN** os controles de filtro não ocupam a tela e ficam atrás de um único controle
+- **WHEN** the traffic inspection is opened with no filter
+- **THEN** the filter controls take up no screen space and sit behind a single control
 
-#### Scenario: Filtro ativo permanece visível
+#### Scenario: An active filter stays visible
 
-- **WHEN** um filtro de faixa de status é aplicado e o controle de filtros é fechado
-- **THEN** o filtro ativo continua visível e pode ser removido em um gesto
+- **WHEN** a status range filter is applied and the filter control is closed
+- **THEN** the active filter stays visible and can be removed in one gesture
 
-### Requirement: Edição com paridade aos documentos
+### Requirement: Editing with parity to the documents
 
-A interface SHALL permitir consultar e alterar tudo o que `gateway.json` e os documentos de rota configuram, exclusivamente por meio da API de administração e somente por controles visuais. A interface MUST NOT exibir nem exigir a edição do conteúdo YAML ou JSON dos documentos: eles continuam sendo a fonte de verdade em disco, editáveis no editor do usuário, mas a interface opera sobre os valores. Valores definidos por variável de ambiente MUST aparecer travados, indicando a variável responsável.
+The interface SHALL allow querying and changing everything `gateway.json` and the route documents configure, exclusively through the admin API and only through visual controls. The interface MUST NOT display or require editing the documents' YAML or JSON content: they remain the source of truth on disk, editable in the user's editor, but the interface operates on the values. Values set by an environment variable MUST appear locked, stating the variable responsible.
 
-#### Scenario: Controle grava no arquivo
+#### Scenario: A control writes to the file
 
-- **WHEN** a latência de um override é alterada no controle visual
-- **THEN** o arquivo em disco passa a declarar a nova latência, sem que a interface exiba o documento
+- **WHEN** an override's latency is changed on the visual control
+- **THEN** the file on disk starts declaring the new latency, without the interface displaying the document
 
-#### Scenario: Edição externa refletida
+#### Scenario: An external edit is reflected
 
-- **WHEN** um documento de rota é editado fora da interface com um valor válido e a configuração é recarregada
-- **THEN** os controles visuais refletem o novo valor sem recarregar a página
+- **WHEN** a route document is edited outside the interface with a valid value and the configuration is reloaded
+- **THEN** the visual controls reflect the new value without the page being reloaded
 
-#### Scenario: Valor inválido é recusado
+#### Scenario: An invalid value is refused
 
-- **WHEN** um controle recebe um valor que a validação recusa
-- **THEN** a interface mostra a mensagem de validação junto do controle e nada é gravado
+- **WHEN** a control receives a value that validation rejects
+- **THEN** the interface shows the validation message next to the control and nothing is written
 
-#### Scenario: Valor do ambiente travado
+#### Scenario: A value from the environment is locked
 
-- **WHEN** o backend do histórico vem de variável de ambiente
-- **THEN** o controle correspondente aparece travado e indica o nome da variável
+- **WHEN** the history backend comes from an environment variable
+- **THEN** the corresponding control appears locked and states the name of the variable
 
-### Requirement: Liga e desliga do override e do aprendizado
+### Requirement: On/off switches for the override and for learning
 
-A interface SHALL permitir ligar e desligar cada override e o modo aprendizado em um único gesto. Ajustar probabilidade, latência ou queda de um override desligado MUST ligá-lo no mesmo gesto. Os overrides aprendidos MUST ser distinguíveis dos declarados e MUST levar à troca de origem quando ela ainda estiver no histórico.
+The interface SHALL allow turning each override and learning mode on and off in a single gesture. Adjusting the probability, latency or drop of a disabled override MUST turn it on in the same gesture. Learned overrides MUST be distinguishable from declared ones and MUST lead to the originating exchange while it is still in the history.
 
-#### Scenario: Override aprendido vira caos em um gesto
+#### Scenario: A learned override becomes chaos in one gesture
 
-- **WHEN** um override aprendido e desligado tem a probabilidade ajustada para 30%
-- **THEN** ele passa a valer ligado com 30%, sem outra ação
+- **WHEN** a learned, disabled override has its probability adjusted to 30%
+- **THEN** it becomes enabled at 30%, with no other action
 
-#### Scenario: Modo aprendizado alternado na interface
+#### Scenario: Learning mode toggled in the interface
 
-- **WHEN** o modo aprendizado é ligado na interface e chega uma requisição para um path novo
-- **THEN** o override aprendido aparece na rota sem recarregar a página
+- **WHEN** learning mode is turned on in the interface and a request for a new path arrives
+- **THEN** the learned override appears on the route without the page being reloaded
 
-#### Scenario: Troca de origem acessível
+#### Scenario: The originating exchange is reachable
 
-- **WHEN** um override aprendido é aberto
-- **THEN** a interface oferece a navegação para a troca capturada que o originou
+- **WHEN** a learned override is opened
+- **THEN** the interface offers navigation to the captured exchange it came from
 
-### Requirement: Inspeção de tráfego com waterfall
+### Requirement: Traffic inspection with a waterfall
 
-A interface SHALL listar as trocas capturadas e, ao selecionar uma, exibir a requisição e a resposta completas junto de uma representação temporal que separe visualmente o tempo consumido pelo upstream do tempo injetado pelo gateway. Trocas com intervenção MUST ser sinalizadas na lista, e a interface MUST permitir percorrer as trocas uma a uma a partir da que está aberta.
+The interface SHALL list the captured exchanges and, when one is selected, display the complete request and response alongside a temporal representation that visually separates the time consumed by the upstream from the time injected by the gateway. Exchanges with an intervention MUST be flagged in the list, and the interface MUST allow stepping through the exchanges one by one from the one that is open.
 
-#### Scenario: Waterfall separa os tempos
+#### Scenario: The waterfall separates the times
 
-- **WHEN** uma troca com latência injetada de `2s` sobre um upstream que respondeu em `150ms` é selecionada
-- **THEN** a representação temporal exibe os dois períodos como segmentos distintos e rotulados
+- **WHEN** an exchange with `2s` of injected latency over an upstream that responded in `150ms` is selected
+- **THEN** the temporal representation shows both periods as distinct, labeled segments
 
-#### Scenario: Intervenção sinalizada na lista
+#### Scenario: An intervention is flagged in the list
 
-- **WHEN** a lista contém trocas com erro do upstream e trocas sintetizadas por override
-- **THEN** as sintetizadas são sinalizadas de forma distinta das demais
+- **WHEN** the list holds exchanges with upstream errors and exchanges synthesized by an override
+- **THEN** the synthesized ones are flagged distinctly from the rest
 
-#### Scenario: Navegação item a item
+#### Scenario: Item-by-item navigation
 
-- **WHEN** uma troca está aberta e a navegação para a seguinte é acionada
-- **THEN** a interface abre a próxima troca respeitando o filtro ativo, sem voltar à listagem
+- **WHEN** an exchange is open and navigation to the next one is triggered
+- **THEN** the interface opens the next exchange honoring the active filter, without going back to the listing
 
-#### Scenario: Requisição e resposta completas
+#### Scenario: Complete request and response
 
-- **WHEN** uma troca é selecionada
-- **THEN** a interface exibe método, path, cabeçalhos e corpo de requisição e resposta, sinalizando corpos truncados
+- **WHEN** an exchange is selected
+- **THEN** the interface shows the method, path, headers and body of the request and of the response, flagging truncated bodies
 
-### Requirement: Indicação de histórico desabilitado
+### Requirement: Indication of a disabled history
 
-Quando a exposição ou o registro do histórico está desligado, a interface SHALL informar essa condição explicitamente em vez de apresentar uma lista vazia, distinguindo "desabilitado" de "nenhuma troca ainda".
+When history exposure or recording is off, the interface SHALL state that condition explicitly instead of presenting an empty list, distinguishing "disabled" from "no exchanges yet".
 
-#### Scenario: Exposição desligada
+#### Scenario: Exposure off
 
-- **WHEN** a exposição do histórico está desligada e a inspeção de tráfego é aberta
-- **THEN** a interface informa que o histórico está desabilitado e indica qual configuração o controla
+- **WHEN** history exposure is off and the traffic inspection is opened
+- **THEN** the interface states that the history is disabled and indicates which setting controls it
 
-#### Scenario: Histórico habilitado e vazio
+#### Scenario: History enabled and empty
 
-- **WHEN** o histórico está habilitado e nenhuma troca ocorreu ainda
-- **THEN** a interface informa que ainda não há trocas, sem sugerir que o recurso está desabilitado
+- **WHEN** the history is enabled and no exchange has happened yet
+- **THEN** the interface states that there are no exchanges yet, without suggesting that the feature is disabled
 
-### Requirement: Criar override a partir de uma chamada capturada
+### Requirement: Creating an override from a captured call
 
-A interface SHALL permitir criar um override a partir de uma troca exibida na inspeção, apresentando os critérios e a resposta já preenchidos com os dados observados para revisão antes de passarem a valer.
+The interface SHALL allow creating an override from an exchange displayed in the inspection, presenting the criteria and the response already filled in with the observed data for review before they take effect.
 
-#### Scenario: Override criado a partir da troca
+#### Scenario: An override created from the exchange
 
-- **WHEN** a criação de override é acionada sobre uma troca capturada
-- **THEN** a interface apresenta um override pré-preenchido com os dados daquela requisição e daquela resposta, aguardando confirmação
+- **WHEN** override creation is triggered on a captured exchange
+- **THEN** the interface presents an override pre-filled with the data of that request and that response, awaiting confirmation
 
-#### Scenario: Override revisado antes de valer
+#### Scenario: The override is reviewed before it takes effect
 
-- **WHEN** o override pré-preenchido é editado e confirmado
-- **THEN** as requisições equivalentes seguintes passam a ser interceptadas pelo override editado
+- **WHEN** the pre-filled override is edited and confirmed
+- **THEN** the following equivalent requests start being intercepted by the edited override
 
-### Requirement: Atualização em tempo real
+### Requirement: Real-time updates
 
-A interface SHALL refletir novas trocas e alterações de configuração sem que o usuário precise recarregar a página. Quando a conexão com o gateway é perdida, a interface MUST sinalizar a perda e MUST tentar restabelecê-la automaticamente.
+The interface SHALL reflect new exchanges and configuration changes without the user having to reload the page. When the connection to the gateway is lost, the interface MUST signal the loss and MUST try to restore it automatically.
 
-#### Scenario: Nova troca aparece sozinha
+#### Scenario: A new exchange appears on its own
 
-- **WHEN** uma requisição atravessa o gateway com a interface aberta na inspeção de tráfego
-- **THEN** a troca aparece na lista sem recarregar a página
+- **WHEN** a request crosses the gateway with the interface open on the traffic inspection
+- **THEN** the exchange appears in the list without the page being reloaded
 
-#### Scenario: Perda de conexão sinalizada
+#### Scenario: Connection loss is signaled
 
-- **WHEN** o processo do gateway se torna inacessível com a interface aberta
-- **THEN** a interface sinaliza que está desconectada e volta a atualizar sozinha quando o gateway retorna
+- **WHEN** the gateway process becomes unreachable with the interface open
+- **THEN** the interface signals that it is disconnected and goes back to updating on its own when the gateway returns

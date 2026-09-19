@@ -1,158 +1,158 @@
 ## Purpose
 
-Registra cada troca HTTP que atravessa o gateway com o tempo decomposto e o armazena no backend escolhido pelo ambiente, para que o desenvolvedor veja o caminho percorrido pela chamada, distinga a lentidão real do upstream daquela que o gateway injetou e consiga ler as trocas uma a uma.
+Records every HTTP exchange that crosses the gateway with its time broken down and stores it in the backend the environment selects, so the developer can see the path the call took, tell the upstream's real slowness apart from the slowness the gateway injected, and read the exchanges one by one.
 
 ## ADDED Requirements
 
-### Requirement: Registro das trocas HTTP
+### Requirement: Recording HTTP exchanges
 
-O gateway SHALL registrar cada troca que atravessa a porta de tráfego contendo, no mínimo: identificador único, instante de início, método, path, query, cabeçalhos e corpo da requisição, rota casada, override aplicado quando houver, upstream de destino, status, cabeçalhos e corpo da resposta, e tamanhos em bytes. O identificador MUST ser estável e suficiente para recuperar a troca isoladamente. Corpos maiores que o limite configurado MUST ser truncados e marcados como truncados.
+The gateway SHALL record every exchange that crosses the traffic port containing, at a minimum: a unique identifier, the start instant, the request's method, path, query, headers and body, the matched route, the override applied when there is one, the destination upstream, the response's status, headers and body, and the sizes in bytes. The identifier MUST be stable and sufficient to retrieve the exchange on its own. Bodies larger than the configured limit MUST be truncated and marked as truncated.
 
-#### Scenario: Troca encaminhada é registrada por completo
+#### Scenario: A forwarded exchange is recorded in full
 
-- **WHEN** uma requisição é encaminhada a um upstream e respondida
-- **THEN** o histórico passa a conter uma troca com identificador próprio, a rota casada, o upstream de destino, o status e os dados de requisição e resposta
+- **WHEN** a request is forwarded to an upstream and answered
+- **THEN** the history now holds an exchange with its own identifier, the matched route, the destination upstream, the status and the request and response data
 
-#### Scenario: Corpo acima do limite é truncado
+#### Scenario: A body above the limit is truncated
 
-- **WHEN** uma resposta traz um corpo maior que o limite de captura configurado
-- **THEN** a troca registra o corpo truncado, sinaliza que houve truncamento e preserva o tamanho real em bytes
+- **WHEN** a response carries a body larger than the configured capture limit
+- **THEN** the exchange records the truncated body, flags that truncation happened and preserves the real size in bytes
 
-#### Scenario: Troca sem rota casada também é registrada
+#### Scenario: An exchange with no matched route is recorded too
 
-- **WHEN** chega uma requisição que nenhuma rota atende e o gateway responde `404`
-- **THEN** o histórico registra a troca sem rota casada e sem upstream
+- **WHEN** a request arrives that no route serves and the gateway responds `404`
+- **THEN** the history records the exchange with no matched route and no upstream
 
-### Requirement: Decomposição da latência
+### Requirement: Latency breakdown
 
-Cada troca registrada SHALL informar separadamente o tempo total, o tempo consumido pelo upstream, o tempo de atraso injetado por override e o tempo restante atribuído ao próprio gateway. Quando nenhum atraso é injetado, o tempo injetado MUST ser zero.
+Every recorded exchange SHALL report separately the total time, the time consumed by the upstream, the delay time injected by an override and the remaining time attributed to the gateway itself. When no delay is injected, the injected time MUST be zero.
 
-#### Scenario: Tempo injetado separado do tempo real
+#### Scenario: Injected time separated from real time
 
-- **WHEN** um override com latência de `2s` deixa a requisição seguir para um upstream que responde em `150ms`
-- **THEN** a troca registra aproximadamente `2s` de tempo injetado e aproximadamente `150ms` de tempo de upstream, e o total reflete a soma acrescida do overhead do gateway
+- **WHEN** an override with a latency of `2s` lets the request go to an upstream that responds in `150ms`
+- **THEN** the exchange records roughly `2s` of injected time and roughly `150ms` of upstream time, and the total reflects the sum plus the gateway's overhead
 
-#### Scenario: Sem override o tempo injetado é zero
+#### Scenario: With no override the injected time is zero
 
-- **WHEN** uma requisição é encaminhada sem que nenhum override a intercepte
-- **THEN** a troca registra tempo injetado igual a zero
+- **WHEN** a request is forwarded without any override intercepting it
+- **THEN** the exchange records an injected time of zero
 
-#### Scenario: Resposta sintetizada não contabiliza tempo de upstream
+#### Scenario: A synthesized response records no upstream time
 
-- **WHEN** uma requisição é respondida por um override, sem contato com upstream
-- **THEN** a troca registra tempo de upstream igual a zero
+- **WHEN** a request is answered by an override, with no contact with an upstream
+- **THEN** the exchange records an upstream time of zero
 
-### Requirement: Distinção entre resposta do upstream e intervenção do gateway
+### Requirement: Distinction between an upstream response and a gateway intervention
 
-O registro de cada troca SHALL indicar se o resultado veio do upstream ou foi produzido por um override, nomeando o override responsável quando houver. Quedas de conexão MUST ser registradas, ainda que nenhuma resposta tenha sido enviada.
+Each exchange's record SHALL state whether the result came from the upstream or was produced by an override, naming the override responsible when there is one. Connection drops MUST be recorded, even though no response was sent.
 
-#### Scenario: Resposta sintetizada é marcada
+#### Scenario: A synthesized response is marked
 
-- **WHEN** um override sintetiza um `503`
-- **THEN** a troca registra status `503`, marca-o como sintetizado pelo gateway e nomeia o override responsável
+- **WHEN** an override synthesizes a `503`
+- **THEN** the exchange records status `503`, marks it as synthesized by the gateway and names the override responsible
 
-#### Scenario: Erro do upstream não é marcado como intervenção
+#### Scenario: An upstream error is not marked as an intervention
 
-- **WHEN** o upstream responde `500` sem que nenhum override tenha interceptado
-- **THEN** a troca registra status `500` sem marcação de intervenção
+- **WHEN** the upstream responds `500` without any override having intercepted
+- **THEN** the exchange records status `500` with no intervention marking
 
-#### Scenario: Queda de conexão é registrada
+#### Scenario: A connection drop is recorded
 
-- **WHEN** um override derruba a conexão sem enviar resposta
-- **THEN** a troca é registrada como encerrada por queda, sem status de resposta
+- **WHEN** an override drops the connection without sending a response
+- **THEN** the exchange is recorded as ended by a drop, with no response status
 
-### Requirement: Consulta e filtragem do histórico
+### Requirement: Querying and filtering the history
 
-O gateway SHALL permitir consultar o histórico em ordem cronológica inversa, com paginação, e filtrá-lo por rota, upstream, override, método, path, faixa de status, presença de intervenção e janela de tempo. Filtros combinados MUST ser aplicados de forma conjuntiva.
+The gateway SHALL allow querying the history in reverse chronological order, with pagination, and filtering it by route, upstream, override, method, path, status range, presence of an intervention and time window. Combined filters MUST be applied conjunctively.
 
-#### Scenario: Filtro por rota
+#### Scenario: Filter by route
 
-- **WHEN** o histórico é consultado filtrando pela rota `payments`
-- **THEN** somente trocas casadas por essa rota são retornadas
+- **WHEN** the history is queried filtering by the `payments` route
+- **THEN** only exchanges matched by that route are returned
 
-#### Scenario: Filtro por faixa de status
+#### Scenario: Filter by status range
 
-- **WHEN** o histórico é consultado filtrando por status entre `500` e `599`
-- **THEN** somente trocas com status nessa faixa são retornadas
+- **WHEN** the history is queried filtering by status between `500` and `599`
+- **THEN** only exchanges with a status in that range are returned
 
-#### Scenario: Filtro por intervenção
+#### Scenario: Filter by intervention
 
-- **WHEN** o histórico é consultado filtrando por trocas com intervenção do gateway
-- **THEN** somente trocas sintetizadas ou atrasadas por override são retornadas
+- **WHEN** the history is queried filtering by exchanges with a gateway intervention
+- **THEN** only exchanges synthesized or delayed by an override are returned
 
-#### Scenario: Ordem e paginação
+#### Scenario: Order and pagination
 
-- **WHEN** o histórico contém 150 trocas e a primeira página de 50 é solicitada
-- **THEN** são retornadas as 50 trocas mais recentes, da mais nova para a mais antiga, com um indicador de continuação
+- **WHEN** the history holds 150 exchanges and the first page of 50 is requested
+- **THEN** the 50 most recent exchanges are returned, newest to oldest, with a continuation indicator
 
-### Requirement: Leitura individual e navegação por cursor
+### Requirement: Single reads and cursor navigation
 
-O gateway SHALL permitir recuperar uma única troca pelo seu identificador, com o conteúdo completo ainda que a listagem o resuma. O gateway SHALL também permitir navegar o histórico item a item a partir de uma troca, obtendo a anterior e a seguinte sem carregar a listagem inteira. A navegação MUST respeitar os filtros ativos quando informados.
+The gateway SHALL allow retrieving a single exchange by its identifier, with the complete content even though the listing summarizes it. The gateway SHALL also allow navigating the history item by item from an exchange, obtaining the previous and the next one without loading the whole listing. The navigation MUST honor the active filters when they are given.
 
-#### Scenario: Troca recuperada pelo identificador
+#### Scenario: An exchange retrieved by identifier
 
-- **WHEN** uma troca é solicitada pelo seu identificador
-- **THEN** o gateway devolve a troca completa, com requisição, resposta e tempos decompostos
+- **WHEN** an exchange is requested by its identifier
+- **THEN** the gateway returns the complete exchange, with its request, response and time breakdown
 
-#### Scenario: Identificador inexistente
+#### Scenario: Nonexistent identifier
 
-- **WHEN** é solicitada uma troca cujo identificador não existe no histórico
-- **THEN** o gateway responde que a troca não foi encontrada
+- **WHEN** an exchange is requested whose identifier does not exist in the history
+- **THEN** the gateway responds that the exchange was not found
 
-#### Scenario: Navegação item a item
+#### Scenario: Item-by-item navigation
 
-- **WHEN** é solicitada a troca seguinte a partir de um identificador
-- **THEN** o gateway devolve a troca imediatamente posterior na ordem do histórico, ou informa que não há mais itens
+- **WHEN** the next exchange is requested from an identifier
+- **THEN** the gateway returns the exchange immediately after it in the history's order, or reports that there are no more items
 
-#### Scenario: Navegação respeita o filtro ativo
+#### Scenario: Navigation honors the active filter
 
-- **WHEN** a navegação item a item é feita com um filtro por faixa de status
-- **THEN** as trocas percorridas são apenas as que satisfazem o filtro
+- **WHEN** item-by-item navigation is done with a status range filter
+- **THEN** the exchanges traversed are only those that satisfy the filter
 
-### Requirement: Armazenamento plugável do histórico
+### Requirement: Pluggable history storage
 
-O gateway SHALL armazenar o histórico no backend selecionado pela configuração — variável de ambiente, `gateway.json` ou API de administração —, entre memória, arquivo NDJSON e SQLite local. Sem seleção explícita, o gateway MUST usar memória. O comportamento observável de registro, consulta e navegação MUST ser o mesmo em todos os backends. Quando o backend selecionado não pode ser inicializado, o gateway MUST recusar iniciar com uma mensagem que identifique o backend e a causa, em vez de silenciosamente cair para outro.
+The gateway SHALL store the history in the backend selected by the configuration — an environment variable, `gateway.json` or the admin API — among memory, an NDJSON file and a local SQLite database. With no explicit selection, the gateway MUST use memory. The observable behavior of recording, querying and navigation MUST be the same across every backend. When the selected backend cannot be initialized, the gateway MUST refuse to start with a message identifying the backend and the cause, instead of silently falling back to another.
 
-#### Scenario: Memória é o padrão
+#### Scenario: Memory is the default
 
-- **WHEN** o gateway inicia sem nenhuma configuração selecionando o backend
-- **THEN** o histórico é mantido em memória, com capacidade limitada e descarte das trocas mais antigas ao atingi-la
+- **WHEN** the gateway starts with no configuration selecting the backend
+- **THEN** the history is kept in memory, with a bounded capacity and the oldest exchanges discarded once it is reached
 
-#### Scenario: Histórico sobrevive ao reinício em backend persistente
+#### Scenario: The history survives a restart on a persistent backend
 
-- **WHEN** o backend NDJSON ou SQLite está selecionado, trocas são registradas e o processo é reiniciado
-- **THEN** as trocas anteriores continuam disponíveis para consulta e navegação
+- **WHEN** the NDJSON or SQLite backend is selected, exchanges are recorded and the process is restarted
+- **THEN** the previous exchanges remain available for querying and navigation
 
-#### Scenario: Mesmo comportamento entre backends
+#### Scenario: The same behavior across backends
 
-- **WHEN** a mesma sequência de requisições atravessa o gateway em cada um dos backends
-- **THEN** listagem, filtros, leitura por identificador e navegação por cursor produzem os mesmos resultados
+- **WHEN** the same sequence of requests crosses the gateway on each of the backends
+- **THEN** listing, filters, reads by identifier and cursor navigation produce the same results
 
-#### Scenario: Backend indisponível impede a inicialização
+#### Scenario: An unavailable backend prevents startup
 
-- **WHEN** o backend SQLite é selecionado com um caminho em que o gateway não consegue escrever
-- **THEN** o gateway recusa iniciar, informando o backend e a causa da falha
+- **WHEN** the SQLite backend is selected with a path the gateway cannot write to
+- **THEN** the gateway refuses to start, reporting the backend and the cause of the failure
 
-#### Scenario: Capacidade excedida em memória
+#### Scenario: Capacity exceeded in memory
 
-- **WHEN** o backend é memória, a capacidade é de 100 trocas e chega a centésima primeira
-- **THEN** a troca mais antiga deixa de constar no histórico e a nova é registrada
+- **WHEN** the backend is memory, the capacity is 100 exchanges and the hundred and first arrives
+- **THEN** the oldest exchange drops out of the history and the new one is recorded
 
-### Requirement: Exposição do histórico configurável
+### Requirement: Configurable history exposure
 
-O gateway SHALL permitir ligar e desligar a exposição do histórico por configuração. Com a exposição desligada, os endpoints de listagem, leitura e navegação MUST responder que o recurso está desabilitado, e a interface MUST indicar isso em vez de apresentar uma lista vazia. O registro das trocas MUST poder ser desligado de forma independente da exposição.
+The gateway SHALL allow turning history exposure on and off through configuration. With exposure off, the listing, read and navigation endpoints MUST respond that the feature is disabled, and the interface MUST say so instead of presenting an empty list. Recording exchanges MUST be turnable off independently of exposure.
 
-#### Scenario: Exposição desligada
+#### Scenario: Exposure off
 
-- **WHEN** a exposição do histórico está desligada e a listagem é solicitada
-- **THEN** o gateway responde que o recurso está desabilitado, sem devolver trocas
+- **WHEN** history exposure is off and the listing is requested
+- **THEN** the gateway responds that the feature is disabled, returning no exchanges
 
-#### Scenario: Registro desligado
+#### Scenario: Recording off
 
-- **WHEN** o registro está desligado e chegam requisições
-- **THEN** nenhuma troca é registrada e o encaminhamento segue funcionando normalmente
+- **WHEN** recording is off and requests arrive
+- **THEN** no exchange is recorded and forwarding keeps working normally
 
-#### Scenario: Limpeza sob demanda
+#### Scenario: Clearing on demand
 
-- **WHEN** a limpeza do histórico é solicitada
-- **THEN** o histórico fica vazio no backend em uso e as trocas seguintes voltam a ser registradas normalmente
+- **WHEN** clearing the history is requested
+- **THEN** the history is empty on the backend in use and the following exchanges go back to being recorded normally

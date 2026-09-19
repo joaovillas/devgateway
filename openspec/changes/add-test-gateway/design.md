@@ -1,196 +1,196 @@
 ## Context
 
-Projeto greenfield: o repositório contém apenas o scaffold do OpenSpec. O ambiente já dispõe de Go 1.26, Node 24 e Docker. Ver `proposal.md` — Why para a motivação e os `specs/` desta mudança para os requisitos.
+Greenfield project: the repository holds only the OpenSpec scaffold. The environment already has Go 1.26, Node 24 and Docker. See `proposal.md` — Why for the motivation, and this change's `specs/` for the requirements.
 
-Três restrições moldam todas as decisões abaixo:
+Three constraints shape every decision below:
 
-- **Artefato único.** O produto precisa ser um binário estático sem dependência de runtime. Isso condiciona a escolha do driver de banco e empurra o frontend para dentro do executável.
-- **Ambiente de desenvolvimento, não produção.** O volume é de dezenas de requisições por segundo, não dezenas de milhares. Clareza e previsibilidade valem mais que throughput.
-- **A interface é a última etapa.** Cada capability precisa ser exercitável pela API de administração antes de existir tela, sob pena de o projeto virar refém do frontend.
+- **A single artifact.** The product has to be a static binary with no runtime dependency. That decides the database driver and pushes the frontend inside the executable.
+- **A development environment, not production.** The volume is tens of requests per second, not tens of thousands. Clarity and predictability are worth more than throughput.
+- **The interface comes last.** Every capability has to be exercisable through the admin API before any screen exists, or the project ends up hostage to the frontend.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Um único conceito de intervenção, em vez de mock e caos como mecanismos paralelos.
-- Caminho de requisição com etapas explícitas e ordem fixa, para que o waterfall da captura seja uma leitura direta do que o gateway fez, e não uma reconstrução aproximada.
-- Determinismo real sob concorrência quando um seed é declarado.
-- Troca de configuração sem lock no caminho quente e sem derrubar requisições em curso.
-- Configuração que não produza conflito de merge quando duas pessoas criam rotas diferentes.
-- API de administração completa o bastante para operar o gateway inteiro por `curl`, com a interface como cliente dessa mesma API.
+- One single concept for intervention, instead of mock and chaos as parallel mechanisms.
+- A request path with explicit steps in a fixed order, so the capture waterfall is a direct reading of what the gateway did and not an approximate reconstruction.
+- Real determinism under concurrency when a seed is declared.
+- Configuration swaps with no lock on the hot path and without dropping in-flight requests.
+- Configuration that does not produce merge conflicts when two people create different routes.
+- An admin API complete enough to drive the entire gateway from `curl`, with the interface as a client of that same API.
 
 **Non-Goals:**
 
-- Otimizar throughput ou alocação. Correção e legibilidade vêm primeiro.
-- Terminar TLS na porta de tráfego nesta mudança (ver Open Questions).
-- Autenticação na porta de administração nesta mudança (ver Open Questions).
+- Optimizing throughput or allocation. Correctness and readability come first.
+- Terminating TLS on the traffic port in this change (see Open Questions).
+- Authentication on the admin port in this change (see Open Questions).
 
 ## Decisions
 
-### Override único no lugar de mock e caos
+### One override instead of mock and chaos
 
-Não existem dois mecanismos. Existe o override: um seletor e os efeitos `respond`, `latency` e `drop`, cada um com a sua frequência, mais a expiração por `ttl` e por contagem. Responder sempre é resposta forçada; responder em `0.3` é injeção de falha; o que não é sorteado segue para o upstream.
+There are not two mechanisms. There is the override: a selector plus the effects `respond`, `latency` and `drop`, each with its own frequency, plus expiry by `ttl` and by count. Always responding is a forced response; responding at `0.3` is fault injection; whatever is not drawn goes on to the upstream.
 
-*Por quê:* as ferramentas de referência separam mock de caos, e a separação vaza para o usuário — no MockServer você configura uma expectation numa tela e um chaos profile em outra, para controlar a mesma rota. A distinção é interna, não conceitual: forçar uma resposta é injetar caos com probabilidade máxima. Unificar corta metade da superfície de configuração, metade da UI e a pergunta "isso eu configuro como mock ou como caos?".
+*Why:* the reference tools separate mock from chaos, and the separation leaks to the user — in MockServer you configure an expectation on one screen and a chaos profile on another to control the same route. The distinction is internal, not conceptual: forcing a response is injecting chaos at maximum probability. Unifying them cuts half the configuration surface, half the UI, and the question "do I set this up as a mock or as chaos?".
 
-*Consequência que vale registrar:* um override com `latency` e sem `respond` não intercepta nada — apenas atrasa a resposta do upstream. Isso cai naturalmente do modelo e cobre o caso "quero só deixar esse endpoint lento" sem inventar um terceiro conceito.
+*A consequence worth recording:* an override with `latency` and no `respond` intercepts nothing — it just delays the upstream's response. That falls out of the model naturally and covers the "I only want this endpoint to be slow" case without inventing a third concept.
 
-*Alternativa descartada:* manter os dois com nomes distintos, espelhando MockServer e Smocker. Rejeitada porque preserva uma sobreposição que o usuário enxergou antes de o código existir.
+*Alternative rejected:* keeping both under distinct names, mirroring MockServer and Smocker. Rejected because it preserves an overlap the user spotted before the code existed.
 
-### Proxy sobre `net/http/httputil.ReverseProxy`
+### Proxying on `net/http/httputil.ReverseProxy`
 
-Usar o `ReverseProxy` da biblioteca padrão com a API `Rewrite`, em vez de escrever o encaminhamento do zero ou adotar `fasthttp`.
+Use the standard library's `ReverseProxy` with the `Rewrite` API, instead of writing the forwarding from scratch or adopting `fasthttp`.
 
-*Por quê:* streaming, `Flush` incremental, trailers, HTTP/2 e `Expect: 100-continue` já vêm resolvidos e testados. Escrever isso à mão é onde proxies caseiros erram. O `fasthttp` seria mais rápido, mas não fala HTTP/2, tem API divergente da stdlib e a velocidade não é o gargalo aqui.
+*Why:* streaming, incremental `Flush`, trailers, HTTP/2 and `Expect: 100-continue` already come solved and tested. Writing that by hand is where homemade proxies go wrong. `fasthttp` would be faster, but it does not speak HTTP/2, its API diverges from the stdlib, and speed is not the bottleneck here.
 
-### Ordem fixa e única do caminho de requisição
+### One fixed request path, in a fixed order
 
-Toda requisição na porta de tráfego percorre exatamente esta sequência:
+Every request on the traffic port goes through exactly this sequence:
 
-1. Resolver a rota (host, depois padrão de path mais específico).
-2. Abrir o registro de captura e iniciar a cronometragem.
-3. Resolver o override aplicável: entre os ligados que selecionam a requisição, o mais específico.
-4. Se há override, sortear cada efeito declarado em ordem fixa — queda, resposta, atraso — de uma única fonte de aleatoriedade, cada um com a sua frequência.
-5. Efeito não sorteado é ignorado; sem nenhum sorteado, seguir para o upstream como se o override não existisse.
-6. Se houve queda: encerrar a conexão e fechar o registro.
-7. Se o override declara `respond`: sintetizar a resposta. Caso contrário, encaminhar ao upstream.
-8. Aplicar o atraso sorteado **depois** de a resposta estar pronta e antes de escrevê-la ao cliente — seja ela a do upstream, a sintetizada ou uma resposta de erro do próprio gateway (`501`, `502`, `504`). Se o cliente desiste durante o atraso, nada lhe foi entregue: a troca fica sem status, com a desistência (`client_canceled`) anotada.
-9. Fechar o registro com os tempos decompostos e, com o modo aprendizado ligado, aprender o endpoint fora do caminho da requisição.
+1. Resolve the route (host, then the most specific path pattern).
+2. Open the capture record and start the clock.
+3. Resolve the applicable override: among the enabled ones that select the request, the most specific.
+4. If there is an override, draw each declared effect in a fixed order — drop, response, delay — from a single source of randomness, each against its own frequency.
+5. An effect that was not drawn is ignored; with none drawn, go to the upstream as if the override did not exist.
+6. If there was a drop: close the connection and close the record.
+7. If the override declares `respond`: synthesize the response. Otherwise, forward to the upstream.
+8. Apply the drawn delay **after** the response is ready and before writing it to the client — whether it is the upstream's, the synthesized one, or an error response from the gateway itself (`501`, `502`, `504`). If the client gives up during the delay, nothing was delivered to it: the exchange ends with no status, with the abandonment (`client_canceled`) recorded.
+9. Close the record with the times broken down and, with learning mode on, learn the endpoint off the request path.
 
-*Por quê o atraso no passo 8 e não antes do upstream:* atrasar depois mantém o tempo real do upstream e o tempo injetado como grandezas independentes e diretamente mensuráveis. Atrasar antes obrigaria a subtrair um valor do outro para exibir o waterfall, e a subtração erra sempre que o upstream oscila. O custo é que a latência total passa a ser a soma, e não a máxima — que é justamente o comportamento esperado por quem pede "essa rota demora 2s a mais".
+*Why the delay at step 8 and not before the upstream:* delaying afterwards keeps the upstream's real time and the injected time as independent, directly measurable quantities. Delaying beforehand would force subtracting one from the other to show the waterfall, and the subtraction is wrong whenever the upstream fluctuates. The cost is that total latency becomes the sum rather than the maximum — which is exactly the behavior expected by someone who asks for "this route takes 2s longer".
 
-*Por quê uma frequência por efeito:* "esse endpoint falha em 30% das chamadas e está sempre lento" é uma frase só, e com uma probabilidade única do override ela exigiria dois overrides sobre o mesmo path. Sorteando efeito a efeito, cada um responde à pergunta "em quantas chamadas isso acontece?".
+*Why one frequency per effect:* "this endpoint fails in 30% of the calls and is always slow" is a single sentence, and with one probability for the whole override it would need two overrides on the same path. Drawing effect by effect, each one answers the question "in how many calls does this happen?".
 
-*Por quê sortear tudo no passo 4:* o sorteio precisa ser independente do que acontece depois. Se a aplicação fosse decidida só quando o upstream responde, o mesmo seed produziria sequências diferentes conforme a disponibilidade do upstream, e o determinismo iria embora.
+*Why draw everything at step 4:* the draw has to be independent of what happens afterwards. If application were decided only once the upstream responds, the same seed would produce different sequences depending on upstream availability, and determinism would be gone.
 
-### Determinismo por número de sequência, não por conteúdo
+### Determinism by sequence number, not by content
 
-Cada requisição recebe um número de sequência monotônico ao entrar. Quando há seed configurado, a fonte de aleatoriedade daquela requisição é derivada de `(seed, sequência)`, com `math/rand/v2` e um gerador PCG. As decisões de uma requisição não dependem de nenhuma outra.
+Every request gets a monotonic sequence number on the way in. When a seed is configured, that request's source of randomness is derived from `(seed, sequence)`, using `math/rand/v2` and a PCG generator. One request's decisions do not depend on any other's.
 
-*Por quê:* um único gerador compartilhado entre goroutines produziria resultados dependentes da ordem de escalonamento — determinismo aparente, que quebra sob carga. Derivar por sequência dá reprodutibilidade genuína com zero contenção no sorteio.
+*Why:* a single generator shared across goroutines would produce results that depend on scheduling order — apparent determinism, which breaks under load. Deriving by sequence gives genuine reproducibility with zero contention on the draw.
 
-*Alternativa descartada:* derivar do hash da requisição. Seria determinístico por conteúdo, mas então a mesma requisição repetida seria interceptada sempre ou nunca — o que destrói o próprio sentido de "aplica em 30% das vezes".
+*Alternative rejected:* deriving from a hash of the request. That would be deterministic by content, but then the same repeated request would always or never be intercepted — which destroys the whole point of "applies 30% of the time".
 
-*Limite assumido e documentado:* o determinismo é sobre a **ordem de chegada**. Reproduzir uma execução exige reenviar as requisições na mesma ordem.
+*Limit assumed and documented:* determinism is about **arrival order**. Reproducing a run requires replaying the requests in the same order.
 
-### Configuração em documentos por rota
+### Configuration in one document per route
 
-`gateway.json` guarda a configuração do processo. Cada rota vive em seu próprio documento YAML sob `routes/`, e a carga funde todos num snapshot.
+`gateway.json` holds the process configuration. Each route lives in its own YAML document under `routes/`, and the load merges them all into a snapshot.
 
-*Por quê:* é o padrão do `nginx conf.d` e dos manifests do Kubernetes, e resolve três problemas de uma vez. Duas pessoas criando rotas diferentes não tocam no mesmo arquivo, então não há conflito de merge. O diff do PR passa a dizer "adicionou a rota de pagamentos" em vez de mostrar uma mancha no meio de um arquivo grande. E a escrita pela API fica cirúrgica: mexer numa rota reescreve só aquele documento.
+*Why:* it is the pattern of `nginx conf.d` and of Kubernetes manifests, and it solves three problems at once. Two people creating different routes never touch the same file, so there are no merge conflicts. The PR diff now says "added the payments route" instead of showing a smudge in the middle of a big file. And writing through the API becomes surgical: touching one route rewrites only that document.
 
-*Trade-off explícito:* a reserialização **não preserva comentários nem a ordem original das chaves** do documento tocado. Preservá-los exigiria manipular a árvore sintática do YAML e manter essa manipulação correta a cada evolução do schema — custo desproporcional. A decisão é assumir a perda, que agora fica contida a um documento de rota em vez do arquivo inteiro, documentá-la no README e avisar na interface antes da primeira escrita destrutiva.
+*Explicit trade-off:* reserialization **does not preserve comments or the original key order** of the document it touches. Preserving them would mean manipulating the YAML syntax tree and keeping that manipulation correct through every schema change — a disproportionate cost. The decision is to accept the loss, which is now confined to one route document instead of the whole file, to document it in the README and to warn in the interface before the first destructive write.
 
-### JSON no processo, YAML nas rotas
+### JSON for the process, YAML for the routes
 
-Os dois formatos convivem de propósito.
+The two formats coexist on purpose.
 
-*Por quê:* `gateway.json` é lido por máquina e por scripts de bootstrap, quase nunca editado à mão, e JSON evita ambiguidade de tipos. Os documentos de rota são editados à mão o tempo todo, e YAML sobrevive melhor a isso — comentários, blocos de corpo multilinha e menos ruído de pontuação. Forçar um formato só otimizaria a consistência da documentação em detrimento de quem usa.
+*Why:* `gateway.json` is read by machines and by bootstrap scripts, almost never edited by hand, and JSON avoids type ambiguity. Route documents are hand-edited all the time, and YAML survives that better — comments, multi-line body blocks and less punctuation noise. Forcing a single format would optimize documentation consistency at the expense of the people using it.
 
-### Precedência ambiente sobre arquivo sobre padrão
+### Precedence: environment over file over default
 
-Variáveis de ambiente vencem `gateway.json`, que vence os padrões embutidos. A origem efetiva de cada valor é consultável pela API.
+Environment variables beat `gateway.json`, which beats the built-in defaults. The effective origin of each value can be queried through the API.
 
-*Por quê:* o backend de armazenamento muda por ambiente — memória na máquina do desenvolvedor, SQLite no CI — enquanto as rotas são as mesmas. Ambiente é o lugar certo para o que varia por máquina; arquivo, para o que varia por projeto. A consulta de origem existe porque a pergunta "por que está usando memória se eu configurei SQLite?" precisa ter resposta em um comando, não em uma sessão de depuração.
+*Why:* the storage backend changes per environment — memory on the developer's machine, SQLite in CI — while the routes stay the same. The environment is the right place for what varies per machine; the file, for what varies per project. The origin query exists because the question "why is it using memory if I configured SQLite?" needs an answer in one command, not in a debugging session.
 
-### Resolução por lista ordenada, em dois níveis
+### Resolution by ordered list, on two levels
 
-Rotas e overrides são ordenados na carga por especificidade e resolvidos por varredura linear — primeiro a rota, depois o override dentro dela.
+Routes and overrides are sorted by specificity at load time and resolved by a linear scan — the route first, then the override inside it.
 
-*Por quê:* uma árvore de prefixos seria mais rápida e bem mais difícil de auditar quando o usuário perguntar por que determinada requisição caiu em determinado override. Com a dezena de rotas típica de um ambiente de desenvolvimento, a varredura é irrelevante no perfil, e a ordem de precedência fica legível no próprio código.
+*Why:* a prefix tree would be faster and much harder to audit when the user asks why a given request landed on a given override. With the dozen or so routes typical of a development environment, the scan is irrelevant in the profile, and the precedence order stays readable in the code itself.
 
-### Configuração como snapshot imutável trocado atomicamente
+### Configuration as an immutable snapshot swapped atomically
 
-O snapshot fundido vive num `atomic.Pointer` para uma estrutura imutável, com os índices de roteamento já pré-computados. A recarga valida, constrói um snapshot novo e troca o ponteiro. Requisições em curso seguem com o snapshot que capturaram na entrada.
+The merged snapshot lives in an `atomic.Pointer` to an immutable struct, with the routing indexes precomputed. A reload validates, builds a new snapshot and swaps the pointer. In-flight requests carry on with the snapshot they captured on the way in.
 
-*Por quê:* elimina locks no caminho quente e resolve de graça o requisito de que uma recarga não perturbe requisições em andamento. Validar antes de trocar é o que garante que uma configuração inválida preserve a anterior — a troca só acontece depois que o snapshot novo existe inteiro.
+*Why:* it removes locks from the hot path and solves for free the requirement that a reload must not disturb in-flight requests. Validating before swapping is what guarantees an invalid configuration preserves the previous one — the swap happens only once the new snapshot exists in full.
 
-### Armazenamento do histórico atrás de uma interface, com três implementações
+### History storage behind one interface, with three implementations
 
-O histórico é acessado por uma interface única, com implementações em memória (anel, padrão), arquivo NDJSON e SQLite local, escolhidas por variável de ambiente. A mesma bateria de testes de contrato roda contra as três.
+The history is reached through a single interface, with implementations in memory (a ring, the default), an NDJSON file and a local SQLite database, chosen by environment variable. The same contract test battery runs against all three.
 
-*Por quê:* o histórico em memória basta para a máquina do desenvolvedor, mas não para investigar o que aconteceu num CI que já terminou, nem para correlacionar duas execuções. NDJSON serve a quem quer processar com `jq` sem subir banco. SQLite serve à consulta com filtro sobre volume grande, que é exatamente onde o arquivo plano degrada.
+*Why:* an in-memory history is enough on the developer's machine, but not to investigate what happened in a CI run that already finished, nor to correlate two runs. NDJSON serves anyone who wants to process it with `jq` without standing up a database. SQLite serves filtered queries over large volumes, which is exactly where a flat file degrades.
 
-*Restrição que decide o driver:* o driver comum de SQLite em Go usa CGO, o que quebraria a compilação cruzada e o binário estático. A implementação MUST usar um driver puro em Go (`modernc.org/sqlite`). É mais lento, e nesse uso isso não importa.
+*The constraint that decides the driver:* the common SQLite driver in Go uses CGO, which would break cross-compilation and the static binary. The implementation MUST use a pure Go driver (`modernc.org/sqlite`). It is slower, and in this use that does not matter.
 
-*Ordem do histórico pela chegada, não pela conclusão:* a troca só é gravada quando termina, mas o histórico a posiciona pela chegada — instante de início, depois número de sequência, e a ordem de gravação apenas como desempate. Assim uma requisição lenta que chegou antes não aparece como mais nova que as rápidas que chegaram depois dela, e a listagem, a paginação e a navegação item a item concordam com os instantes exibidos. O cursor de paginação carrega essa chave e a época do histórico, que avança a cada limpeza.
+*History ordered by arrival, not by completion:* an exchange is written only when it finishes, but the history places it by arrival — start instant, then sequence number, with write order only as a tiebreaker. That way a slow request that arrived earlier does not show up as newer than the fast ones that arrived after it, and the listing, the pagination and the item-by-item navigation agree with the instants on display. The pagination cursor carries that key and the history epoch, which advances on every clear.
 
-*Por que a falha de inicialização não cai para memória:* subir silenciosamente com outro backend produziria a pior forma de erro — tudo funcionando, nada sendo persistido, descoberto horas depois. Melhor recusar iniciar.
+*Why a failed initialization does not fall back to memory:* silently coming up on a different backend would produce the worst kind of error — everything working, nothing being persisted, found out hours later. Better to refuse to start.
 
-### Tempo real por SSE, não WebSocket
+### Real time over SSE, not WebSocket
 
-A interface recebe as trocas novas por *Server-Sent Events*, com envio agregado a no máximo uma atualização por segundo.
+The interface receives new exchanges over *Server-Sent Events*, batched to at most one update per second.
 
-*Por quê:* o fluxo é unidirecional — a interface apenas consome, e toda escrita já passa pela API REST. O `EventSource` reconecta sozinho, o que atende ao requisito de reconexão automática sem código de retry próprio. WebSocket traria bidirecionalidade que não seria usada e um caminho de reconexão para manter à mão.
+*Why:* the flow is one-way — the interface only consumes, and every write already goes through the REST API. `EventSource` reconnects on its own, which meets the automatic reconnection requirement without any retry code of ours. WebSocket would bring bidirectionality that would go unused and a reconnection path to maintain by hand.
 
-### Queda de conexão limitada a HTTP/1.1
+### Connection drops limited to HTTP/1.1
 
-A queda usa `http.Hijacker` para fechar o socket sem escrever resposta. Isso não existe em HTTP/2.
+The drop uses `http.Hijacker` to close the socket without writing a response. That does not exist in HTTP/2.
 
-*Decisão:* em HTTP/2 a queda é degradada para o cancelamento abrupto do stream, e a captura registra qual dos comportamentos ocorreu em `dropMode`: `hijack` (HTTP/1.1, socket fechado) ou `stream_reset` (HTTP/2). Um terceiro valor, `abort`, cobre o caso raro de uma conexão HTTP/1.x cujo `ResponseWriter` não permite sequestro (um writer intermediário sem `Unwrap`, por exemplo): o handler é abortado com `http.ErrAbortHandler` e o servidor fecha a conexão sem resposta. Registrá-lo como `hijack` ou `stream_reset` esconderia do desenvolvedor o que de fato aconteceu. A alternativa — recusar configurar queda quando a porta serve HTTP/2 — foi descartada por tornar o comportamento dependente de um detalhe de transporte que o usuário não escolheu.
+*Decision:* on HTTP/2 the drop degrades to an abrupt stream cancellation, and the capture records which of the behaviors happened in `dropMode`: `hijack` (HTTP/1.1, socket closed) or `stream_reset` (HTTP/2). A third value, `abort`, covers the rare case of an HTTP/1.x connection whose `ResponseWriter` cannot be hijacked (an intermediate writer with no `Unwrap`, for instance): the handler is aborted with `http.ErrAbortHandler` and the server closes the connection with no response. Recording it as `hijack` or `stream_reset` would hide from the developer what actually happened. The alternative — refusing to configure a drop when the port serves HTTP/2 — was rejected because it makes the behavior depend on a transport detail the user did not choose.
 
-### Frontend embutido via `go:embed`
+### Frontend embedded via `go:embed`
 
-O frontend é React + TypeScript construído com Vite para `web/dist`, embutido com `//go:embed all:web/dist`. Um `index.html` mínimo é versionado nesse diretório para que `go build` funcione em um clone limpo, sem exigir Node. Durante o desenvolvimento do frontend, o servidor do Vite encaminha as chamadas de API para a porta de administração.
+The frontend is React + TypeScript built with Vite into `web/dist`, embedded with `//go:embed all:web/dist`. A minimal `index.html` is committed in that directory so `go build` works on a clean clone without requiring Node. During frontend development, the Vite server proxies the API calls to the admin port.
 
-*Por quê o placeholder versionado:* sem ele, `go build` quebra em qualquer máquina que não tenha rodado o build do frontend antes — incluindo CI e a máquina de quem só quer mexer no backend.
+*Why the committed placeholder:* without it, `go build` breaks on any machine that has not run the frontend build first — including CI and the machine of anyone who only wants to touch the backend.
 
-### Duas portas, sem paths reservados, trocadas a quente
+### Two ports, no reserved paths, hot-swappable
 
-Tráfego e administração ficam em portas distintas (padrão `8080` e `8081`), e o processo recusa iniciar se forem iguais.
+Traffic and administration sit on separate ports (`8080` and `8081` by default), and the process refuses to start if they are the same.
 
-*Por quê:* qualquer path reservado na porta de tráfego seria um prefixo que o usuário não poderia usar nas próprias rotas. É a mesma separação que o Smocker adota, e pelo mesmo motivo.
+*Why:* any reserved path on the traffic port would be a prefix the user could not use in their own routes. It is the same separation Smocker adopts, and for the same reason.
 
-*Troca a quente:* os listeners ficam num supervisor, fora do snapshot. Mudar uma porta abre o listener novo primeiro; só se ele abrir o servidor antigo recebe `Shutdown`, que para de aceitar conexões e deixa as requisições em curso terminarem. Se o listener novo falhar, nada muda e o erro é reportado. A troca do backend do histórico segue o mesmo protocolo: inicializa o novo, troca o ponteiro, fecha o antigo. O histórico não é migrado entre backends — migrar exigiria reescrever volumes arbitrários no caminho da requisição de configuração, e a pergunta "onde estão minhas trocas antigas?" tem resposta simples: no backend anterior, intacto.
+*Hot swap:* the listeners live in a supervisor, outside the snapshot. Changing a port opens the new listener first; only if it opens does the old server get `Shutdown`, which stops accepting connections and lets in-flight requests finish. If the new listener fails, nothing changes and the error is reported. Swapping the history backend follows the same protocol: initialize the new one, swap the pointer, close the old one. The history is not migrated between backends — migrating would mean rewriting arbitrary volumes inside a configuration request, and the question "where are my old exchanges?" has a simple answer: in the previous backend, intact.
 
-### Transparência: repassar tudo, acrescentar um cabeçalho
+### Transparency: pass everything through, add one header
 
-O gateway repassa método, path, query, corpo, todos os cabeçalhos e o `Host` como chegaram, e só acrescenta os `X-Forwarded-*` (preservando valores já presentes) e um único cabeçalho próprio, `X-Gateway`, na ida e na volta. Os cabeçalhos hop-by-hop são a única remoção, porque o HTTP proíbe repassá-los; o `Upgrade` de WebSocket e os trailers continuam funcionando pelo `ReverseProxy`.
+The gateway passes through method, path, query, body, every header and the `Host` as they arrived, and only adds the `X-Forwarded-*` headers (preserving values already present) plus a single header of its own, `X-Gateway`, on the way out and on the way back. Hop-by-hop headers are the only removal, because HTTP forbids forwarding them; WebSocket `Upgrade` and trailers keep working through `ReverseProxy`.
 
-*Por quê:* o gateway existe para testar o cliente contra o serviço real; qualquer alteração silenciosa invalida o teste. O `Host` original por padrão segue a mesma lógica; a rota declara `rewriteHost` quando o upstream exige o próprio host, como servidores com virtual host.
+*Why:* the gateway exists to test the client against the real service; any silent change invalidates the test. Keeping the original `Host` by default follows the same logic; a route declares `rewriteHost` when the upstream requires its own host, as with virtual-host servers.
 
-*Um cabeçalho só:* `X-Gateway` carrega a rota e, quando há intervenção, o override e o tipo (`route=payments; override=payments/flaky; intervention=synthesized`). Quando o override sintetiza e também atrasa, as duas intervenções aparecem, separadas por vírgula e na ordem em que acontecem (`intervention=synthesized,delayed`), como na lista `interventions` da troca capturada. Vários cabeçalhos `X-Gateway-*` seriam mais fáceis de ler um a um, mas multiplicariam o que o gateway injeta no tráfego.
+*One header only:* `X-Gateway` carries the route and, when there is an intervention, the override and its kind (`route=payments; override=payments/flaky; intervention=synthesized`). When the override both synthesizes and delays, both interventions appear, comma-separated and in the order they happen (`intervention=synthesized,delayed`), just like the `interventions` list of the captured exchange. Several `X-Gateway-*` headers would be easier to read one by one, but would multiply what the gateway injects into the traffic.
 
-### Aprendizado grava overrides desligados
+### Learning writes disabled overrides
 
-Com o modo aprendizado ligado, cada método e path novo respondido pelo upstream vira um override `enabled: false` no documento da rota, com a resposta real pré-preenchida e um bloco `source` registrando a troca de origem.
+With learning mode on, every new method and path answered by the upstream becomes an `enabled: false` override in the route document, with the real response pre-filled and a `source` block recording the originating exchange.
 
-*Por quê:* o endpoint aprendido já é o ponto de partida do gesto que o usuário quer fazer em seguida — ligar caos ou customizar a resposta. Guardá-lo como uma lista paralela de "endpoints conhecidos" criaria um segundo conceito ao lado do override, exatamente a separação que este projeto recusa. Desligado por padrão, ele não altera o tráfego até o usuário decidir.
+*Why:* the learned endpoint is already the starting point for the gesture the user wants to make next — turning on chaos or customizing the response. Keeping it as a parallel list of "known endpoints" would create a second concept alongside the override, exactly the separation this project refuses. Disabled by default, it does not change the traffic until the user decides to.
 
-*Generalização:* segmentos que parecem identificador (só dígitos, UUID, hexadecimal ou alfanumérico com dígitos e ao menos 8 caracteres) viram parâmetros de segmento `:id`, e o resto do path fica literal. A heurística é conservadora de propósito: `me`, `json`, `charge` nunca viram parâmetro, e um falso negativo só custa uma regra a mais, que o usuário generaliza à mão. O parâmetro de segmento entra na precedência entre o path exato e a expressão regular, desempatado pelo número de segmentos literais.
+*Generalization:* segments that look like an identifier (all digits, a UUID, hexadecimal, or alphanumeric with digits and at least 8 characters) become the segment parameter `:id`, and the rest of the path stays literal. The heuristic is deliberately conservative: `me`, `json`, `charge` never become a parameter, and a false negative only costs one extra rule, which the user generalizes by hand. The segment parameter sits in the precedence between the exact path and the regular expression, with ties broken by the number of literal segments.
 
-*Como:* o aprendizado roda depois de a resposta ser entregue, fora do caminho da requisição, e grava pelo mesmo mecanismo da API — escrita atômica do documento sob o mutex de escrita, seguida de reconstrução do snapshot. Uma combinação é conhecida quando já há override do mesmo método com o path generalizado igual ou com path exato ou de parâmetros que casa com a requisição; curingas e expressões regulares livres não contam, para que endpoints sob eles também sejam aprendidos. A absorção dos aprendidos exatos pelo generalizado alcança só os que continuam como o aprendizado os deixou — desligados e sem outros critérios —; um que o usuário ligou ou restringiu fica, com precedência sobre o generalizado.
+*How:* learning runs after the response has been delivered, off the request path, and writes through the same mechanism as the API — an atomic write of the document under the write mutex, followed by rebuilding the snapshot. A combination is known when the route already has an override of the same method with the same generalized path, or with an exact or parameterized path that matches the request; free wildcards and regular expressions do not count, so that endpoints underneath them get learned too. The absorption of exact learned overrides by the generalized one reaches only those still in the state learning left them — disabled and with no other criteria; one the user enabled or restricted stays, taking precedence over the generalized one.
 
-*Fidelidade da resposta aprendida:* um cabeçalho repetido (vários `Set-Cookie`, por exemplo) é gravado como lista de valores em `respond.headers` — cada cabeçalho aceita um texto ou uma lista — e a resposta sintetizada o repete, um por valor. O corpo JSON só vira estrutura quando todos os números cabem sem perda (inteiros até `uint64`, decimais que o `float64` reproduz); senão fica como texto, idêntico ao observado. Um path que contém `*` literal (ou que não começa com `/`) não pode ser escrito como path exato, porque o `*` seria curinga: o critério gravado é `pathRegex` ancorado (`^` + path escapado + `$`), que também conta como path exato na verificação de endpoint conhecido. Um override montado que ainda assim não passe na validação não é gravado, e o endpoint deixa de ser candidato até o processo reiniciar, com um único aviso no log.
+*Fidelity of the learned response:* a repeated header (several `Set-Cookie` headers, for instance) is written as a list of values in `respond.headers` — each header accepts a string or a list — and the synthesized response repeats it, one per value. A JSON body only becomes a structure when every number fits without loss (integers up to `uint64`, decimals `float64` reproduces); otherwise it stays as text, identical to what was observed. A path containing a literal `*` (or one that does not start with `/`) cannot be written as an exact path, because the `*` would be a wildcard: the criterion written is an anchored `pathRegex` (`^` + escaped path + `$`), which also counts as an exact path when checking for a known endpoint. An assembled override that still fails validation is not written, and the endpoint stops being a candidate until the process restarts, with a single warning in the log.
 
-*Troca de origem sem histórico:* com `history.record` desligado a troca é observada pelo aprendizado mas não vai para o histórico; o override aprendido sai então sem `source.exchange`, para não apontar para uma troca inexistente, e mantém `source.kind`, `source.at` e `source.bodyIncomplete`. Um override derivado (que sempre parte de uma troca do histórico) continua exigindo `source.exchange`.
+*Originating exchange without a history:* with `history.record` off, the exchange is observed by learning but does not reach the history; the learned override then comes out without `source.exchange`, so it does not point at a nonexistent exchange, and keeps `source.kind`, `source.at` and `source.bodyIncomplete`. A derived override (which always starts from an exchange in the history) still requires `source.exchange`.
 
 ## Risks / Trade-offs
 
-- **Latência injetada soma em vez de sobrepor** → Assumido conscientemente para manter o waterfall exato. Documentar no campo de latência da interface que o valor é acrescido ao tempo real do upstream.
-- **Tempo de upstream inclui a espera por um cliente lento em streaming** → O corpo da resposta é copiado ao cliente sem ser acumulado; quando o cliente lê mais devagar do que o upstream envia, a cópia espera por ele e essa espera entra no tempo de upstream. Separá-las exigiria acumular a resposta inteira, o que quebraria o streaming. Assumido e documentado no modelo da troca (`exchange.Timing`).
-- **Determinismo depende da ordem de chegada** → Documentar junto à configuração do seed. Requisições concorrentes podem receber números de sequência em ordem distinta entre execuções; a reprodutibilidade estrita exige envio serial.
-- **Queda de conexão se comporta de forma diferente em HTTP/2** → Registrar na captura qual comportamento ocorreu, para que o desenvolvedor nunca precise adivinhar.
-- **Comentários do documento de rota se perdem ao escrever pela API** → Escrita atômica por documento, aviso no README e alerta na interface antes da primeira escrita destrutiva. O dano fica contido a uma rota.
-- **Identificadores que a heurística não reconhece** (slugs como `/posts/meu-titulo`) ainda geram uma regra por valor → o usuário troca por `:id` na regra, e as outras aprendidas que ela cobre deixam de ser geradas.
-- **Aprendizado reescreve o documento da rota** → Herda a perda de comentários da escrita pela API; o aviso da interface e do README vale também aqui.
-- **Troca de backend não migra o histórico** → Registrado na resposta da API e na interface no momento da troca.
-- **Três backends de armazenamento triplicam a superfície de teste** → Uma única bateria de testes de contrato roda contra as três implementações; nenhuma ganha teste próprio salvo para o que é específico dela.
-- **Driver SQLite puro em Go é mais lento que o baseado em CGO** → Irrelevante no volume alvo, e é o preço de manter o binário estático e a compilação cruzada.
-- **Dois formatos de configuração podem confundir** → O critério é simples e vai no README: processo em JSON, rotas em YAML. Um formato por tipo de leitor.
-- **A interface é a última etapa e pode ficar sem fôlego** → Mitigado pela decisão de a API cobrir todas as operações: mesmo sem nenhuma tela, o produto é utilizável por `curl` e por documento de rota.
-- **`ReverseProxy` reescreve cabeçalhos por conta própria** → Cobrir com testes os cenários de cabeçalho da spec de roteamento, especialmente o acúmulo de `X-Forwarded-For` e a preservação opcional do `Host`.
+- **Injected latency adds instead of overlapping** → Accepted knowingly to keep the waterfall exact. Document in the interface's latency field that the value is added to the upstream's real time.
+- **Upstream time includes waiting on a slow client during streaming** → The response body is copied to the client without being buffered; when the client reads more slowly than the upstream sends, the copy waits on it and that wait lands in the upstream time. Separating them would require buffering the entire response, which would break streaming. Accepted and documented in the exchange model (`exchange.Timing`).
+- **Determinism depends on arrival order** → Document it next to the seed configuration. Concurrent requests may get sequence numbers in a different order from run to run; strict reproducibility requires serial sending.
+- **Connection drops behave differently on HTTP/2** → Record in the capture which behavior happened, so the developer never has to guess.
+- **Route document comments are lost when writing through the API** → Atomic per-document writes, a warning in the README and an alert in the interface before the first destructive write. The damage is confined to one route.
+- **Identifiers the heuristic does not recognize** (slugs such as `/posts/my-title`) still produce one rule per value → the user replaces it with `:id` in the rule, and the other learned rules it covers stop being generated.
+- **Learning rewrites the route document** → It inherits the comment loss from API writes; the interface and README warning applies here too.
+- **Swapping the backend does not migrate the history** → Recorded in the API response and in the interface at the moment of the swap.
+- **Three storage backends triple the test surface** → A single contract test battery runs against all three implementations; none gets its own tests except for what is specific to it.
+- **A pure Go SQLite driver is slower than the CGO-based one** → Irrelevant at the target volume, and it is the price of keeping the binary static and cross-compilable.
+- **Two configuration formats can confuse** → The criterion is simple and goes in the README: the process in JSON, the routes in YAML. One format per kind of reader.
+- **The interface comes last and may run out of steam** → Mitigated by the decision that the API covers every operation: even with no screen at all, the product is usable through `curl` and through route documents.
+- **`ReverseProxy` rewrites headers on its own** → Cover the header scenarios of the routing spec with tests, especially the accumulation of `X-Forwarded-For` and the optional preservation of `Host`.
 
 ## Migration Plan
 
-Não há migração: o projeto não tem código anterior nem consumidores.
+There is no migration: the project has no prior code and no consumers.
 
-Para a distribuição, tanto `gateway.json` quanto cada documento de rota carregam um campo de versão de schema desde a primeira versão. O gateway recusa carregar um documento cuja versão de schema seja maior que a que ele conhece, com mensagem explícita — evita que uma configuração futura seja interpretada pela metade por um binário antigo.
+For distribution, both `gateway.json` and every route document carry a schema version field from the first version onward. The gateway refuses to load a document whose schema version is higher than the one it knows, with an explicit message — this keeps a future configuration from being half-interpreted by an old binary.
 
-Entrega: binários por plataforma e imagem Docker, ambos produzidos pelo mesmo build que embute o frontend.
+Delivery: per-platform binaries and a Docker image, both produced by the same build that embeds the frontend.
 
 ## Open Questions
 
-- **Terminação TLS na porta de tráfego.** Hoje o gateway fala HTTP em claro com o cliente e pode falar HTTPS com o upstream. Aceitar HTTPS do cliente exigiria gestão de certificado e provavelmente uma autoridade local. Não altera nenhuma spec desta mudança e pode ser acrescentado depois como configuração da porta.
-- **Autenticação na porta de administração.** O uso alvo é local. Se o gateway passar a ser compartilhado por um time numa rede interna, será preciso decidir entre token estático e proxy autenticador à frente. Nenhuma das duas opções muda a API nem as specs atuais.
-- **Retenção no backend persistente.** Em memória o anel resolve. Em NDJSON e SQLite, o histórico cresce sem limite até alguém apagar. Decidir depois entre rotação por tamanho, por idade ou nenhuma — não altera o contrato de leitura já especificado.
+- **TLS termination on the traffic port.** Today the gateway speaks plain HTTP to the client and may speak HTTPS to the upstream. Accepting HTTPS from the client would require certificate management and probably a local authority. It changes none of this change's specs and can be added later as port configuration.
+- **Authentication on the admin port.** The target use is local. If the gateway ends up shared by a team on an internal network, we will have to choose between a static token and an authenticating proxy in front. Neither option changes the API or the current specs.
+- **Retention on the persistent backends.** In memory the ring handles it. On NDJSON and SQLite, the history grows without bound until someone deletes it. Decide later between rotation by size, by age, or none — it does not change the read contract already specified.
