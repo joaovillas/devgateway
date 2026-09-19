@@ -146,6 +146,12 @@ components:
     height: "26px"
   traffic-row-open:
     backgroundColor: "{colors.override-dim}"
+  rule-row-simple:
+    padding: "8px 0"
+    gap: "{spacing.s-2}"
+  filters-bar:
+    padding: "4px 12px 8px 8px"
+    height: "24px"
 ---
 
 # Design System: gateway
@@ -165,6 +171,7 @@ A cor não decora nada. Azul, âmbar, vermelho e verde são quatro estados com s
 - Cantos quase retos (2px) e controles baixos (22 a 26px de altura).
 - Nenhuma sombra de elevação; estados de foco e seleção são traços de 1px.
 - Vocabulário do dev na tela: seu app → serviço → destino, com regras. Os termos internos (rota, upstream, override) ficam na API e nos arquivos.
+- Dois modos de detalhe: simples (o padrão) mostra o essencial de cada regra; avançado revela a edição completa. A escolha fica guardada no navegador.
 
 ## Colors
 
@@ -222,9 +229,11 @@ Grafite frio em três degraus de superfície, tinta em três degraus de contrast
 
 O console ocupa a viewport inteira sem rolagem de página: uma barra de 30px e, abaixo, duas colunas em 3fr/2fr (60/40). A coluna esquerda empilha o painel de serviços, em mapa ou lista (até metade da altura, ajustada ao que mostra, e dali em diante rola) e tráfego (o resto); a direita é inteira do serviço selecionado ou do cadastro de um novo, do processo ou do detalhe da troca. O YAML nunca aparece na tela. Os painéis se separam por `gap: 1px` sobre o fundo `seam`, e cada corpo de painel rola sozinho.
 
+A coluna direita tem dois modos, escolhidos na chave "simples | avançado" do cabeçalho e lembrados entre visitas. No **simples**, o padrão, o serviço vira uma linha-resumo ("payments · /payments/* → 127.0.0.1:9001") e cada regra mostra só interruptor, nome, efeito resumido, a marca de recurso avançado e a probabilidade; o processo vira uma lista de valores efetivos para ler. No **avançado**, tudo o que existe volta: latência, queda, critérios, resposta, tempo de vida, limite de aplicações, os campos do serviço e os controles do processo. O cadastro de serviço não depende do modo: vive no cabeçalho do painel de serviços.
+
 O ritmo usa a escala de 2, 4, 8, 12 e 16px. Recuo lateral de painel é 12px; controles e células usam 8px; seções dentro de um painel se separam por 16px e uma costura. Linhas de formulário são grade de rótulo de 108px e controle; configurações do processo são grade de rótulo, controle e origem.
 
-Abaixo de 900px os painéis empilham e a página rola; só o tráfego (até 70vh) e o painel de serviços (até 45vh) mantêm rolagem própria. Abaixo de 640px o painel de serviços perde o resumo do cabeçalho, o mapa reduz seu app e destinos à porta e tira a entrada dos nós, a lista perde a coluna de entrada, o tráfego perde as colunas de hora, serviço e intervenção, e o status sintetizado ganha uma caixa para não depender só da cor.
+Abaixo de 900px os painéis empilham e a página rola; só o tráfego (até 70vh) e o painel de serviços (até 45vh) mantêm rolagem própria. Abaixo de 640px o painel de serviços perde o resumo do cabeçalho, o mapa reduz seu app e destinos à porta e tira a entrada dos nós, a lista perde a coluna de entrada, e o tráfego perde as colunas de hora e serviço (a marca da intervenção acompanha o status em qualquer largura).
 
 ## Elevation & Depth
 
@@ -286,7 +295,14 @@ Escala: com 50 ou mais serviços, a coluna de serviços rola dentro do painel e 
 Selecionar na lista é o mesmo gesto do tráfego: fundo `override-dim` e traços azuis de 1px acima e abaixo. O destino é um botão próprio que filtra o tráfego por ele; filtrado, ganha contorno azul e os serviços que não vão para ele recuam para `ink-3`. Setas percorrem a coluna, → e ← alternam entre serviço e destino, Enter seleciona, Esc limpa. A lista rola sozinha e não sobrepõe nada com 50 ou mais serviços.
 
 ### Tráfego com waterfall (assinatura)
+Seis colunas e nada mais: hora, método, path, status, total e o waterfall. A sétima, o serviço, só aparece quando a lista não está filtrada por um: com o filtro, ela repetiria o mesmo nome em toda linha e o path fica com a largura. A intervenção não tem coluna: é um triângulo de 7px colado à esquerda do status, vermelho para sintetizado e queda, âmbar para atraso, com a dica nomeando a regra ("sintetizado por payments/charge-declined"). Por ser forma, e não só cor, ele sobrevive à tela estreita sem caixa auxiliar.
+
 Tabela de linhas de 26px com cabeçalho colante em versalete e costura entre linhas. Hover em `panel-raised`, linha aberta em `override-dim` com traços azuis acima e abaixo. Cada linha termina num waterfall de 8px: destino em `time-upstream`, injetado em âmbar, gateway em `time-gateway`. No detalhe, o waterfall vira faixas de 12px sobre trilho `ground` com eixo e marcas mono de 11px.
+
+Os filtros ficam atrás de um único controle. Em repouso a barra é o botão "filtrar" e os filtros ativos, cada um num chip azul com o seu botão de fechar; "limpar" aparece a partir do segundo. Abrir o botão desce uma faixa separada por costura com serviço, método, status, intervenção e path, e fechá-la devolve a tela à lista sem apagar nada.
+
+### Painel do serviço em dois modos (assinatura)
+A chave "simples | avançado" mora à direita do cabeçalho do painel, no lugar das ferramentas, como a chave "mapa | lista" mora no painel de serviços. No simples, a regra ocupa duas linhas: o cabeçalho leva o interruptor, o nome em 600, o efeito resumido em mono ("402", "+200ms–900ms", "queda", combinados por "·") e, à direita, só o que se esgota (prazo restante e aplicações sobre o limite); abaixo, a probabilidade no controle contínuo com o número. Uma regra que usa algo que só o avançado edita — latência, queda, tempo de vida, limite de aplicações ou critérios além de path e método — ganha uma marca de 22px em `ink-3` ao lado do efeito, que diz na dica o que ela tem e leva ao avançado num clique. Nada fica escondido sem aviso.
 
 ## Do's and Don'ts
 
@@ -296,6 +312,7 @@ Tabela de linhas de 26px com cabeçalho colante em versalete e costura entre lin
 - **Do** pôr todo valor de arquivo ou requisição em JetBrains Mono 12px com algarismos tabulares e zero cortado.
 - **Do** rotular painéis, colunas e grupos em versalete de 15px com espaçamento de 0.08 a 0.1em, em `ink-2` ou `ink-3`.
 - **Do** manter controles entre 20 e 26px de altura e cantos em 2px.
+- **Do** dar ao modo simples só o que o dev ajusta de relance, e marcar toda regra que usa recurso do avançado.
 - **Do** usar traço tracejado para travado, derivado ou incompleto, e dar forma além de cor a todo estado que o estreito precisar distinguir.
 - **Do** limitar a animação à chegada de troca (1.6s, `cubic-bezier(0.16, 1, 0.3, 1)`), com transições de 120 a 160ms, e desligar tudo sob `prefers-reduced-motion`.
 - **Do** desenhar ícones como SVG de 10px com traço de 1.5px em `currentColor`.

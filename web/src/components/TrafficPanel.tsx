@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   api,
   type ConnectionState,
@@ -15,7 +15,7 @@ import type { Selection } from "../selection";
 import { Segmented } from "./Controls";
 import { ErrorNote } from "./ErrorNote";
 import { HistoryDisabled, RecordingOff } from "./HistoryState";
-import { CloseIcon } from "./Icons";
+import { CloseIcon, FilterIcon, MarkIcon } from "./Icons";
 import { Panel } from "./Panel";
 import { Empty, Failure, Loading } from "./States";
 import type { ApiError } from "../api";
@@ -263,10 +263,107 @@ export function TrafficPanel(props: TrafficPanelProps) {
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 
-/** Filtros do contrato: serviço (ou o destino do painel de serviços), método, status, intervenção e path. */
-function FilterBar({ routes, selection, onRoute, listFilter: f, onListFilter }: TrafficPanelProps) {
+/** Um filtro ativo: o que ele diz e como sair dele em um gesto. */
+interface ActiveFilter {
+  key: string;
+  text: string;
+  clear: () => void;
+}
+
+function activeFilters(
+  selection: Selection,
+  f: ListFilter,
+  onRoute: (name: string | null) => void,
+  onListFilter: (f: ListFilter) => void,
+): ActiveFilter[] {
+  const out: ActiveFilter[] = [];
+  if (selection?.kind === "route") {
+    out.push({ key: "route", text: `serviço ${selection.name}`, clear: () => onRoute(null) });
+  } else if (selection?.kind === "upstream") {
+    out.push({
+      key: "upstream",
+      text: `destino ${selection.name.replace(/^https?:\/\//, "")}`,
+      clear: () => onRoute(null),
+    });
+  }
+  if (f.method) out.push({ key: "method", text: `método ${f.method}`, clear: () => onListFilter({ ...f, method: "" }) });
+  if (f.status !== "all") {
+    out.push({ key: "status", text: `status ${f.status}`, clear: () => onListFilter({ ...f, status: "all" }) });
+  }
+  if (f.intervened !== "all") {
+    out.push({
+      key: "intervened",
+      text: f.intervened === "yes" ? "com intervenção" : "sem intervenção",
+      clear: () => onListFilter({ ...f, intervened: "all" }),
+    });
+  }
+  if (f.path.trim()) {
+    out.push({ key: "path", text: `path com ${f.path.trim()}`, clear: () => onListFilter({ ...f, path: "" }) });
+  }
+  return out;
+}
+
+/**
+ * Os filtros ficam atrás de um único controle: a barra em repouso é o botão
+ * "filtrar" e os filtros ativos, cada um removível sozinho. Os controles
+ * (serviço, método, status, intervenção e path) só ocupam a tela enquanto o
+ * painel está aberto.
+ */
+function FilterBar(props: TrafficPanelProps) {
+  const { selection, onRoute, listFilter: f, onListFilter } = props;
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const chips = activeFilters(selection, f, onRoute, onListFilter);
+
+  return (
+    <div className="filters" role="search" aria-label="Filtrar o tráfego">
+      <div className="filters__bar">
+        <button
+          type="button"
+          className={"button button--sm filters__toggle" + (open ? " filters__toggle--on" : "")}
+          aria-expanded={open}
+          aria-controls={open ? panelId : undefined}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <FilterIcon /> filtrar
+        </button>
+        {chips.map((c) => (
+          <span key={c.key} className="chip chip--override">
+            {c.text}
+            <button type="button" onClick={c.clear} aria-label={`Remover o filtro ${c.text}`}>
+              <CloseIcon />
+            </button>
+          </span>
+        ))}
+        {chips.length > 1 ? (
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => {
+              onListFilter(EMPTY_FILTER);
+              onRoute(null);
+            }}
+          >
+            limpar
+          </button>
+        ) : null}
+      </div>
+      {open ? <FilterFields {...props} id={panelId} /> : null}
+    </div>
+  );
+}
+
+/** Os controles do contrato: serviço (ou o destino do painel de serviços), método, status, intervenção e path. */
+function FilterFields({
+  routes,
+  selection,
+  onRoute,
+  listFilter: f,
+  onListFilter,
+  id,
+}: TrafficPanelProps & { id: string }) {
   const [path, setPath] = useState(f.path);
-  // Filtro limpo de fora (botão "limpar"): o campo acompanha.
+  // Filtro limpo de fora (chip removido ou "limpar"): o campo acompanha.
   useEffect(() => setPath(f.path), [f.path]);
   useEffect(() => {
     if (path === f.path) return;
@@ -276,15 +373,15 @@ function FilterBar({ routes, selection, onRoute, listFilter: f, onListFilter }: 
 
   const names = routes.kind === "ready" ? routes.data.map((r) => r.route.name) : [];
   const routeName = selection?.kind === "route" ? selection.name : "";
-  const any = isFiltering(f) || selection !== null;
 
   return (
-    <div className="filters" role="search" aria-label="Filtrar o tráfego">
+    <div className="filters__fields" id={id}>
       {selection?.kind === "upstream" ? (
-        <span className="chip chip--override">
-          destino {selection.name.replace(/^https?:\/\//, "")}
-          <button type="button" onClick={() => onRoute(null)} aria-label={`Remover o filtro do destino ${selection.name}`}>
-            <CloseIcon />
+        <span className="filters__item">
+          <span className="filters__label">destino</span>
+          <span className="mono">{selection.name.replace(/^https?:\/\//, "")}</span>
+          <button type="button" className="text-button" onClick={() => onRoute(null)}>
+            remover
           </button>
         </span>
       ) : (
@@ -366,18 +463,6 @@ function FilterBar({ routes, selection, onRoute, listFilter: f, onListFilter }: 
           }}
         />
       </label>
-      {any ? (
-        <button
-          type="button"
-          className="text-button"
-          onClick={() => {
-            onListFilter(EMPTY_FILTER);
-            onRoute(null);
-          }}
-        >
-          limpar
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -452,7 +537,6 @@ function TrafficTable({
         <col />
         {showRoute ? <col className="traffic__c-route" /> : null}
         <col className="traffic__c-status" />
-        <col className="traffic__c-tag traffic__tag" />
         <col className="traffic__c-total" />
         <col className="traffic__c-fall" />
       </colgroup>
@@ -470,9 +554,6 @@ function TrafficTable({
           ) : null}
           <th scope="col" className="num">
             status
-          </th>
-          <th scope="col" className="traffic__tag">
-            intervenção
           </th>
           <th scope="col" className="num">
             total
@@ -531,20 +612,10 @@ function TrafficTable({
                 }
                 title={gatewayError ? "erro do próprio gateway" : upstreamError ? "erro do destino" : undefined}
               >
-                {/* Estreito, a coluna de intervenção sai: o status que o gateway
-                    sintetizou ou derrubou vira uma etiqueta em caixa, e o nome da
-                    intervenção segue para o leitor de tela. */}
-                <span className={tag && tag.tone !== "delay" ? "status-mark" : undefined}>{status}</span>
-                {tag ? <span className="traffic__narrow-tag"> {tag.label}</span> : null}
-              </td>
-              <td className="traffic__tag">
-                {tag ? (
-                  <span className={`tag tag--${tag.tone}`}>{tag.label}</span>
-                ) : gatewayError ? (
-                  <span className="tag tag--gateway">
-                    <span className="tag__long">erro do </span>gateway
-                  </span>
-                ) : null}
+                {/* A intervenção é uma marca junto do status, não uma coluna: o
+                    triângulo dá forma além da cor e a dica nomeia a regra. */}
+                {tag ? <InterventionMark ex={e} tag={tag} /> : null}
+                {status}
               </td>
               <td className="mono num">{ms(e.timing.totalMs)}</td>
               <td>
@@ -555,6 +626,21 @@ function TrafficTable({
         })}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * A marca da intervenção, colada ao status: um triângulo na cor do que o
+ * gateway fez ("sintetizado por payments/charge-declined"). Vale como forma,
+ * então continua distinguível sem cor e na tela estreita.
+ */
+function InterventionMark({ ex, tag }: { ex: Exchange; tag: NonNullable<ReturnType<typeof interventionTag>> }) {
+  const by = ex.override ? ` por ${ex.override}` : ex.route ? ` por uma regra de ${ex.route}` : "";
+  const title = `${tag.label}${by}`;
+  return (
+    <span className={`imark imark--${tag.tone}`} role="img" aria-label={title} title={title}>
+      <MarkIcon />
+    </span>
   );
 }
 

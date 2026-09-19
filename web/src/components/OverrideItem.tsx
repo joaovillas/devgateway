@@ -1,4 +1,4 @@
-import { useCallback, useId, useState } from "react";
+import { useCallback, useId, useState, type ReactNode } from "react";
 import { api, type Latency, type Override, type OverrideLiveState, type OverrideResource } from "../api";
 import { useStale, type OnOverrideState } from "../live";
 import type { CommentsGuard, GuardedDoc } from "../commentsGuard";
@@ -7,6 +7,7 @@ import { clock, formatDuration, ms, parseDuration, PATH_HINT, rulePathProblem, s
 import { RuleSelector } from "./PathText";
 import { toApiError, useResource } from "../hooks";
 import { mergeDiff, type MergePatch } from "../patch";
+import { advancedFeatures, advancedNote, type DetailMode } from "../mode";
 import { isActive } from "../services";
 import { usePatchWriter } from "../writer";
 import {
@@ -19,7 +20,7 @@ import {
   Switch,
   TextField,
 } from "./Controls";
-import { ChevronIcon } from "./Icons";
+import { ChevronIcon, SlidersIcon } from "./Icons";
 import { BodyMatcherEditor, MapEditor } from "./MapEditor";
 import { ErrorNote } from "./ErrorNote";
 import type { ApiError } from "../api";
@@ -37,6 +38,10 @@ interface OverrideItemProps {
   onShowExchange: (id: string) => void;
   /** Estado vivo devolvido pela escrita, aplicado já no painel e no mapa. */
   onState?: OnOverrideState;
+  /** Simples mostra liga/desliga, nome, efeito e probabilidade; avançado, tudo. */
+  mode: DetailMode;
+  /** Leva ao modo avançado a partir da marca de recurso avançado. */
+  onAdvanced: () => void;
 }
 
 const CONTINUOUS = ["probability", "latency", "drop"];
@@ -49,7 +54,20 @@ function latMode(l: Latency | undefined): LatMode {
 }
 
 /** Um override da rota: liga/desliga, controles contínuos e edição completa. */
-export function OverrideItem({ route, doc, override, state, at, now, guard, onShowExchange, onState }: OverrideItemProps) {
+export function OverrideItem({
+  route,
+  doc,
+  override,
+  state,
+  at,
+  now,
+  guard,
+  onShowExchange,
+  onState,
+  mode,
+  onAdvanced,
+}: OverrideItemProps) {
+  const simple = mode === "simple";
   const stale = useStale();
   const applyState = useCallback(
     (r: OverrideResource) => {
@@ -91,14 +109,14 @@ export function OverrideItem({ route, doc, override, state, at, now, guard, onSh
     });
   };
 
-  const mode = latMode(o.latency);
+  const latencyMode = latMode(o.latency);
   const lat = o.latency;
   const fixed = typeof lat === "string" ? lat : "200ms";
   const range = typeof lat === "object" ? lat : null;
   const ms0 = (d: string) => parseDuration(d) ?? 0;
 
   const setMode = (m: LatMode) => {
-    if (m === mode) return;
+    if (m === latencyMode) return;
     if (m === "none") adjust({ latency: null });
     else if (m === "fixed") adjust({ latency: range ? range.min : "200ms" });
     else {
@@ -107,9 +125,14 @@ export function OverrideItem({ route, doc, override, state, at, now, guard, onSh
     }
   };
 
+  // O que a regra usa e só o avançado edita: no simples vira a marca do
+  // cabeçalho, para nada ficar escondido sem aviso.
+  const features = advancedFeatures(o);
+  const note = features.length ? advancedNote(features) : null;
+
   return (
     <li
-      className={"ov" + (active ? " ov--active" : "") + (enabled ? "" : " ov--off")}
+      className={"ov" + (simple ? " ov--simple" : "") + (active ? " ov--active" : "") + (enabled ? "" : " ov--off")}
       aria-labelledby={`${ids}-name`}
     >
       <div className="ov__head">
@@ -126,16 +149,29 @@ export function OverrideItem({ route, doc, override, state, at, now, guard, onSh
             {o.source.kind === "learned" ? "aprendida" : "derivada"}
           </span>
         ) : null}
-        <LiveState enabled={enabled} active={active} state={state} now={now} at={at} busy={w.busy ? (guard.asking === doc.file ? "esperando a confirmação" : "gravando") : null} stale={stale} onReset={reset} />
+        {simple ? (
+          <span className="ov__effect">
+            <Effect o={o} />
+          </span>
+        ) : null}
+        {simple && note ? (
+          <button type="button" className="icon-button ov__adv" title={note} onClick={onAdvanced}>
+            <SlidersIcon />
+            <span className="sr-only">{`A regra ${o.name} ${note}`}</span>
+          </button>
+        ) : null}
+        <LiveState enabled={enabled} active={active} state={state} now={now} at={at} busy={w.busy ? (guard.asking === doc.file ? "esperando a confirmação" : "gravando") : null} stale={stale} compact={simple} onReset={reset} />
       </div>
 
-      <p className="ov__sel">
-        <span className="mono">
-          <RuleSelector o={o} />
-        </span>
-        <span className="dim"> → </span>
-        <Effect o={o} />
-      </p>
+      {simple ? null : (
+        <p className="ov__sel">
+          <span className="mono">
+            <RuleSelector o={o} />
+          </span>
+          <span className="dim"> → </span>
+          <Effect o={o} />
+        </p>
+      )}
 
       <div className="ov__controls">
         <Row label="probabilidade" htmlFor={`${ids}-p`}>
@@ -147,66 +183,70 @@ export function OverrideItem({ route, doc, override, state, at, now, guard, onSh
             onSettle={w.flush}
           />
         </Row>
-        <Row label="latência">
-          <div className="lat">
-            <Segmented<LatMode>
-              label={`Latência de ${o.name}`}
-              value={mode}
-              onChange={setMode}
-              options={[
-                { value: "none", label: "sem" },
-                { value: "fixed", label: "fixa" },
-                { value: "range", label: "intervalo" },
-              ]}
-            />
-            {mode === "fixed" ? (
-              <DurationSlider
-                label={`Latência fixa de ${o.name}`}
-                value={fixed}
-                onChange={(d, delay) => adjust({ latency: d }, delay)}
-                onSettle={w.flush}
+        {simple ? null : (
+          <>
+          <Row label="latência">
+            <div className="lat">
+              <Segmented<LatMode>
+                label={`Latência de ${o.name}`}
+                value={latencyMode}
+                onChange={setMode}
+                options={[
+                  { value: "none", label: "sem" },
+                  { value: "fixed", label: "fixa" },
+                  { value: "range", label: "intervalo" },
+                ]}
               />
-            ) : null}
-            {mode === "range" && range ? (
-              <>
-                <span className="lat__bound">
-                  <span className="lat__label">mín</span>
-                  <DurationSlider
-                    label={`Latência mínima de ${o.name}`}
-                    onSettle={w.flush}
-                    value={range.min}
-                    onChange={(d, delay) =>
-                      adjust({ latency: { min: d, max: ms0(d) > ms0(range.max) ? d : range.max } }, delay)
-                    }
-                  />
-                </span>
-                <span className="lat__bound">
-                  <span className="lat__label">máx</span>
-                  <DurationSlider
-                    label={`Latência máxima de ${o.name}`}
-                    onSettle={w.flush}
-                    value={range.max}
-                    onChange={(d, delay) =>
-                      adjust({ latency: { min: ms0(d) < ms0(range.min) ? d : range.min, max: d } }, delay)
-                    }
-                  />
-                </span>
-              </>
-            ) : null}
-          </div>
-        </Row>
-        <Row label="queda">
-          <span className="inline">
-            <Switch
-              checked={o.drop === true}
-              label={`Derrubar a conexão em ${o.name}`}
-              onChange={(v) => adjust({ drop: v ? true : null })}
-            />
-            <span className={o.drop ? "tone-drop" : "dim"}>
-              {o.drop ? "derruba a conexão sem responder" : "responde normalmente"}
+              {latencyMode === "fixed" ? (
+                <DurationSlider
+                  label={`Latência fixa de ${o.name}`}
+                  value={fixed}
+                  onChange={(d, delay) => adjust({ latency: d }, delay)}
+                  onSettle={w.flush}
+                />
+              ) : null}
+              {latencyMode === "range" && range ? (
+                <>
+                  <span className="lat__bound">
+                    <span className="lat__label">mín</span>
+                    <DurationSlider
+                      label={`Latência mínima de ${o.name}`}
+                      onSettle={w.flush}
+                      value={range.min}
+                      onChange={(d, delay) =>
+                        adjust({ latency: { min: d, max: ms0(d) > ms0(range.max) ? d : range.max } }, delay)
+                      }
+                    />
+                  </span>
+                  <span className="lat__bound">
+                    <span className="lat__label">máx</span>
+                    <DurationSlider
+                      label={`Latência máxima de ${o.name}`}
+                      onSettle={w.flush}
+                      value={range.max}
+                      onChange={(d, delay) =>
+                        adjust({ latency: { min: ms0(d) < ms0(range.min) ? d : range.min, max: d } }, delay)
+                      }
+                    />
+                  </span>
+                </>
+              ) : null}
+            </div>
+          </Row>
+          <Row label="queda">
+            <span className="inline">
+              <Switch
+                checked={o.drop === true}
+                label={`Derrubar a conexão em ${o.name}`}
+                onChange={(v) => adjust({ drop: v ? true : null })}
+              />
+              <span className={o.drop ? "tone-drop" : "dim"}>
+                {o.drop ? "derruba a conexão sem responder" : "responde normalmente"}
+              </span>
             </span>
-          </span>
-        </Row>
+          </Row>
+          </>
+        )}
       </div>
 
       {o.source ? <SourceLine source={o.source} onShowExchange={onShowExchange} /> : null}
@@ -214,43 +254,45 @@ export function OverrideItem({ route, doc, override, state, at, now, guard, onSh
       {w.error ? <ErrorNote error={w.error} onDismiss={w.dismissError} what="A alteração não foi gravada" /> : null}
       {actionError ? <ErrorNote error={actionError} onDismiss={() => setActionError(null)} what="A ação falhou" /> : null}
 
-      <details className="more">
-        <summary>
-          <ChevronIcon /> critérios, resposta e limites
-        </summary>
-        <OverrideForm
-          o={o}
-          ids={ids}
-          change={(p) => w.change(p)}
-          rename={(name) =>
-            act(() => guard.guard(doc, () => api.replaceOverride(route, override.name, { ...o, name })))
-          }
-        />
-        <div className="more__actions">
-          <button type="button" className="text-button" onClick={reset}>
-            reiniciar TTL e contagem
-          </button>
-          {confirmDelete ? (
-            <span className="inline">
-              <button
-                type="button"
-                className="text-button text-button--danger"
-                autoFocus
-                onClick={() => act(() => guard.guard(doc, () => api.deleteOverride(route, override.name)))}
-              >
-                confirmar remoção de {o.name}
-              </button>
-              <button type="button" className="text-button" onClick={() => setConfirmDelete(false)}>
-                manter
-              </button>
-            </span>
-          ) : (
-            <button type="button" className="text-button" onClick={() => setConfirmDelete(true)}>
-              remover regra
+      {simple ? null : (
+        <details className="more">
+          <summary>
+            <ChevronIcon /> critérios, resposta e limites
+          </summary>
+          <OverrideForm
+            o={o}
+            ids={ids}
+            change={(p) => w.change(p)}
+            rename={(name) =>
+              act(() => guard.guard(doc, () => api.replaceOverride(route, override.name, { ...o, name })))
+            }
+          />
+          <div className="more__actions">
+            <button type="button" className="text-button" onClick={reset}>
+              reiniciar TTL e contagem
             </button>
-          )}
-        </div>
-      </details>
+            {confirmDelete ? (
+              <span className="inline">
+                <button
+                  type="button"
+                  className="text-button text-button--danger"
+                  autoFocus
+                  onClick={() => act(() => guard.guard(doc, () => api.deleteOverride(route, override.name)))}
+                >
+                  confirmar remoção de {o.name}
+                </button>
+                <button type="button" className="text-button" onClick={() => setConfirmDelete(false)}>
+                  manter
+                </button>
+              </span>
+            ) : (
+              <button type="button" className="text-button" onClick={() => setConfirmDelete(true)}>
+                remover regra
+              </button>
+            )}
+          </div>
+        </details>
+      )}
     </li>
   );
 }
@@ -263,7 +305,9 @@ function Effect({ o }: { o: Override }) {
     const l = typeof o.latency === "string" ? o.latency : `${o.latency.min}–${o.latency.max}`;
     parts.push(<span key="l" className="tone-injected mono">+{l}</span>);
   }
-  if (!o.drop && !o.respond) parts.push(<span key="u" className="dim">destino</span>);
+  // "destino" só quando não há mais nada a dizer: com atraso declarado, o
+  // resumo é o atraso, e ir ao destino é o que já se espera.
+  if (parts.length === 0) parts.push(<span key="u" className="dim">destino</span>);
   return (
     <>
       {parts.map((p, i) => (
@@ -284,6 +328,7 @@ function LiveState({
   at,
   busy,
   stale,
+  compact,
   onReset,
 }: {
   enabled: boolean;
@@ -294,11 +339,16 @@ function LiveState({
   busy: string | null;
   /** Sem conexão: TTL e aplicações não estão sendo confirmados pelo servidor. */
   stale: boolean;
+  /**
+   * Modo simples: só o que se esgota (prazo, limite, expiração). "Ativa" e
+   * "desligada" o interruptor ao lado já diz, e repetir seria ruído.
+   */
+  compact: boolean;
   onReset: () => void;
 }) {
-  const parts = [];
+  const parts: ReactNode[] = [];
   if (!enabled) {
-    parts.push(<span key="s">desligada</span>);
+    if (!compact) parts.push(<span key="s">desligada</span>);
   } else if (state && !active) {
     const why =
       state.expired === "applications" || (state.maxApplications !== null && state.applications >= state.maxApplications)
@@ -313,11 +363,13 @@ function LiveState({
       </span>,
     );
   } else {
-    parts.push(
-      <span key="s" className="ov__on">
-        ativa
-      </span>,
-    );
+    if (!compact) {
+      parts.push(
+        <span key="s" className="ov__on">
+          ativa
+        </span>,
+      );
+    }
     if (state?.ttlRemainingMs != null) {
       parts.push(
         <span key="t" className="mono" title="Tempo de vida restante">
@@ -326,7 +378,7 @@ function LiveState({
       );
     }
   }
-  if (state && (state.maxApplications !== null || state.applications > 0)) {
+  if (state && (state.maxApplications !== null || (!compact && state.applications > 0))) {
     parts.push(
       <span key="a" className="mono" title="Aplicações desde o início do relógio">
         {state.applications}
@@ -334,7 +386,7 @@ function LiveState({
       </span>,
     );
   }
-  if (stale && enabled && state) {
+  if (stale && enabled && state && (!compact || parts.length > 0)) {
     parts.push(
       <span key="p" title="Sem conexão com /api/events: estes números são da última atualização e não estão sendo confirmados">
         parado

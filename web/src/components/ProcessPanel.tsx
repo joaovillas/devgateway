@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useRef, useState } from "react";
 import {
   api,
   type ApiError,
@@ -9,6 +9,7 @@ import {
 } from "../api";
 import { bytes, shortPath } from "../format";
 import { toApiError, useResource } from "../hooks";
+import type { DetailMode } from "../mode";
 import { patchForKey } from "../patch";
 import { IntField, Segmented, Switch, TextField } from "./Controls";
 import { ErrorNote } from "./ErrorNote";
@@ -36,13 +37,26 @@ const LABELS: Record<string, { label: string; hint?: string }> = {
   routesDir: { label: "diretório dos serviços" },
 };
 
+/** O valor efetivo em uma palavra, para a leitura do modo simples. */
+function settingText(v: EffectiveValue): string {
+  if (typeof v.value === "boolean") return v.value ? "ligado" : "desligado";
+  if (v.value === null || v.value === "") return "—";
+  if (v.key === "capture.maxBodyBytes" && typeof v.value === "number") return bytes(v.value);
+  return String(v.value);
+}
+
 export function ProcessBody({
   version,
   onSettings,
+  mode,
+  onAdvanced,
 }: {
   version: number;
   /** Resultado de uma escrita das configurações (a porta de administração pode ter mudado). */
   onSettings?: (r: SettingsPatchResult) => void;
+  /** Simples lê os valores efetivos; avançado edita cada um. */
+  mode: DetailMode;
+  onAdvanced: () => void;
 }) {
   // Evento de configuração: relê mantendo os controles à vista. Voltar a
   // "carregando" desmontaria os campos e perderia o que está sendo digitado.
@@ -63,6 +77,39 @@ export function ProcessBody({
     return <Failure what="a configuração" request="GET /api/settings" error={settings.error} onRetry={reload} />;
   }
   const view = latest ?? settings.data;
+
+  // Modo simples: os mesmos valores, só para ler. Nada sai da tela, mas
+  // trocar porta, backend do histórico ou seed é gesto do avançado.
+  if (mode === "simple") {
+    return (
+      <div className="proc">
+        <p className="proc__file">
+          Valores efetivos de <span className="mono">{view.file.path}</span>
+          {view.file.exists ? "" : " (o arquivo ainda não existe: tudo está no padrão ou no ambiente)"}.
+        </p>
+        <dl className="uph">
+          {view.values.map((v) => (
+            <Fragment key={v.key}>
+              <dt>{LABELS[v.key]?.label ?? v.key}</dt>
+              <dd className="mono">
+                {settingText(v)}
+                {v.locked ? (
+                  <span className="origin origin--env proc__lock" title={`Definido por ${v.env}`}>
+                    <LockIcon /> {v.env}
+                  </span>
+                ) : null}
+              </dd>
+            </Fragment>
+          ))}
+        </dl>
+        <p>
+          <button type="button" className="text-button" onClick={onAdvanced}>
+            abrir o avançado para editar
+          </button>
+        </p>
+      </div>
+    );
+  }
 
   const commit = (key: string, value: unknown) => {
     setBusy(key);

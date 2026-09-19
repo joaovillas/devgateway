@@ -13,11 +13,13 @@ import type { OnOverrideState } from "../live";
 import { useCommentsGuard, WriteCancelled, type CommentsGuard, type GuardedDoc } from "../commentsGuard";
 import type { Load } from "../hooks";
 import { toApiError, useNow } from "../hooks";
+import { MODE_OPTIONS, type DetailMode } from "../mode";
 import type { MergePatch } from "../patch";
 import type { Selection } from "../selection";
 import { destinationText, knownDestinations } from "../services";
 import { usePatchWriter } from "../writer";
-import { DurationField, Row, Switch, TextField } from "./Controls";
+import { DurationField, Row, Segmented, Switch, TextField } from "./Controls";
+import { PathText } from "./PathText";
 import { ErrorNote } from "./ErrorNote";
 import { PlusIcon } from "./Icons";
 import { OverrideItem } from "./OverrideItem";
@@ -57,6 +59,9 @@ interface RoutePanelProps {
   onCreate: () => void;
   onCreated: (name: string) => void;
   onCancelCreate: () => void;
+  /** Simples (o padrão) ou avançado, lembrado entre visitas. */
+  mode: DetailMode;
+  onMode: (m: DetailMode) => void;
 }
 
 /**
@@ -94,11 +99,24 @@ export function RoutePanel(props: RoutePanelProps) {
             …{exchange.id.slice(-8)}
           </span>
         ) : null}
+        <div className="panel__tools">
+          <Segmented<DetailMode>
+            label="Modo do detalhe"
+            value={props.mode}
+            onChange={props.onMode}
+            options={MODE_OPTIONS}
+          />
+        </div>
       </header>
       <div className="panel__body" id={`${tabsId}-panel`} role="tabpanel" aria-labelledby={`${tabsId}-${view}`}>
         {guard.asking ? <CommentsPrompt guard={guard} /> : null}
         {view === "process" ? (
-          <ProcessBody version={props.version} onSettings={props.onSettings} />
+          <ProcessBody
+            version={props.version}
+            onSettings={props.onSettings}
+            mode={props.mode}
+            onAdvanced={() => props.onMode("advanced")}
+          />
         ) : creating ? (
           <NewServiceForm
             routes={routes}
@@ -232,6 +250,8 @@ function RouteBody({
   guard,
   res,
   justCreated,
+  mode,
+  onMode,
 }: RoutePanelProps & { guard: CommentsGuard; res: RouteResource | undefined; justCreated: string | null }) {
   if (routes.kind === "loading") return <Empty title="Carregando os serviços" />;
   if (routes.kind === "error") {
@@ -304,6 +324,8 @@ function RouteBody({
       onOverrideState={onOverrideState}
       onRenamed={(name) => onSelect({ kind: "route", name })}
       onDeleted={() => onSelect(null)}
+      mode={mode}
+      onAdvanced={() => onMode("advanced")}
     />
   );
 }
@@ -316,6 +338,8 @@ function RouteDetail({
   onOverrideState,
   onRenamed,
   onDeleted,
+  mode,
+  onAdvanced,
 }: {
   res: RouteResource;
   guard: CommentsGuard;
@@ -324,6 +348,8 @@ function RouteDetail({
   onOverrideState: OnOverrideState;
   onRenamed: (name: string) => void;
   onDeleted: () => void;
+  mode: DetailMode;
+  onAdvanced: () => void;
 }) {
   const r = res.route;
   const overrides = r.overrides ?? [];
@@ -335,9 +361,11 @@ function RouteDetail({
   const ticking = overrides.some((o) => res.state[o.name]?.ttlRemainingMs != null);
   const now = useNow(ticking);
   const [adding, setAdding] = useState(false);
+  const simple = mode === "simple";
 
   return (
     <div className="route">
+      {simple ? <RouteSummary res={res} onAdvanced={onAdvanced} /> : null}
       <div className="route__section">
         <h3 className="section-title">
           regras
@@ -368,11 +396,13 @@ function RouteDetail({
                 guard={guard}
                 onShowExchange={onShowExchange}
                 onState={onOverrideState}
+                mode={mode}
+                onAdvanced={onAdvanced}
               />
             ))}
           </ul>
         )}
-        {learned > 1 ? (
+        {learned > 1 && !simple ? (
           <p className="hint">
             O aprendizado já troca identificadores por <span className="mono path-param">:id</span>. Para cobrir
             outros valores de uma vez (um slug, por exemplo), use <span className="mono path-param">:id</span> no
@@ -389,8 +419,45 @@ function RouteDetail({
         )}
       </div>
 
-      <RouteFields res={res} doc={doc} guard={guard} onRenamed={onRenamed} onDeleted={onDeleted} />
+      {simple ? null : (
+        <RouteFields res={res} doc={doc} guard={guard} onRenamed={onRenamed} onDeleted={onDeleted} />
+      )}
     </div>
+  );
+}
+
+/**
+ * O serviço em uma linha no modo simples: nome, entrada e destino
+ * ("payments · /payments/* → 127.0.0.1:9001"), com o que o encaminhamento
+ * muda em tinta terciária. Editar esses campos é gesto do avançado.
+ */
+function RouteSummary({ res, onAdvanced }: { res: RouteResource; onAdvanced: () => void }) {
+  const r = res.route;
+  const extras: string[] = [];
+  if (r.stripPrefix) extras.push("remove o prefixo");
+  if (r.rewriteHost) extras.push("Host do destino");
+  if (r.timeout) extras.push(`timeout ${r.timeout}`);
+  return (
+    <p className="route__summary">
+      <span className="mono route__summary-name">{r.name}</span>
+      <span className="dim" aria-hidden="true"> · </span>
+      <span className="mono">
+        {r.match.host ? <span className="route__summary-host">{r.match.host}</span> : null}
+        {r.match.path ? <PathText path={r.match.path} /> : <span className="dim">qualquer entrada</span>}
+      </span>
+      <span className="dim" aria-hidden="true"> → </span>
+      {r.upstream ? (
+        <span className="mono" title={r.upstream}>
+          {destinationText(r.upstream)}
+        </span>
+      ) : (
+        <span className="dim">sem destino</span>
+      )}
+      {extras.length ? <span className="dim">{` · ${extras.join(" · ")}`}</span> : null}
+      <button type="button" className="text-button route__summary-edit" onClick={onAdvanced}>
+        editar o serviço
+      </button>
+    </p>
   );
 }
 

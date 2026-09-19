@@ -50,3 +50,38 @@ export function ArrowIcon({ dir }: { dir: "up" | "down" }) {
     </svg>
   );
 }
+
+/** Pilha de ajustes: a regra usa algo que só o modo avançado edita. */
+export function SlidersIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false" className="icon">
+      <path d="M1 2.5h8M1 5h8M1 7.5h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+      <circle cx="3.25" cy="2.5" r="1.25" fill="var(--panel)" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="6.75" cy="7.5" r="1.25" fill="var(--panel)" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+/** Funil: o controle único que abre e fecha os filtros do tráfego. */
+export function FilterIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false" className="icon">
+      <path
+        d="M1 1.75h8L6 5.25v3.25L4 7.25V5.25z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+/** Triângulo cheio: a marca da intervenção junto do status no tráfego. */
+export function MarkIcon() {
+  return (
+    <svg width="7" height="7" viewBox="0 0 7 7" aria-hidden="true" focusable="false" className="icon">
+      <path d="M3.5 0.5l3 6h-6z" fill="currentColor" />
+    </svg>
+  );
+}

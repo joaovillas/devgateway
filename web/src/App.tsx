@@ -11,6 +11,7 @@ import {
 import { StaleContext } from "./live";
 import { EMPTY_FILTER, toExchangeFilter, type ListFilter } from "./exchangeFilter";
 import { useConnection, useResource, type Load } from "./hooks";
+import { readMode, storeMode, type DetailMode } from "./mode";
 import { useSelection, type Selection } from "./selection";
 import { withLiveState } from "./services";
 import { TopBar } from "./components/TopBar";
@@ -48,6 +49,12 @@ export function App() {
   const [selection, setSelectionRaw] = useSelection();
   const [docVersion, setDocVersion] = useState(0);
   const [view, setViewRaw] = useState<ControlView>(readView);
+  // Simples (o padrão) ou avançado, lembrado entre visitas.
+  const [mode, setModeRaw] = useState<DetailMode>(readMode);
+  const setMode = useCallback((m: DetailMode) => {
+    setModeRaw(m);
+    storeMode(m);
+  }, []);
   // Troca aberta no detalhe (aba "troca"), com a rota dela.
   const [opened, setOpened] = useState<(OpenedExchange & { route?: string }) | null>(null);
   const [listFilter, setListFilter] = useState<ListFilter>(EMPTY_FILTER);
@@ -265,6 +272,8 @@ export function App() {
             onCreate={startCreate}
             onCreated={onCreated}
             onCancelCreate={cancelCreate}
+            mode={mode}
+            onMode={setMode}
           />
         </div>
       </main>

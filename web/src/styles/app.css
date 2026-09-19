@@ -953,15 +953,19 @@ button.node--down:hover {
   color: var(--fault);
 }
 
-.tag {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+/* Marca da intervenção, colada ao status: forma além de cor, para o que o
+   gateway fez não depender só do vermelho. */
+.imark {
+  display: inline-flex;
+  align-items: center;
+  margin-right: var(--s-2);
+  vertical-align: baseline;
 }
-.tag--synth,
-.tag--drop {
+.imark--synth,
+.imark--drop {
   color: var(--fault);
 }
-.tag--delay {
+.imark--delay {
   color: var(--injected);
 }
 
@@ -1474,6 +1478,27 @@ kbd {
   min-width: 0;
 }
 
+/* O serviço em uma linha no modo simples: ler basta, editar é no avançado. */
+.route__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--s-2);
+  margin: 0;
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--seam);
+}
+.route__summary-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+.route__summary-host {
+  color: var(--ink-2);
+}
+.route__summary-edit {
+  margin-left: auto;
+}
+
 .route__danger {
   margin: var(--s-4) 0 0;
 }
@@ -1532,6 +1557,21 @@ kbd {
 }
 .ov__expired {
   color: var(--ink-2);
+}
+
+/* Modo simples: o efeito resumido fica no cabeçalho da regra, entre o nome e
+   o que se esgota, e a linha da probabilidade vem logo abaixo. */
+.ov--simple {
+  gap: var(--s-2);
+  padding: var(--s-3) 0;
+}
+.ov__effect {
+  flex: none;
+  white-space: nowrap;
+}
+/* Recurso que só o avançado edita: marca discreta, sem cor de estado. */
+.ov__adv {
+  flex: none;
 }
 
 .ov__sel {
@@ -1829,6 +1869,10 @@ kbd {
   color: var(--ink-2);
 }
 
+.proc__lock {
+  margin-left: var(--s-3);
+}
+
 .proc__notes {
   margin: var(--s-4) 0 0;
   padding-left: var(--s-5);
@@ -1972,12 +2016,29 @@ kbd {
 }
 
 .filters {
+  padding: var(--s-2) var(--s-4) var(--s-3) var(--s-3);
+  border-bottom: 1px solid var(--seam);
+}
+/* Em repouso, a barra é só o botão e os filtros ativos; os controles descem
+   quando ela abre. */
+.filters__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  min-height: 24px;
+}
+.filters__toggle--on {
+  border-color: var(--ink-3);
+}
+.filters__fields {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-2) var(--s-5);
-  padding: var(--s-2) var(--s-4) var(--s-2) var(--s-3);
-  border-bottom: 1px solid var(--seam);
+  margin-top: var(--s-3);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--seam);
 }
 .filters__item {
   display: inline-flex;
@@ -2018,21 +2079,13 @@ kbd {
   width: 96px;
 }
 .traffic__c-status {
-  width: 52px;
-}
-.traffic__c-tag {
-  width: 124px;
+  width: 68px;
 }
 .traffic__c-total {
   width: 68px;
 }
 .traffic__c-fall {
   width: 20%;
-}
-/* A etiqueta dentro do status só existe no estreito, onde a coluna de
-   intervenção sai. */
-.traffic__narrow-tag {
-  display: none;
 }
 .traffic__scale {
   margin-left: var(--s-2);
@@ -2066,9 +2119,6 @@ kbd {
   color: var(--ink);
   text-decoration: underline dotted var(--ink-3);
   text-underline-offset: 3px;
-}
-.tag--gateway {
-  color: var(--ink-2);
 }
 /* Erro do próprio gateway: nem intervenção nem upstream, o cinza da etiqueta. */
 .status--gateway {
@@ -2440,31 +2490,6 @@ kbd {
   .traffic__c-method {
     width: 56px;
   }
-  /* O path é a informação principal da linha: a coluna de intervenção sai,
-     mas o sinal fica. O status que o gateway sintetizou ou derrubou vira uma
-     etiqueta em caixa (forma, não só cor, o separa de um 503 do upstream,
-     que segue sublinhado); o atraso é o segmento âmbar do waterfall. O nome
-     da intervenção segue para o leitor de tela. */
-  .traffic__tag {
-    display: none;
-  }
-  .status-mark {
-    display: inline-block;
-    padding-inline: 3px;
-    line-height: 16px;
-    border: 1px solid currentColor;
-    border-radius: var(--radius);
-    background: var(--fault-dim);
-  }
-  .traffic__narrow-tag {
-    display: inline;
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
   .traffic__c-total {
     width: 60px;
   }
@@ -2479,9 +2504,6 @@ kbd {
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .tag__long {
-    display: none;
-  }
   .traffic__scale {
     display: none;
   }
@@ -2489,7 +2511,7 @@ kbd {
   .traffic th {
     padding-inline: var(--s-2);
   }
-  .filters {
+  .filters__fields {
     gap: var(--s-2) var(--s-4);
   }
   .xd__bar kbd {
