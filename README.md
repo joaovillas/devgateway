@@ -253,7 +253,7 @@ Rota:
 |---|---|
 | `name` | nome único da rota |
 | `upstream` | URL do serviço. Sem ele, só os overrides respondem, e o resto recebe `501` |
-| `match.path` | path exato (`/health`) ou curinga de sufixo (`/api/payments/*`) |
+| `match.path` | path exato (`/health`) ou curinga de sufixo (`/api/payments/*`); parâmetros de segmento (`:id`) só no path de um override |
 | `match.host` | casa pelo `Host` da requisição; rotas com host têm precedência |
 | `stripPrefix` | remove a parte fixa do padrão antes de encaminhar |
 | `rewriteHost` | troca o `Host` original pelo do upstream (servidores com virtual host) |
@@ -268,7 +268,7 @@ Override:
 |---|---|
 | `name` | nome único dentro da rota; o override é identificado como `rota/nome` |
 | `enabled` | `false` desliga; ausente equivale a ligado |
-| `match.path` / `match.pathRegex` | path exato ou curinga, ou expressão regular (um dos dois). O path é o que o cliente enviou, antes do `stripPrefix` |
+| `match.path` / `match.pathRegex` | path exato (`/viacep/01001000/json`), com parâmetros de segmento (`/viacep/:id/json`), curinga de sufixo (`/viacep/*`) ou expressão regular (um dos dois campos). Cada `:nome` casa exatamente um segmento não vazio: `/viacep/:id/json` casa com `/viacep/40415345/json`, não com `/viacep/40415345/extra/json`. O nome segue `[A-Za-z_][A-Za-z0-9_]*`, não se repete no mesmo path e não divide o segmento com o curinga. O path é o que o cliente enviou, antes do `stripPrefix` |
 | `match.method` | método HTTP |
 | `match.headers`, `match.query` | por nome, um texto (igualdade) ou um objeto com um de `equals`, `regex`, `json`, `contains` |
 | `match.body` | o mesmo, aplicado ao corpo (`json` compara a estrutura, ignorando formatação e ordem das chaves) |
@@ -282,7 +282,7 @@ Override:
 | `maxApplications` | número de aplicações até expirar |
 | `source` | escrito pelo gateway nos overrides aprendidos ou derivados de uma troca; aponta a troca de origem |
 
-Quando mais de um override casa, vale o mais específico: path exato antes de curinga, curinga mais longo antes do mais curto, e, em empate, o que declara mais critérios. O que ainda empatar é resolvido pela ordem no documento. Overrides desligados ou expirados ficam fora dessa disputa.
+Quando mais de um override casa, vale o mais específico: path exato; depois path com parâmetros de segmento (entre eles, o de mais segmentos literais); depois expressão regular; depois curinga, do mais longo ao mais curto; e, em empate, o que declara mais critérios. O que ainda empatar é resolvido pela ordem no documento. Overrides desligados ou expirados ficam fora dessa disputa.
 
 ## Variáveis de ambiente
 
@@ -347,7 +347,11 @@ Com `learning.enabled` ligado, cada combinação nova de método e path que pass
       at: 2026-09-18T20:04:24.72Z
 ```
 
-Desligado, ele não muda o tráfego. Ele é o ponto de partida para o próximo gesto: ligar, ajustar a resposta ou dar uma probabilidade de falha. Uma combinação já é conhecida quando a rota tem override, ligado ou não, com o mesmo path exato e o mesmo método; curingas não contam. O aprendizado grava depois de a resposta ser entregue, fora do caminho da requisição.
+Desligado, ele não muda o tráfego. Ele é o ponto de partida para o próximo gesto: ligar, ajustar a resposta ou dar uma probabilidade de falha. O aprendizado grava depois de a resposta ser entregue, fora do caminho da requisição.
+
+O path gravado é generalizado: um segmento que parece identificar um registro — só dígitos, UUID, ou alfanumérico com dígitos e ao menos 8 caracteres — vira parâmetro de segmento (`:id`, `:id2`…), e o resto fica literal. `GET /viacep/40415345/json` e depois `GET /viacep/01001000/json` geram um único override, `get-viacep-id-json`, com path `/viacep/:id/json` e a resposta da primeira troca; `/api/users/me` e `/api/users/42` geram dois, `/api/users/me` e `/api/users/:id`, porque `me` não é identificador. A heurística é conservadora: `json`, `charge` ou `ch_123` ficam literais, e um identificador não reconhecido (um slug, por exemplo) só custa uma regra a mais, que você generaliza trocando o segmento por `:id`.
+
+Uma combinação já é conhecida quando a rota tem override, ligado ou não, do mesmo método com o path generalizado igual ou cujo path (exato ou com parâmetros) casa com a requisição; curingas e expressões regulares não contam, para que os endpoints sob eles também sejam aprendidos. Ao gravar um override generalizado, os aprendidos de path exato que ele cobre — ainda desligados e sem outros critérios — são substituídos por ele, no mesmo lugar do documento. Um aprendido que você ligou ou restringiu fica, e continua valendo antes do generalizado.
 
 Ligue e desligue sem reiniciar:
 
@@ -397,7 +401,7 @@ Decisões conscientes, com o custo à vista:
 - **Comentários se perdem na escrita e no aprendizado.** Quando a API, o painel ou o modo aprendizado grava um documento de rota, ele é reserializado: comentários e a ordem original das chaves daquele documento se perdem. O dano fica contido à rota tocada, e o painel avisa antes da primeira escrita num documento com comentários. Se os comentários importam, mantenha o original versionado e trabalhe numa cópia (é o que `examples/run.sh` faz).
 - **O determinismo é por ordem de chegada.** O seed fixa as decisões por número de sequência, não por conteúdo. Reproduzir uma execução exige reenviar as requisições na mesma ordem; requisições concorrentes podem chegar em ordem diferente de uma execução para outra, então a reprodutibilidade estrita pede envio serial.
 - **A queda de conexão é degradada em HTTP/2.** Em HTTP/1.1 o gateway fecha o socket sem resposta. Em HTTP/2 não há socket próprio da requisição, e a queda vira o cancelamento abrupto do stream. A troca capturada registra qual dos dois aconteceu em `dropMode` (`hijack`, `stream_reset`, ou `abort` quando a conexão HTTP/1.x não permite sequestro).
-- **Paths com identificadores geram um override por identificador.** O aprendizado grava `/users/1`, `/users/2` e assim por diante como overrides separados. Consolide num override com curinga (`/users/*`) e remova os aprendidos; `GET /api/learning` conta os aprendidos por rota.
+- **Identificadores que a heurística não reconhece geram um override por valor.** O aprendizado generaliza dígitos, UUIDs e códigos alfanuméricos com dígitos, mas um slug como `/posts/meu-titulo` ou um código curto como `ch_123` vira um override por valor. Troque o segmento por `:id` num deles e remova os demais; daí em diante os valores que ele cobre são conhecidos e não geram regra nova. `GET /api/learning` conta os aprendidos por rota.
 - **Trocar o backend do histórico não migra as trocas.** As trocas anteriores continuam no backend antigo, intactas (o arquivo NDJSON ou SQLite continua no disco); o novo começa vazio. A resposta da API e o painel avisam no momento da troca.
 
 Também ficam de fora, por ora: TLS na porta de tráfego (o gateway fala HTTP com o cliente e HTTP ou HTTPS com o upstream), autenticação na porta de administração (o uso previsto é local) e retenção automática nos backends persistentes.

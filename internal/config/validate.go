@@ -47,7 +47,7 @@ func validateRoute(r Route) []issue {
 		add("match.host", "host inválido %q", r.Match.Host)
 	}
 	if r.Match.Path != "" {
-		if msg := checkPathPattern(r.Match.Path); msg != "" {
+		if msg := checkPathPattern(r.Match.Path, false); msg != "" {
 			add("match.path", "%s", msg)
 		}
 	}
@@ -98,7 +98,7 @@ func validateOverride(base string, o Override) []issue {
 	case m.Path != "" && m.PathRegex != "":
 		add("match.pathRegex", "use path ou pathRegex, não os dois")
 	case m.Path != "":
-		if msg := checkPathPattern(m.Path); msg != "" {
+		if msg := checkPathPattern(m.Path, true); msg != "" {
 			add("match.path", "%s", msg)
 		}
 	default:
@@ -208,10 +208,32 @@ func checkUpstream(s string) string {
 	return ""
 }
 
-// checkPathPattern aceita path exato ("/health") ou curinga de sufixo ("/api/*").
-func checkPathPattern(p string) string {
+// paramNameRe é a forma do nome de um parâmetro de segmento.
+var paramNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// checkPathPattern aceita path exato ("/health") ou curinga de sufixo
+// ("/api/*"); com params, também parâmetros de segmento ("/viacep/:id/json"),
+// que só o path de um override aceita.
+func checkPathPattern(p string, params bool) string {
 	if !strings.HasPrefix(p, "/") {
 		return fmt.Sprintf("o padrão deve começar com / (recebido %q)", p)
+	}
+	seen := map[string]bool{}
+	for seg := range strings.SplitSeq(p[1:], "/") {
+		name, ok := strings.CutPrefix(seg, ParamPrefix)
+		switch {
+		case !ok:
+		case !params:
+			return fmt.Sprintf("parâmetros de segmento como :id só são aceitos no path de um override (recebido %q)", p)
+		case strings.Contains(name, "*"):
+			return fmt.Sprintf("um segmento não pode ser parâmetro e curinga ao mesmo tempo (recebido %q)", p)
+		case !paramNameRe.MatchString(name):
+			return fmt.Sprintf("parâmetro de segmento %q inválido: use : seguido de letras, dígitos ou _, sem começar por dígito, como :id (recebido %q)", seg, p)
+		case seen[name]:
+			return fmt.Sprintf("parâmetro de segmento :%s repetido no path (recebido %q)", name, p)
+		default:
+			seen[name] = true
+		}
 	}
 	star := strings.Index(p, "*")
 	if star >= 0 && (star != len(p)-1 || !strings.HasSuffix(p, "/*")) {

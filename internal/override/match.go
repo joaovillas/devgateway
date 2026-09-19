@@ -89,9 +89,10 @@ func (q *Request) readBody() ([]byte, bool) {
 
 // Select devolve o override que vale para a requisição: entre os ligados que
 // a selecionam, o mais específico. Os overrides da rota já estão em ordem de
-// precedência (path exato, expressão regular, curinga do mais longo ao mais
-// curto, mais critérios, ordem de declaração), então vale o primeiro que
-// casa. Devolve nil quando nenhum casa.
+// precedência (path exato; parâmetros de segmento, do de mais literais ao de
+// menos; expressão regular; curinga do mais longo ao mais curto; mais
+// critérios; ordem de declaração), então vale o primeiro que casa. Devolve nil
+// quando nenhum casa.
 func Select(route *config.CompiledRoute, q *Request) *config.CompiledOverride {
 	return SelectWhere(route, q, nil)
 }

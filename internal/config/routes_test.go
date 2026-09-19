@@ -317,3 +317,44 @@ overrides:
 		t.Errorf("override desligado sem efeito deveria ser recusado: %+v", es[1])
 	}
 }
+
+// Requirement: Critérios de seleção do override — parâmetros de segmento
+
+func TestSegmentParamPathValidated(t *testing.T) {
+	doc := func(path string) string {
+		return "schemaVersion: 1\nname: v\nmatch:\n  path: /viacep/*\noverrides:\n  - name: o\n    match:\n      path: " + path + "\n    respond:\n      status: 200\n"
+	}
+	for _, ok := range []string{"/viacep/:id/json", "/viacep/:cep_1/:_x", "/viacep/:id/*", "/v1/projects:batch"} {
+		dir := t.TempDir()
+		writeFiles(t, dir, map[string]string{"v.yaml": doc(ok)})
+		if _, _, err := loadDir(t, dir); err != nil {
+			t.Errorf("%s deveria ser aceito: %v", ok, err)
+		}
+	}
+	for path, want := range map[string]string{
+		"/viacep/:/json":       "inválido",
+		"/viacep/:1d/json":     "inválido",
+		"/viacep/:i-d/json":    "inválido",
+		"/viacep/:id/:id/json": "repetido",
+		"/viacep/:id*":         "parâmetro e curinga",
+	} {
+		dir := t.TempDir()
+		writeFiles(t, dir, map[string]string{"v.yaml": doc(path)})
+		_, _, err := loadDir(t, dir)
+		e := singleError(t, err)
+		if e.Field != "overrides[0].match.path" || !strings.Contains(e.Msg, want) {
+			t.Errorf("%s: erro inesperado %+v", path, e)
+		}
+	}
+}
+
+// O path da rota continua sem parâmetros: só o de um override os aceita.
+func TestRoutePathRejectsSegmentParams(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"v.yaml": routeYAML("v", "/viacep/:id/*")})
+	_, _, err := loadDir(t, dir)
+	e := singleError(t, err)
+	if e.Field != "match.path" || !strings.Contains(e.Msg, "só são aceitos no path de um override") {
+		t.Fatalf("erro inesperado: %+v", e)
+	}
+}

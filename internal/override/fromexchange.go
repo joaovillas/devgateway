@@ -57,11 +57,12 @@ func FromExchange(e exchange.Exchange, kind string, at time.Time) config.Overrid
 }
 
 // ExactMatch é o critério que seleciona exatamente o método e o path dados.
-// No padrão de path o * é curinga; um path que contém * literal, ou que não
-// começa com /, não pode ser escrito como path exato e vira uma expressão
-// regular ancorada que casa só com ele.
+// No padrão de path o * é curinga e um segmento começado por : é parâmetro;
+// um path que contém * literal, um segmento começado por : ou que não começa
+// com / não pode ser escrito como path exato e vira uma expressão regular
+// ancorada que casa só com ele.
 func ExactMatch(method, path string) config.OverrideMatch {
-	if strings.HasPrefix(path, "/") && !strings.Contains(path, "*") {
+	if writable(path) {
 		return config.OverrideMatch{Path: path, Method: method}
 	}
 	return config.OverrideMatch{PathRegex: "^" + regexp.QuoteMeta(path) + "$", Method: method}
@@ -173,20 +174,10 @@ func number(s string) (any, bool) {
 	return f, true
 }
 
-// Known informa se a rota já tem um override, ligado ou desligado, que
-// seleciona exatamente o método e o path dados, na forma que ExactMatch
-// produz. Curingas, outras expressões regulares e overrides sem método não
-// contam, para que endpoints sob eles também sejam aprendidos.
-func Known(r config.Route, method, path string) bool {
-	want := ExactMatch(method, path)
-	return slices.ContainsFunc(r.Overrides, func(o config.Override) bool {
-		return o.Match.Method == method && o.Match.Path == want.Path && o.Match.PathRegex == want.PathRegex
-	})
-}
-
 // Name deriva do método e do path um nome de override único na rota:
-// "get-api-teste" para GET /api/teste, com sufixo numérico ("-2", "-3"...)
-// quando o nome já está em uso.
+// "get-api-teste" para GET /api/teste e "get-viacep-id-json" para o path
+// generalizado /viacep/:id/json, com sufixo numérico ("-2", "-3"...) quando o
+// nome já está em uso.
 func Name(r config.Route, method, path string) string {
 	var b strings.Builder
 	b.WriteString(strings.ToLower(method))

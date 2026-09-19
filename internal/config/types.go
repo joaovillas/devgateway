@@ -118,7 +118,8 @@ type OverrideSource struct {
 
 // OverrideMatch seleciona requisições. Todos os critérios declarados precisam casar.
 type OverrideMatch struct {
-	// Path é exato ou curinga de sufixo. Exclusivo com PathRegex.
+	// Path é exato, com parâmetros de segmento (/viacep/:id/json) ou curinga
+	// de sufixo. Exclusivo com PathRegex.
 	Path      string             `json:"path,omitempty" yaml:"path,omitempty"`
 	PathRegex string             `json:"pathRegex,omitempty" yaml:"pathRegex,omitempty"`
 	Method    string             `json:"method,omitempty" yaml:"method,omitempty"`

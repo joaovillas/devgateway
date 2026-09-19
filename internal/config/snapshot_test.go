@@ -66,7 +66,9 @@ func TestLiveSwapNeverExposesPartialState(t *testing.T) {
 			}
 		})
 	}
-	for i := range 2000 {
+	// Troca até haver ao menos uma leitura concorrente: com poucos núcleos, as
+	// 2000 trocas podem terminar antes de qualquer leitor começar.
+	for i := 0; i < 2000 || reads.Load() == 0; i++ {
 		live.Swap(snaps[i%len(snaps)])
 	}
 	stop.Store(true)

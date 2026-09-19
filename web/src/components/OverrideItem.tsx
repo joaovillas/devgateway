@@ -3,7 +3,8 @@ import { api, type Latency, type Override, type OverrideLiveState, type Override
 import { useStale, type OnOverrideState } from "../live";
 import type { CommentsGuard, GuardedDoc } from "../commentsGuard";
 import { WriteCancelled } from "../commentsGuard";
-import { clock, formatDuration, ms, overrideSelector, parseDuration, seconds } from "../format";
+import { clock, formatDuration, ms, parseDuration, PATH_HINT, rulePathProblem, seconds } from "../format";
+import { RuleSelector } from "./PathText";
 import { toApiError, useResource } from "../hooks";
 import { mergeDiff, type MergePatch } from "../patch";
 import { isActive } from "../services";
@@ -129,7 +130,9 @@ export function OverrideItem({ route, doc, override, state, at, now, guard, onSh
       </div>
 
       <p className="ov__sel">
-        <span className="mono">{overrideSelector(o)}</span>
+        <span className="mono">
+          <RuleSelector o={o} />
+        </span>
         <span className="dim"> → </span>
         <Effect o={o} />
       </p>
@@ -444,7 +447,7 @@ function OverrideForm({
       </Row>
 
       <h4 className="form__group">critérios</h4>
-      <Row label="path" htmlFor={`${ids}-path`} hint="exato, ou curinga de sufixo: /api/x/*">
+      <Row label="path" htmlFor={`${ids}-path`} hint={PATH_HINT}>
         <TextField
           id={`${ids}-path`}
           label="Path"
@@ -452,6 +455,7 @@ function OverrideForm({
           size="sm"
           value={m.path ?? ""}
           placeholder="qualquer"
+          validate={rulePathProblem}
           onCommit={(t) => change({ match: { path: t.trim() || null } })}
         />
       </Row>

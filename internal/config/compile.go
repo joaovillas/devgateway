@@ -12,26 +12,97 @@ import (
 	"strings"
 )
 
-// PathPattern é um path exato ou um curinga de sufixo já decomposto.
+// PathPattern é um path exato, um path com parâmetros de segmento
+// ("/viacep/:id/json") ou um curinga de sufixo, já decomposto.
 type PathPattern struct {
 	Raw      string
 	Prefix   string // parte fixa de um curinga: "/api" em "/api/*"
 	Wildcard bool
+	// Segs decompõe o path (ou a parte fixa do curinga) quando ele tem
+	// parâmetros de segmento; nil num path sem parâmetros.
+	Segs []PathSegment
 }
+
+// PathSegment é um segmento de um path com parâmetros: um literal, que casa
+// só com ele mesmo, ou um parâmetro (Param não vazio), que casa com
+// exatamente um segmento não vazio.
+type PathSegment struct {
+	Literal string
+	Param   string
+}
+
+// ParamPrefix marca um parâmetro de segmento: ":id" em "/viacep/:id/json".
+const ParamPrefix = ":"
 
 func ParsePathPattern(p string) PathPattern {
+	pp := PathPattern{Raw: p}
+	base := p
 	if strings.HasSuffix(p, "/*") {
-		return PathPattern{Raw: p, Prefix: strings.TrimSuffix(p, "/*"), Wildcard: true}
+		pp.Prefix, pp.Wildcard = strings.TrimSuffix(p, "/*"), true
+		base = pp.Prefix
 	}
-	return PathPattern{Raw: p}
+	if strings.HasPrefix(base, "/") && strings.Contains(base, "/"+ParamPrefix) {
+		for s := range strings.SplitSeq(base[1:], "/") {
+			if name, ok := strings.CutPrefix(s, ParamPrefix); ok {
+				pp.Segs = append(pp.Segs, PathSegment{Param: name})
+			} else {
+				pp.Segs = append(pp.Segs, PathSegment{Literal: s})
+			}
+		}
+	}
+	return pp
 }
 
-// Match informa se o path casa. "/api/*" casa com "/api" e com tudo sob "/api/".
+// HasParams informa se o path tem parâmetros de segmento.
+func (p PathPattern) HasParams() bool { return p.Segs != nil }
+
+// Literals conta os segmentos literais de um path com parâmetros: entre
+// paths com parâmetros, o de mais literais é o mais específico.
+func (p PathPattern) Literals() int {
+	n := 0
+	for _, s := range p.Segs {
+		if s.Param == "" {
+			n++
+		}
+	}
+	return n
+}
+
+// Match informa se o path casa. "/api/*" casa com "/api" e com tudo sob
+// "/api/"; "/viacep/:id/json" casa com "/viacep/40415345/json", mas não com
+// "/viacep//json" nem com "/viacep/1/extra/json".
 func (p PathPattern) Match(path string) bool {
+	if p.Segs != nil {
+		return p.matchSegments(path)
+	}
 	if !p.Wildcard {
 		return path == p.Raw
 	}
 	return path == p.Prefix || strings.HasPrefix(path, p.Prefix+"/")
+}
+
+// matchSegments casa segmento a segmento. Com curinga, os segmentos além da
+// parte fixa são livres, como em "/api/*".
+func (p PathPattern) matchSegments(path string) bool {
+	rest, ok := strings.CutPrefix(path, "/")
+	if !ok {
+		return false
+	}
+	parts := strings.Split(rest, "/")
+	if len(parts) < len(p.Segs) || (!p.Wildcard && len(parts) != len(p.Segs)) {
+		return false
+	}
+	for i, s := range p.Segs {
+		switch {
+		case s.Param != "":
+			if parts[i] == "" {
+				return false
+			}
+		case parts[i] != s.Literal:
+			return false
+		}
+	}
+	return true
 }
 
 // Strip remove a parte fixa do curinga, preservando ao menos "/".
@@ -177,17 +248,22 @@ func (o *CompiledOverride) Criteria() int {
 	return n
 }
 
-// pathRank: exato, depois expressão regular, depois curinga por comprimento.
-// A spec não posiciona a expressão regular; ela fica entre os dois porque
-// costuma ser mais estreita que um curinga e mais larga que um path exato.
+// pathRank ordena os critérios de path do mais ao menos específico: exato;
+// com parâmetros de segmento, desempatado pelo número de segmentos literais;
+// expressão regular; curinga, do mais longo ao mais curto. A spec põe o
+// parâmetro de segmento entre o exato e o curinga e não posiciona a expressão
+// regular; ela fica depois do parâmetro de segmento, cuja estrutura mostra o
+// quanto ele é estreito, e antes do curinga, que costuma ser mais largo.
 func (o *CompiledOverride) pathRank() (int, int) {
 	switch {
 	case o.PathRegex != nil:
 		return 2, 0
 	case o.Path.Wildcard:
 		return 1, len(o.Path.Prefix)
+	case o.Path.HasParams():
+		return 3, o.Path.Literals()
 	}
-	return 3, len(o.Path.Raw)
+	return 4, len(o.Path.Raw)
 }
 
 func compileRoute(file string, r Route) (*CompiledRoute, []issue) {

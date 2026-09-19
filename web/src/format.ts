@@ -55,12 +55,6 @@ export function overrideSummary(o: Override): string {
   return parts.join(" · ");
 }
 
-export function overrideSelector(o: Override): string {
-  const m = o.match;
-  const path = m.pathRegex ? `~${m.pathRegex}` : (m.path ?? "*");
-  return (m.method ? m.method + " " : "") + path;
-}
-
 export function liveSummary(s: OverrideLiveState | undefined, enabled: boolean, now: number, at: number): string {
   if (!enabled) return "desligado";
   if (!s) return "ligado";
@@ -155,4 +149,71 @@ export function bytes(n: number, scale = n): string {
 export function shortPath(path: string): string {
   const parts = path.split(/[\\/]+/).filter(Boolean);
   return parts.length <= 2 ? path : parts.slice(-2).join("/");
+}
+
+/** Um trecho do path de uma regra: literal, ou parâmetro de segmento (":id"). */
+export interface PathPart {
+  text: string;
+  param: boolean;
+}
+
+/**
+ * Divide o path de uma regra em trechos, separando os parâmetros de segmento
+ * (":id" em "/viacep/:id/json"), que casam com qualquer valor não vazio
+ * naquele segmento. Um ":" no meio do segmento é literal.
+ */
+export function pathParts(path: string): PathPart[] {
+  const out: PathPart[] = [];
+  let lit = "";
+  path.split("/").forEach((seg, i) => {
+    if (i > 0) lit += "/";
+    if (i > 0 && seg.startsWith(":")) {
+      if (lit) out.push({ text: lit, param: false });
+      out.push({ text: seg, param: true });
+      lit = "";
+    } else {
+      lit += seg;
+    }
+  });
+  if (lit) out.push({ text: lit, param: false });
+  return out;
+}
+
+const PARAM_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * Confere o path de uma regra como o gateway confere, para mostrar o problema
+ * junto do campo antes de gravar. Devolve null quando o path é aceito (vazio
+ * inclusive, que vale "qualquer").
+ */
+export function rulePathProblem(path: string): string | null {
+  const p = path.trim();
+  if (!p) return null;
+  if (!p.startsWith("/")) return "o path começa com /";
+  const seen = new Set<string>();
+  for (const seg of p.slice(1).split("/")) {
+    if (!seg.startsWith(":")) continue;
+    const name = seg.slice(1);
+    if (name.includes("*")) return "um segmento não pode ser parâmetro e curinga ao mesmo tempo";
+    if (!PARAM_NAME.test(name)) return `parâmetro ${seg} inválido: o nome começa por letra ou _ e segue com letras, dígitos ou _, como :id`;
+    if (seen.has(name)) return `o parâmetro :${name} aparece duas vezes`;
+    seen.add(name);
+  }
+  const star = p.indexOf("*");
+  if (star >= 0 && (star !== p.length - 1 || !p.endsWith("/*"))) return "o curinga só vale no fim, depois de /, como /api/*";
+  return null;
+}
+
+/** Dica curta do campo de path de uma regra. */
+export const PATH_HINT = "use :id para um segmento variável; curinga no fim: /api/x/*";
+
+/**
+ * A mensagem de um erro de validação da API sem o prefixo de arquivo e campo
+ * ("routes/x.yaml: campo overrides[1].match.path: ..."), para mostrá-la junto
+ * do campo. Devolve null quando o erro não é do campo terminado em `suffix`.
+ */
+export function fieldProblem(body: { field?: string; message: string }, suffix: string): string | null {
+  if (!body.field?.endsWith(suffix)) return null;
+  const m = /campo \S+(?: \(linha [^)]*\))?: ([\s\S]*)$/.exec(body.message);
+  return m?.[1] ?? body.message;
 }

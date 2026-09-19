@@ -47,7 +47,14 @@ type Learner struct {
 	once sync.Once
 }
 
+// key identifica um endpoint candidato pelo path generalizado: requisições a
+// registros distintos do mesmo endpoint ("/viacep/1/json", "/viacep/2/json")
+// aguardam uma única gravação.
 type key struct{ route, method, path string }
+
+func learnKey(route string, e exchange.Exchange) key {
+	return key{route, e.Method, override.Generalize(e.Path)}
+}
 
 type job struct {
 	route   string
@@ -91,7 +98,7 @@ func (l *Learner) Observe(route *config.CompiledRoute, e exchange.Exchange) {
 	if route == nil || !Eligible(e) || override.Known(route.Doc, e.Method, e.Path) {
 		return
 	}
-	k := key{route.Name(), e.Method, e.Path}
+	k := learnKey(route.Name(), e)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.closed || l.pending[k] || l.unlearnable[k] {
@@ -142,18 +149,28 @@ func (l *Learner) handle(j job) {
 				return false, nil
 			}
 			o := override.FromExchange(e, config.SourceLearned, l.now())
-			o.Name = override.Name(*r, e.Method, e.Path)
+			o.Match = override.LearnMatch(e.Method, e.Path)
 			o.On = new(bool)
+			// O generalizado substitui os aprendidos exatos que cobre. O nome,
+			// derivado do path gravado, é escolhido depois, entre os que
+			// restam na rota.
+			list, at := override.Absorb(r.Overrides, o)
+			namePath := o.Match.Path
+			if namePath == "" {
+				namePath = e.Path
+			}
+			o.Name = override.Name(config.Route{Overrides: list}, e.Method, namePath)
+			list[at].Name = o.Name
 			// Um override que não seria aceito como documento de rota não é
 			// gravado, e o endpoint deixa de ser candidato.
 			if invalid = config.ValidateOverride(j.route, o); invalid != nil {
 				return false, invalid
 			}
-			r.Overrides = append(r.Overrides, o)
+			r.Overrides = list
 			return true, nil
 		},
 	})
-	k := key{j.route, e.Method, e.Path}
+	k := learnKey(j.route, e)
 	switch {
 	case invalid != nil:
 		l.log.Warn("endpoint não aprendido: o override montado a partir da troca é inválido; ele não será tentado de novo",

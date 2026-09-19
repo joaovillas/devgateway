@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { api, type Exchange, type Matcher, type Override, type RouteResource } from "../api";
 import { WriteCancelled, type CommentsGuard } from "../commentsGuard";
-import { shortPath } from "../format";
+import { PATH_HINT, rulePathProblem, shortPath } from "../format";
 import { toApiError, type Load } from "../hooks";
 import { ProbabilityControl, Row, Switch } from "./Controls";
 import { ErrorNote } from "./ErrorNote";
@@ -110,6 +110,7 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
   const incomplete = draft.source?.bodyIncomplete === true;
   const nameTaken = res?.route.overrides?.some((o) => o.name === draft.name.trim()) === true;
   const statusOk = respond.status === undefined || (respond.status >= 100 && respond.status <= 599);
+  const pathProblem = rulePathProblem(draft.match.path ?? "");
   const observedQuery = x.query ? queryCriteria(x.query) : null;
 
   const submit = (e: FormEvent) => {
@@ -186,13 +187,27 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
         </Row>
 
         <h4 className="form__group">critérios</h4>
-        <Row label="path" htmlFor={`${ids}-p`} hint="exato, como observado; curinga de sufixo: /api/x/*">
+        <Row
+          label="path"
+          htmlFor={`${ids}-p`}
+          hint={
+            pathProblem ? (
+              <span className="field__problem" id={`${ids}-pe`}>
+                {pathProblem}
+              </span>
+            ) : (
+              `exato, como observado; ${PATH_HINT}`
+            )
+          }
+        >
           <input
             id={`${ids}-p`}
-            className="input input--mono input--sm"
+            className={"input input--mono input--sm" + (pathProblem ? " input--bad" : "")}
             value={draft.match.path ?? ""}
             placeholder="qualquer"
             spellCheck={false}
+            aria-invalid={pathProblem ? true : undefined}
+            aria-describedby={pathProblem ? `${ids}-pe` : undefined}
             onChange={(e) => setMatch({ path: e.target.value || undefined })}
           />
         </Row>
@@ -292,7 +307,7 @@ export function DeriveDraft({ exchange: x, routes, guard, onCancel, onCreated }:
         <button
           type="submit"
           className="button button--primary"
-          disabled={sending || !res || !draft.name.trim() || nameTaken || !statusOk}
+          disabled={sending || !res || !draft.name.trim() || nameTaken || !statusOk || pathProblem !== null}
         >
           {sending ? "Criando…" : incomplete ? `Criar em ${route} com o corpo incompleto` : `Criar regra em ${route}`}
         </button>

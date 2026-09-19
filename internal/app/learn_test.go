@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -359,5 +360,110 @@ func TestDelayedUpstreamResponseIsLearned(t *testing.T) {
 			t.Fatalf("o endpoint atrasado não foi aprendido: %+v", r.Overrides)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestIdentifierBecomesParam(t *testing.T) {
+	var hits atomic.Int64
+	up := learningUpstream(t, &hits)
+	env := startLearning(t, learningOn, up.URL, nil)
+	env.get(t, "/api/viacep/40415345/json")
+	env.learned(t, 1)
+	env.get(t, "/api/viacep/01001000/json")
+	env.settle(t)
+	ovs := env.learned(t, 1)
+	o := ovs[0]
+	if o.Match.Path != "/api/viacep/:id/json" || o.Match.Method != http.MethodGet || o.Enabled() {
+		t.Fatalf("deveria haver um único override desligado com o path generalizado: %+v", o)
+	}
+	if o.Name != "get-api-viacep-id-json" {
+		t.Fatalf("nome derivado do path generalizado inesperado: %s", o.Name)
+	}
+	// A resposta pré-preenchida é a da primeira troca, que ensinou o endpoint.
+	if body, ok := o.Respond.Body.(map[string]any); !ok || body["path"] != "/api/viacep/40415345/json" {
+		t.Fatalf("a resposta deveria ser a da troca de origem: %#v", o.Respond.Body)
+	}
+	// Desligado, ele não intercepta nenhum dos registros.
+	if status, body := env.get(t, "/api/viacep/99999999/json"); status != http.StatusAccepted || body != `{"path":"/api/viacep/99999999/json","n":1}` {
+		t.Fatalf("o override aprendido desligado não deveria interceptar: %d %q", status, body)
+	}
+}
+
+func TestLiteralSegmentPreserved(t *testing.T) {
+	var hits atomic.Int64
+	up := learningUpstream(t, &hits)
+	env := startLearning(t, learningOn, up.URL, nil)
+	env.get(t, "/api/users/me")
+	env.learned(t, 1)
+	env.get(t, "/api/users/42")
+	ovs := env.learned(t, 2)
+	if ovs[0].Match.Path != "/api/users/me" || ovs[1].Match.Path != "/api/users/:id" {
+		t.Fatalf("esperados /api/users/me e /api/users/:id como overrides distintos: %s, %s", ovs[0].Match.Path, ovs[1].Match.Path)
+	}
+	if ovs[1].Name != "get-api-users-id" {
+		t.Fatalf("nome inesperado: %s", ovs[1].Name)
+	}
+	// O literal continua conhecido pelo próprio override; outro registro, pelo
+	// generalizado.
+	env.get(t, "/api/users/me")
+	env.get(t, "/api/users/7")
+	env.settle(t)
+	env.learned(t, 2)
+}
+
+// Um override aprendido antes da generalização, com path exato, é substituído
+// pelo generalizado que o cobre, no mesmo lugar do documento; um criado pelo
+// usuário para outro registro continua lá.
+func TestLearnedExactIsAbsorbed(t *testing.T) {
+	var hits atomic.Int64
+	up := learningUpstream(t, &hits)
+	exact := "  - name: get-cep-40415345-json\n    enabled: false\n    match:\n      path: /cep/40415345/json\n      method: GET\n" +
+		"    respond:\n      status: 200\n      body: antigo\n    source:\n      kind: learned\n      at: 2026-09-18T00:00:00Z\n"
+	user := "  - name: meu\n    enabled: false\n    match:\n      path: /cep/11111111/json\n      method: GET\n    respond:\n      status: 418\n"
+	env := startLearning(t, learningOn, up.URL, map[string]string{
+		"cep.yaml": "schemaVersion: 1\nname: cep\nupstream: " + up.URL + "\nmatch:\n  path: /cep/*\noverrides:\n" + exact + user,
+	})
+	cep := *env
+	cep.doc = filepath.Join(env.dir, "routes", "cep.yaml")
+	// O próprio registro aprendido continua conhecido: nada muda.
+	cep.get(t, "/cep/40415345/json")
+	cep.settle(t)
+	cep.learned(t, 2)
+	cep.get(t, "/cep/01001000/json")
+	cep.settle(t)
+	ovs := cep.learned(t, 2)
+	if ovs[0].Match.Path != "/cep/:id/json" || ovs[0].Name != "get-cep-id-json" || ovs[0].Source.Kind != config.SourceLearned || ovs[0].Enabled() {
+		t.Fatalf("o aprendido exato deveria ser substituído pelo generalizado: %+v", ovs[0])
+	}
+	if ovs[1].Name != "meu" {
+		t.Fatalf("o override do usuário deveria continuar: %+v", ovs[1])
+	}
+	if rt := env.Live.Load().Route("cep"); rt.Override("get-cep-40415345-json") != nil || rt.Override("get-cep-id-json") == nil {
+		t.Fatal("o snapshot deveria refletir a substituição")
+	}
+}
+
+// Requisições simultâneas a registros distintos do mesmo endpoint geram um
+// único override generalizado.
+func TestConcurrentIdentifiersLearnOnce(t *testing.T) {
+	var hits atomic.Int64
+	up := learningUpstream(t, &hits)
+	env := startLearning(t, learningOn, up.URL, nil)
+	var wg sync.WaitGroup
+	for i := range 20 {
+		wg.Go(func() {
+			res, err := http.Get(env.base + "/api/orders/" + strconv.Itoa(1000+i))
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			io.Copy(io.Discard, res.Body)
+			res.Body.Close()
+		})
+	}
+	wg.Wait()
+	env.settle(t)
+	if ovs := env.learned(t, 1); ovs[0].Match.Path != "/api/orders/:id" {
+		t.Fatalf("esperado um único override generalizado: %+v", ovs[0].Match)
 	}
 }

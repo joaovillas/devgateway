@@ -195,6 +195,7 @@ A leitura de uma rota embrulha o documento (`route`, idêntico ao tipo `config.R
 - `order` é a posição da rota na precedência (0 é a mais específica).
 - `state` é o estado vivo de cada override, pelo nome (ver [estado vivo](#get-apioverridesstate)).
 - Campos omitidos seguem as regras do documento: `enabled` ausente equivale a ligado, `probability` ausente a `1.0`, `respond.status` ausente a `200`.
+- `match.path` é exato (`/viacep/01001000/json`), com parâmetros de segmento (`/viacep/:id/json`, em que cada `:nome` casa exatamente um segmento não vazio) ou curinga de sufixo (`/viacep/*`); `match.pathRegex` é a alternativa por expressão regular. O nome do parâmetro segue `[A-Za-z_][A-Za-z0-9_]*`, não se repete no mesmo path e não divide o segmento com o curinga; o erro vem em `422` com `field: "match.path"`. O `match.path` da rota não aceita parâmetros. Na precedência, o parâmetro de segmento fica depois do path exato e antes da expressão regular e do curinga, e entre dois paths com parâmetros vence o de mais segmentos literais.
 - `latency` é texto (`"2s"`, atraso fixo) ou `{ "min", "max" }` (intervalo sorteado).
 - Um critério de `headers`, `query` ou `body` é texto (igualdade) ou um objeto com exatamente um de `equals`, `regex`, `json`, `contains`.
 - `source` aparece nos overrides aprendidos ou derivados: `{ "kind": "learned" | "derived", "exchange": "<id>", "at": "<instante>", "bodyIncomplete": true }`.
@@ -471,7 +472,7 @@ Resposta (rascunho):
 }
 ```
 
-Um corpo JSON válido, completo e cujos números cabem sem perda vira estrutura em `respond.body`. Qualquer outro corpo vira texto, idêntico ao observado. Um path que não pode ser escrito como path exato (contém `*` literal) vira `pathRegex` ancorado.
+Um corpo JSON válido, completo e cujos números cabem sem perda vira estrutura em `respond.body`. Qualquer outro corpo vira texto, idêntico ao observado. Um path que não pode ser escrito como path exato (contém `*` literal ou um segmento começado por `:`) vira `pathRegex` ancorado. A derivação não generaliza o path: ela reproduz uma troca específica.
 
 Se o corpo da resposta foi truncado na captura, ou a transferência foi interrompida, o rascunho sai com `source.bodyIncomplete: true` e um aviso em `warnings`. A derivação não é recusada, e o painel mostra o aviso antes de gravar. `warnings` também avisa quando a rota já tem um override para o mesmo método e path, quando o `name` pedido já está em uso na rota (só no rascunho) e quando a troca foi atendida por outra rota.
 
@@ -676,7 +677,9 @@ curl -s -X PUT $A/api/settings/document -H 'Content-Type: application/json' --da
 }
 ```
 
-`learned` conta, por rota, os overrides com `source.kind = "learned"`, e traz todas as rotas, inclusive as sem nenhum. É a contagem que o painel mostra para o usuário consolidar em curinga.
+`learned` conta, por rota, os overrides com `source.kind = "learned"`, e traz todas as rotas, inclusive as sem nenhum. É a contagem que o painel mostra para o usuário consolidar em curinga ou em parâmetro de segmento.
+
+O aprendizado grava o path generalizado: segmentos que parecem identificador (só dígitos, UUID, ou alfanumérico com dígitos e ao menos 8 caracteres) viram `:id`, `:id2`…, e o nome sai do método e desse path (`get-viacep-id-json`). Uma combinação é conhecida quando a rota já tem override do mesmo método, ligado ou desligado, com o path generalizado igual ou com path exato ou de parâmetros que casa com a requisição; curingas e expressões regulares não contam. Ao gravar um generalizado, os aprendidos de path exato que ele cobre (ainda desligados e sem outros critérios) são substituídos por ele, e o evento `config` sai com `cause: "learning"`.
 
 ```sh
 curl -s $A/api/learning

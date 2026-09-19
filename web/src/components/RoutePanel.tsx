@@ -8,7 +8,7 @@ import {
   type SettingsPatchResult,
   type UpstreamHealth,
 } from "../api";
-import { clock, shortPath } from "../format";
+import { clock, fieldProblem, PATH_HINT, rulePathProblem, shortPath } from "../format";
 import type { OnOverrideState } from "../live";
 import { useCommentsGuard, WriteCancelled, type CommentsGuard, type GuardedDoc } from "../commentsGuard";
 import type { Load } from "../hooks";
@@ -374,8 +374,10 @@ function RouteDetail({
         )}
         {learned > 1 ? (
           <p className="hint">
-            As aprendidas casam paths exatos. Para cobrir vários de uma vez, crie uma regra com curinga de
-            sufixo (por exemplo <span className="mono">/users/*</span>) e remova as aprendidas.
+            O aprendizado já troca identificadores por <span className="mono path-param">:id</span>. Para cobrir
+            outros valores de uma vez (um slug, por exemplo), use <span className="mono path-param">:id</span> no
+            segmento que varia, ou um curinga de sufixo como <span className="mono">/users/*</span>, e remova as
+            aprendidas.
           </p>
         ) : null}
         {adding ? (
@@ -621,9 +623,19 @@ function NewOverrideForm({
   const [status, setStatus] = useState("503");
   const [error, setError] = useState<ApiError | null>(null);
   const [sending, setSending] = useState(false);
+  // O problema do path aparece ao sair do campo ou ao tentar criar, não a
+  // cada tecla: "/viacep/:" é um path inválido só até o nome do parâmetro.
+  const [pathTouched, setPathTouched] = useState(false);
+  const localPathProblem = rulePathProblem(path);
+  const serverPathProblem = error ? fieldProblem(error.body, "match.path") : null;
+  const pathProblem = (pathTouched ? localPathProblem : null) ?? serverPathProblem;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    if (localPathProblem) {
+      setPathTouched(true);
+      return;
+    }
     setSending(true);
     setError(null);
     guard
@@ -650,8 +662,33 @@ function NewOverrideForm({
         <Row label="nome" htmlFor={`${ids}-n`}>
           <input id={`${ids}-n`} className="input input--mono input--sm" required autoFocus value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} />
         </Row>
-        <Row label="path" htmlFor={`${ids}-p`}>
-          <input id={`${ids}-p`} className="input input--mono input--sm" value={path} placeholder="qualquer" onChange={(e) => setPath(e.target.value)} spellCheck={false} />
+        <Row
+          label="path"
+          htmlFor={`${ids}-p`}
+          hint={
+            pathProblem ? (
+              <span className="field__problem" id={`${ids}-pe`}>
+                {pathProblem}
+              </span>
+            ) : (
+              PATH_HINT
+            )
+          }
+        >
+          <input
+            id={`${ids}-p`}
+            className={"input input--mono input--sm" + (pathProblem ? " input--bad" : "")}
+            value={path}
+            placeholder="qualquer"
+            aria-invalid={pathProblem ? true : undefined}
+            aria-describedby={pathProblem ? `${ids}-pe` : undefined}
+            onChange={(e) => {
+              setPath(e.target.value);
+              if (serverPathProblem) setError(null);
+            }}
+            onBlur={() => setPathTouched(true)}
+            spellCheck={false}
+          />
         </Row>
         <Row label="método" htmlFor={`${ids}-m`}>
           <input id={`${ids}-m`} className="input input--mono input--sm" list="http-methods" value={method} placeholder="qualquer" onChange={(e) => setMethod(e.target.value)} spellCheck={false} />
@@ -661,7 +698,7 @@ function NewOverrideForm({
         </Row>
       </div>
       <p className="hint">Ela nasce desligada. Ajustar a probabilidade, a latência ou a queda a liga.</p>
-      {error ? <ErrorNote error={error} what="A regra não foi criada" /> : null}
+      {error && !serverPathProblem ? <ErrorNote error={error} what="A regra não foi criada" /> : null}
       <p className="inline">
         <button type="submit" className="button button--primary" disabled={sending || !name.trim()}>
           Criar regra

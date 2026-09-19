@@ -84,6 +84,34 @@ func TestWildcardPath(t *testing.T) {
 	}
 }
 
+func TestSegmentParamPath(t *testing.T) {
+	rt := compiled(t, ov("cep", config.OverrideMatch{Path: "/viacep/:id/json"}))
+	if got := selected(t, rt, request("GET", "/viacep/40415345/json", "")); got != "cep" {
+		t.Fatalf("o parâmetro de segmento deveria casar com um segmento, escolhido %q", got)
+	}
+	for _, p := range []string{"/viacep/40415345/extra/json", "/viacep//json", "/viacep/40415345", "/viacep/40415345/json/", "/viacep/40415345/xml"} {
+		if got := selected(t, rt, request("GET", p, "")); got != "" {
+			t.Errorf("o parâmetro de segmento não deveria casar com %s, escolhido %q", p, got)
+		}
+	}
+}
+
+// Parâmetros de segmento na parte fixa de um curinga: o parâmetro casa com
+// um segmento e o curinga, com o que vier depois.
+func TestSegmentParamBeforeWildcard(t *testing.T) {
+	rt := compiled(t, ov("usuario", config.OverrideMatch{Path: "/api/users/:id/*"}))
+	for p, want := range map[string]string{
+		"/api/users/42":          "usuario",
+		"/api/users/42/orders/1": "usuario",
+		"/api/users//orders":     "",
+		"/api/users":             "",
+	} {
+		if got := selected(t, rt, request("GET", p, "")); got != want {
+			t.Errorf("%s: escolhido %q, esperado %q", p, got, want)
+		}
+	}
+}
+
 func TestRegexPath(t *testing.T) {
 	rt := compiled(t, ov("cobranca", config.OverrideMatch{PathRegex: `^/api/payments/charge/\d+$`}))
 	if got := selected(t, rt, request("GET", "/api/payments/charge/42", "")); got != "cobranca" {
@@ -328,6 +356,43 @@ func TestExactPathBeatsWildcard(t *testing.T) {
 	}
 	if got := selected(t, rt, request("GET", "/api/payments/outro", "")); got != "curinga" {
 		t.Fatalf("fora do path exato vale o curinga, escolhido %q", got)
+	}
+}
+
+func TestSegmentParamBetweenExactAndWildcard(t *testing.T) {
+	rt := compiled(t,
+		ov("curinga", config.OverrideMatch{Path: "/viacep/*"}),
+		ov("parametro", config.OverrideMatch{Path: "/viacep/:id/json"}),
+		ov("exato", config.OverrideMatch{Path: "/viacep/01001000/json"}),
+	)
+	for p, want := range map[string]string{
+		"/viacep/01001000/json": "exato",
+		"/viacep/40415345/json": "parametro",
+		"/viacep/40415345/xml":  "curinga",
+	} {
+		if got := selected(t, rt, request("GET", p, "")); got != want {
+			t.Errorf("%s: escolhido %q, esperado %q", p, got, want)
+		}
+	}
+}
+
+// Entre paths com parâmetros, vence o de mais segmentos literais; o
+// parâmetro de segmento vem antes da expressão regular.
+func TestSegmentParamPrecedence(t *testing.T) {
+	rt := compiled(t,
+		ov("regex", config.OverrideMatch{PathRegex: `^/api/users/[^/]+/orders/[^/]+$`}),
+		ov("dois", config.OverrideMatch{Path: "/api/:a/:b/orders/:c"}),
+		ov("tres", config.OverrideMatch{Path: "/api/users/:u/orders/:o"}),
+	)
+	if got := selected(t, rt, request("GET", "/api/users/42/orders/7", "")); got != "tres" {
+		t.Fatalf("o path com mais literais deveria vencer, escolhido %q", got)
+	}
+	rt = compiled(t,
+		ov("regex", config.OverrideMatch{PathRegex: `^/api/users/[^/]+$`}),
+		ov("parametro", config.OverrideMatch{Path: "/api/users/:id"}),
+	)
+	if got := selected(t, rt, request("GET", "/api/users/42", "")); got != "parametro" {
+		t.Fatalf("o parâmetro de segmento deveria vencer a expressão regular, escolhido %q", got)
 	}
 }
 

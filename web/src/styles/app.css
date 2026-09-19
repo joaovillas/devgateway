@@ -1539,6 +1539,17 @@ kbd {
   overflow-wrap: anywhere;
 }
 
+/*
+ * Parâmetro de segmento (":id") no path de uma regra: é forma do path, não
+ * estado, então fica em tinta secundária com sublinhado discreto de 1px, sem
+ * cor de estado e sem o pontilhado, que é do erro vindo do destino.
+ */
+.path-param {
+  color: var(--ink-2);
+  text-decoration: underline 1px solid var(--ink-3);
+  text-underline-offset: 3px;
+}
+
 .ov__controls {
   display: grid;
   gap: var(--s-2);
