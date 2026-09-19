@@ -58,7 +58,7 @@
 - [x] 6.11 Implementar o liga/desliga do override, com desligados fora da seleção e da precedência, e verificar pelos três cenários da requirement de override ligado e desligado
 - [x] 6.12 Implementar o modo aprendizado — detecção de método e path desconhecidos após resposta do upstream, geração do override desligado com resposta completa e origem, gravação atômica do documento e reconstrução do snapshot fora do caminho da requisição — e verificar pelos seis cenários da requirement de aprendizado de endpoints
 - [x] 6.13 Implementar parâmetros de segmento no path das regras (`/viacep/:id/json`), com precedência entre exato e expressão regular, e a generalização no aprendizado (detecção de identificadores, conhecimento por casamento, absorção dos aprendidos exatos cobertos), e verificar pelo cenário de path com parâmetro e pelos três cenários novos do aprendizado
-- [ ] 6.14 Trocar a probabilidade única do override pela frequência por efeito (resposta, latência e queda, cada uma com a sua; ausente vale sempre; a do override vale como padrão das que faltam), com sorteio independente e determinístico por efeito, e verificar pelos seis cenários da requirement de frequência de cada efeito
+- [x] 6.14 Trocar a probabilidade única do override pela frequência por efeito (resposta, latência e queda, cada uma com a sua; ausente vale sempre; a do override vale como padrão das que faltam), com sorteio independente e determinístico por efeito, e verificar pelos seis cenários da requirement de frequência de cada efeito
 
 ## 7. API de administração
 

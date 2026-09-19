@@ -33,22 +33,29 @@ func mix(x uint64) uint64 {
 	return x ^ (x >> 31)
 }
 
-// Decision is the result of step 4's draw for the selected override.
+// Decision is the result of step 4's draw for the selected override: which
+// of its effects hold for this request.
 type Decision struct {
 	// Override is the selected override; nil when none matched.
 	Override *config.CompiledOverride
-	// Apply reports that the override holds for this request. When false, the
-	// request proceeds as if the override did not exist, and Drop and Delay
-	// are zero.
+	// Apply reports that at least one effect was drawn. When false, the
+	// request proceeds as if the override did not exist, and the effects are
+	// all zero.
 	Apply bool
 	// Drop reports that the connection must be dropped without a response.
 	Drop bool
+	// Respond reports that the declared response holds. When false, the
+	// request goes to the upstream even though the override declares one.
+	Respond bool
+	// Delayed reports that the delay was drawn, which a delay of zero does
+	// not tell apart on its own.
+	Delayed bool
 	// Delay is the delay to inject between the response being ready and the
 	// write to the client.
 	Delay time.Duration
 }
 
-// Applied returns the override that holds for this request, or nil.
+// Applied returns the override whose effects hold for this request, or nil.
 func (d Decision) Applied() *config.CompiledOverride {
 	if !d.Apply {
 		return nil
@@ -56,39 +63,40 @@ func (d Decision) Applied() *config.CompiledOverride {
 	return d.Override
 }
 
-// Decide draws, in a fixed order and from the given source, the override's
-// application, drop and delay. All three values are always consumed, in this
-// order, even when the configuration does not need one of them: that way each
-// draw's position in the sequence depends neither on the configuration nor on
-// what happens later (upstream availability, for instance). With a nil
-// override the decision is empty and nothing is drawn.
+// Decide draws, in the fixed order drop, respond and delay, which of the
+// override's effects hold for this request, each one against its own
+// frequency and independently of the others. Four values are always consumed
+// from the source, in this order — drop, respond, delay and the delay's value
+// within the range — even when the configuration declares none of them: that
+// way each draw's position in the sequence depends neither on the
+// configuration nor on what happens later (upstream availability, for
+// instance). With a nil override the decision is empty and nothing is drawn.
 func Decide(o *config.CompiledOverride, rng *rand.Rand) Decision {
 	if o == nil {
 		return Decision{}
 	}
-	apply := rng.Float64()
-	// The drop is declared, not drawn; its slot stays reserved so that the
-	// delay always takes the third value.
-	rng.Float64()
-	delay := rng.Float64()
-	p := 1.0
-	if o.Doc.Probability != nil {
-		p = *o.Doc.Probability
-	}
-	d := Decision{Override: o, Apply: apply < p}
-	if !d.Apply {
-		return d
-	}
-	d.Drop = o.Doc.Drop
-	if l := o.Doc.Latency; l != nil {
+	drop, respond := rng.Float64(), rng.Float64()
+	delay, within := rng.Float64(), rng.Float64()
+
+	// An effect that declares no frequency falls back to the override's
+	// legacy probability, and to always when there is none either. An
+	// undeclared effect has frequency zero and is never drawn.
+	drawn := func(roll, chance float64) bool { return chance > 0 && roll < chance }
+
+	d := Decision{Override: o}
+	d.Drop = drawn(drop, o.Doc.DropChance())
+	d.Respond = drawn(respond, o.Doc.RespondChance())
+	d.Delayed = drawn(delay, o.Doc.LatencyChance())
+	if l := o.Doc.Latency; d.Delayed && l != nil {
 		switch {
 		case l.Fixed != nil:
 			d.Delay = time.Duration(*l.Fixed)
 		case l.Min != nil && l.Max != nil:
 			lo, hi := time.Duration(*l.Min), time.Duration(*l.Max)
-			d.Delay = lo + time.Duration(delay*float64(hi-lo))
+			d.Delay = lo + time.Duration(within*float64(hi-lo))
 		}
 	}
+	d.Apply = d.Drop || d.Respond || d.Delayed
 	return d
 }
 

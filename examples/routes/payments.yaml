@@ -11,7 +11,7 @@ stripPrefix: true
 rewriteHost: true
 timeout: 5s
 overrides:
-  # Forced override: with no probability, it applies to every matching
+  # Forced override: with no frequency, it applies to every matching
   # request. Only requests carrying X-Scenario: declined are caught; the
   # rest go on to the upstream.
   - name: charge-declined
@@ -28,16 +28,16 @@ overrides:
         error: card_declined
         message: Card declined by the issuer
 
-  # Probabilistic override: 30% of the balance lookups get a synthesized 503.
+  # Per-effect frequency: 30% of the balance lookups get a synthesized 503.
   # With a fixed seed in gateway.json, the sequence repeats for the same
   # arrival order.
   - name: balance-flaky
     match:
       path: /payments/balance
       method: GET
-    probability: 0.3
     respond:
       status: 503
+      chance: 0.3
       headers:
         Content-Type: application/json
         Retry-After: "1"

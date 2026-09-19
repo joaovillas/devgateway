@@ -7,7 +7,7 @@
 #   examples/e2e.sh
 #
 # It checks, in this order:
-#   1. probabilistic override: a plausible share of 503s with seed 42, and the
+#   1. response frequency: a plausible share of 503s with seed 42, and the
 #      same sequence after restarting the process (determinism)
 #   2. passthrough: response identical to the upstream one, no intervention
 #   3. forced override: a synthesized 402 whenever the criteria match
@@ -137,9 +137,9 @@ fields() {
 }
 api() { curl -s "$A$1"; }
 
-# --- 1. probabilistic override -----------------------------------------------
+# --- 1. response frequency ---------------------------------------------------
 
-section "1. probabilistic override (balance-flaky, probability 0.3, seed 42)"
+section "1. response frequency (balance-flaky, respond.chance 0.3, seed 42)"
 
 # First series right after startup: the roll for each request derives from
 # (seed, sequence number), so the series repeats after a restart.

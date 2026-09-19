@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/joaovillas/devgateway/internal/config"
 	"github.com/joaovillas/devgateway/internal/exchange"
@@ -340,7 +341,7 @@ func TestSynthesizedResponseHasZeroUpstreamTime(t *testing.T) {
 	}
 }
 
-// Requirement: Application probability
+// Requirement: Frequency of each effect
 
 func seeded(seed uint64) config.Settings {
 	s := recording()
@@ -348,7 +349,14 @@ func seeded(seed uint64) config.Settings {
 	return s
 }
 
-func TestProbabilityAbsentAppliesAlways(t *testing.T) {
+// Binomial(1000, 0.3) has a standard deviation of about 14.5, and
+// Binomial(1000, 0.05) one of about 6.9; both tolerances are 4 deviations.
+const (
+	thirtyLow, thirtyHigh = 242, 358
+	fiveLow, fiveHigh     = 22, 78
+)
+
+func TestEffectWithoutFrequencyAppliesAlways(t *testing.T) {
 	up, hits := countingUpstream(t, "payments")
 	gw := gateway(t, route("payments", up.URL, "/api/*", withOverrides(synth("o", "/api/*", "override"))))
 	for i := range 20 {
@@ -361,32 +369,133 @@ func TestProbabilityAbsentAppliesAlways(t *testing.T) {
 	}
 }
 
-func TestFractionalProbabilitySplits(t *testing.T) {
+// Each effect is drawn on its own: a response at 30% and a delay with no
+// frequency, which holds on every one of the 1000 requests. The ones the
+// response was not drawn for go to the upstream — delayed all the same.
+func TestEachEffectHasItsOwnFrequency(t *testing.T) {
 	up, hits := countingUpstream(t, "payments")
 	o := synth("o", "/api/*", "override")
-	o.Probability = ptr(0.3)
+	o.Respond.Status = http.StatusServiceUnavailable
+	o.Respond.Chance = ptr(0.3)
+	o.Latency = &config.Latency{Fixed: ptr(config.Duration(time.Millisecond))}
 	g := capturing(t, seeded(42), route("payments", up.URL, "/api/*", withOverrides(o)))
 	const n = 1000
 	overridden := 0
 	for range n {
 		res, body := g.get(t, "/api/x")
+		got := res.Header.Get(HeaderGateway)
 		switch {
 		case string(body) == "override":
 			overridden++
-			if got := res.Header.Get(HeaderGateway); !strings.Contains(got, "intervention=synthesized") {
-				t.Fatalf("override response with no identification: %q", got)
+			if res.StatusCode != http.StatusServiceUnavailable || !strings.Contains(got, "intervention=synthesized,delayed") {
+				t.Fatalf("synthesized response identified as %q with status %d", got, res.StatusCode)
 			}
 		default:
 			echoOf(t)(res, body)
-			if got := res.Header.Get(HeaderGateway); got != "route=payments" {
-				t.Fatalf("an upstream response should not be marked: %q", got)
+			// Not drawn for the response, but the delay still applies.
+			if got != "route=payments; override=payments/o; intervention=delayed" {
+				t.Fatalf("an upstream response should be marked as delayed only: %q", got)
 			}
 		}
 	}
-	// Binomial(1000, 0.3): standard deviation about 14.5; the tolerance is 4
-	// deviations.
-	if overridden < 242 || overridden > 358 {
+	if overridden < thirtyLow || overridden > thirtyHigh {
 		t.Fatalf("want around 300 override responses, got %d", overridden)
+	}
+	if got := hits.Load(); got != int64(n-overridden) {
+		t.Fatalf("the other %d should reach the upstream, %d did", n-overridden, got)
+	}
+}
+
+// The drop carries its own frequency while the declared response holds on
+// every request: about 5% of the connections end with nothing, and the rest
+// get the declared response.
+func TestDropFrequencyWithResponseAlways(t *testing.T) {
+	up, hits := countingUpstream(t, "payments")
+	o := synth("o", "/api/*", "override")
+	o.Drop = config.Drop{On: true, Chance: ptr(0.05)}
+	g := capturing(t, seeded(3), route("payments", up.URL, "/api/*", withOverrides(o)))
+	// Each request gets its own connection: on a connection it had reused,
+	// the client would retry the dropped GET by itself, and the retry is a
+	// new request, with a new draw.
+	client := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
+	defer client.CloseIdleConnections()
+	const n = 1000
+	dropped, answered := 0, 0
+	for range n {
+		res, err := client.Get(g.URL + "/api/x")
+		if err != nil {
+			dropped++
+			continue
+		}
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if string(body) != "override" {
+			t.Fatalf("the requests that were not dropped should get the declared response: %d %q", res.StatusCode, body)
+		}
+		answered++
+	}
+	if dropped < fiveLow || dropped > fiveHigh {
+		t.Fatalf("want around 50 dropped connections out of %d, got %d", n, dropped)
+	}
+	if answered != n-dropped {
+		t.Fatalf("the other %d should get the declared response, %d did", n-dropped, answered)
+	}
+	if hits.Load() != 0 {
+		t.Fatalf("the upstream should not be contacted, it got %d", hits.Load())
+	}
+}
+
+// A frequency of zero silences its effect and leaves the others alone: the
+// response is never synthesized, and the delay still holds.
+func TestFrequencyZeroNeverApplies(t *testing.T) {
+	up, hits := countingUpstream(t, "payments")
+	o := synth("o", "/api/*", "override")
+	o.Respond.Chance = ptr(0.0)
+	o.Latency = &config.Latency{Fixed: ptr(config.Duration(time.Millisecond))}
+	g := capturing(t, seeded(1), route("payments", up.URL, "/api/*", withOverrides(o)))
+	for range 50 {
+		res, body := g.get(t, "/api/x")
+		echoOf(t)(res, body)
+		if got := res.Header.Get(HeaderGateway); got != "route=payments; override=payments/o; intervention=delayed" {
+			t.Fatalf("the delay should go on being applied and identified: %q", got)
+		}
+	}
+	if hits.Load() != 50 {
+		t.Fatalf("all of them should reach the upstream, %d did", hits.Load())
+	}
+	if with := g.history(t, exchange.Filter{Intervened: ptr(true)}); len(with) != 50 {
+		t.Fatalf("the 50 should show up as delayed interventions: %d", len(with))
+	}
+	for _, e := range g.history(t, exchange.Filter{}) {
+		if e.Outcome == exchange.OutcomeSynthesized {
+			t.Fatalf("no response should be synthesized: %+v", e)
+		}
+	}
+}
+
+// The override's legacy probability is the default of the effects that
+// declare none, and leaves alone the ones that declare their own.
+func TestLegacyProbabilityIsTheDefaultFrequency(t *testing.T) {
+	up, hits := countingUpstream(t, "payments")
+	o := synth("o", "/api/*", "override")
+	o.Probability = ptr(0.3)
+	o.Latency = &config.Latency{Fixed: ptr(config.Duration(time.Millisecond)), Chance: ptr(1.0)}
+	g := capturing(t, seeded(42), route("payments", up.URL, "/api/*", withOverrides(o)))
+	const n = 1000
+	overridden := 0
+	for range n {
+		res, body := g.get(t, "/api/x")
+		if string(body) == "override" {
+			overridden++
+		} else {
+			echoOf(t)(res, body)
+		}
+		if !strings.Contains(res.Header.Get(HeaderGateway), "delayed") {
+			t.Fatalf("the latency declares 1.0 and should hold on every request: %q", res.Header.Get(HeaderGateway))
+		}
+	}
+	if overridden < thirtyLow || overridden > thirtyHigh {
+		t.Fatalf("the response has no frequency of its own and should follow the 0.3: %d of %d", overridden, n)
 	}
 	if got := hits.Load(); got != int64(n-overridden) {
 		t.Fatalf("the other %d should reach the upstream, %d did", n-overridden, got)
@@ -409,12 +518,13 @@ func TestProbabilityZeroNeverApplies(t *testing.T) {
 	}
 }
 
-// An override that is not drawn neither hides the upstream nor is replaced by
-// a less specific one: the request carries on as if it did not exist.
+// An override whose effects were not drawn neither hides the upstream nor is
+// replaced by a less specific one: the request carries on as if it did not
+// exist.
 func TestNotDrawnBehavesAsIfAbsent(t *testing.T) {
 	up, _ := countingUpstream(t, "payments")
 	o := synth("exact", "/api/x", "exact")
-	o.Probability = ptr(0.0)
+	o.Respond.Chance = ptr(0.0)
 	gw := gateway(t, route("payments", up.URL, "/api/*", withOverrides(o, synth("wildcard", "/api/*", "wildcard"))))
 	// The most specific one is selected and, not being drawn, the request
 	// goes on to the upstream: the draw decides about the override resolved
@@ -432,7 +542,7 @@ func intercepted(t *testing.T, s config.Settings, n int) []int {
 	t.Helper()
 	up, _ := countingUpstream(t, "payments")
 	o := synth("o", "/api/*", "override")
-	o.Probability = ptr(0.5)
+	o.Respond.Chance = ptr(0.5)
 	g := capturing(t, s, route("payments", up.URL, "/api/*", withOverrides(o)))
 	var out []int
 	for i := range n {
@@ -471,7 +581,7 @@ func TestSeedDeterministicUnderConcurrency(t *testing.T) {
 	run := func() map[uint64]bool {
 		up, _ := countingUpstream(t, "payments")
 		o := synth("o", "/api/*", "override")
-		o.Probability = ptr(0.5)
+		o.Respond.Chance = ptr(0.5)
 		g := capturing(t, seeded(7), route("payments", up.URL, "/api/*", withOverrides(o)))
 		var wg sync.WaitGroup
 		for i := range 100 {

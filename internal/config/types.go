@@ -81,11 +81,16 @@ type Override struct {
 	// Respond is the synthesized response. Without it, the override only
 	// delays or drops.
 	Respond *Respond `json:"respond,omitempty" yaml:"respond,omitempty"`
-	// Probability is the fraction of the selected requests where the override
-	// applies. Leaving it out means 1.0.
+	// Probability is legacy: it used to be the fraction of the selected
+	// requests where the whole override applied. It is still accepted and now
+	// works as the default frequency of every effect that does not declare
+	// its own. New writes do not produce it: declare the frequency on the
+	// effect itself (respond.chance, latency.chance, drop.chance).
 	Probability *float64 `json:"probability,omitempty" yaml:"probability,omitempty"`
 	Latency     *Latency `json:"latency,omitempty" yaml:"latency,omitempty"`
-	Drop        bool     `json:"drop,omitempty" yaml:"drop,omitempty"`
+	// Drop is the connection drop: "drop: true" for every selected request,
+	// "drop: {chance: 0.05}" for a fraction of them.
+	Drop Drop `json:"drop,omitzero" yaml:"drop,omitempty"`
 	// TTL is the lifetime counted from when the override was recorded.
 	TTL *Duration `json:"ttl,omitempty" yaml:"ttl,omitempty"`
 	// MaxApplications is how many times the override may apply before it expires.
@@ -97,6 +102,54 @@ type Override struct {
 // Enabled says whether the override takes part in selection. A missing field
 // means on.
 func (o Override) Enabled() bool { return o.On == nil || *o.On }
+
+// AlwaysChance is the frequency of an effect that declares none: it holds on
+// every request the override selects.
+const AlwaysChance = 1.0
+
+// defaultChance is what an effect that declares no frequency of its own
+// falls back to: the override's legacy probability when it has one, and
+// always otherwise.
+func (o Override) defaultChance() float64 {
+	if o.Probability != nil {
+		return *o.Probability
+	}
+	return AlwaysChance
+}
+
+func (o Override) chanceOr(c *float64) float64 {
+	if c != nil {
+		return *c
+	}
+	return o.defaultChance()
+}
+
+// RespondChance is how often the declared response holds, between 0 and 1;
+// zero when the override declares no response.
+func (o Override) RespondChance() float64 {
+	if o.Respond == nil {
+		return 0
+	}
+	return o.chanceOr(o.Respond.Chance)
+}
+
+// LatencyChance is how often the delay holds, between 0 and 1; zero when the
+// override declares no latency.
+func (o Override) LatencyChance() float64 {
+	if o.Latency == nil {
+		return 0
+	}
+	return o.chanceOr(o.Latency.Chance)
+}
+
+// DropChance is how often the connection drop holds, between 0 and 1; zero
+// when the override declares no drop.
+func (o Override) DropChance() float64 {
+	if !o.Drop.Declared() {
+		return 0
+	}
+	return o.chanceOr(o.Drop.Chance)
+}
 
 const (
 	// SourceLearned marks an override recorded by learning mode.
@@ -139,4 +192,7 @@ type Respond struct {
 	Status  int                     `json:"status,omitempty" yaml:"status,omitempty"`
 	Headers map[string]HeaderValues `json:"headers,omitempty" yaml:"headers,omitempty"`
 	Body    any                     `json:"body,omitempty" yaml:"body,omitempty"`
+	// Chance is how often the selected requests get this response, between
+	// 0.0 and 1.0. Leaving it out means every one of them.
+	Chance *float64 `json:"chance,omitempty" yaml:"chance,omitempty"`
 }

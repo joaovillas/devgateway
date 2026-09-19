@@ -219,6 +219,42 @@ func TestSchemaVersionAboveSupported(t *testing.T) {
 	}
 }
 
+// Requirement: Frequency of each effect
+
+// A frequency outside [0, 1] is refused, naming the effect that holds it.
+func TestEffectChanceOutOfRange(t *testing.T) {
+	for _, c := range []struct {
+		name, effects, field string
+		line                 int
+	}{
+		{"respond", "    respond:\n      status: 503\n      chance: 1.5\n", "overrides[0].respond.chance", 12},
+		{"latency", "    latency:\n      fixed: 2s\n      chance: -0.5\n", "overrides[0].latency.chance", 12},
+		{"drop", "    drop:\n      chance: 1.5\n", "overrides[0].drop.chance", 11},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFiles(t, dir, map[string]string{"c.yaml": `schemaVersion: 1
+name: c
+upstream: http://localhost:9000
+match:
+  path: /c/*
+overrides:
+  - name: flaky
+    match:
+      path: /c/x
+` + c.effects})
+			_, _, err := loadDir(t, dir)
+			e := singleError(t, err)
+			if e.Field != c.field || e.Line != c.line {
+				t.Fatalf("the error should point at %s on line %d: %+v", c.field, c.line, e)
+			}
+			if !strings.Contains(e.Msg, "between 0.0 and 1.0") {
+				t.Fatalf("the message should state the accepted range: %s", e.Msg)
+			}
+		})
+	}
+}
+
 func TestLatencyRangeInverted(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, map[string]string{"l.yaml": `schemaVersion: 1

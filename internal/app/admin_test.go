@@ -519,6 +519,52 @@ func TestAdminOverrideCRUD(t *testing.T) {
 	}
 }
 
+// Requirement: Frequency of each effect
+
+// The override's JSON representation carries the frequency of each effect,
+// the long form of drop and latency included, and a merge patch reaches them
+// one at a time.
+func TestAdminEffectFrequencies(t *testing.T) {
+	e := startAdmin(t, freePorts, adminRoutes(t))
+	base := "/routes/payments/overrides"
+	r := e.call(t, "POST", base, "", `{"name":"flaky","match":{"path":"/payments/charge"},`+
+		`"respond":{"status":503,"chance":0.3},"latency":{"fixed":"2s","chance":0.5},"drop":{"chance":0.05}}`)
+	if r.status != http.StatusCreated {
+		t.Fatalf("creating the override: %d %s", r.status, r.body)
+	}
+	var o overrideRes
+	r.decode(t, &o)
+	if o.Override.RespondChance() != 0.3 || o.Override.LatencyChance() != 0.5 || o.Override.DropChance() != 0.05 {
+		t.Fatalf("the resource should carry each effect's frequency: %s", r.body)
+	}
+	for _, want := range []string{`"chance": 0.3`, `"chance": 0.5`, `"chance": 0.05`} {
+		if !strings.Contains(string(r.body), want) {
+			t.Fatalf("the JSON should carry %s: %s", want, r.body)
+		}
+	}
+	doc, err := os.ReadFile(filepath.Join(e.routes, "payments.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(doc), "chance: 0.05") || strings.Contains(string(doc), "probability") {
+		t.Fatalf("the document should carry the frequencies and no legacy probability:\n%s", doc)
+	}
+
+	// One frequency at a time, and the short form of drop turns it off.
+	r = e.call(t, "PATCH", base+"/flaky", "application/merge-patch+json", `{"respond":{"chance":1},"drop":false}`)
+	o = overrideRes{}
+	r.decode(t, &o)
+	if r.status != 200 || o.Override.RespondChance() != 1 || o.Override.Drop.Declared() || o.Override.LatencyChance() != 0.5 {
+		t.Fatalf("patching the frequencies: %d %s", r.status, r.body)
+	}
+
+	// Out of range is refused, naming the effect that holds it.
+	r = e.call(t, "PATCH", base+"/flaky", "application/merge-patch+json", `{"latency":{"chance":1.5}}`)
+	if ae := r.err(t); r.status != 422 || ae.Field != "overrides[0].latency.chance" {
+		t.Fatalf("a frequency out of range should name the field: %d %s", r.status, r.body)
+	}
+}
+
 // Scenario: A change touches only the route's document
 
 func TestAdminWriteTouchesOnlyRouteDocument(t *testing.T) {

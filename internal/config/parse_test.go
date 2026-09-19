@@ -155,6 +155,87 @@ func TestNewRouteFieldsParsed(t *testing.T) {
 	}
 }
 
+// Requirement: Frequency of each effect
+
+// Every effect carries its own frequency, in the long form of drop and
+// latency as much as on the declared response; the short forms keep meaning
+// "on every selected request".
+func TestEffectFrequenciesParsed(t *testing.T) {
+	r, err := ParseRoute("payments.yaml", readTestdata(t, "route-full.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]Override{}
+	for _, o := range r.Overrides {
+		byName[o.Name] = o
+	}
+	o := byName["per-effect"]
+	if got := o.RespondChance(); got != 0.3 {
+		t.Fatalf("respond.chance read as %v", got)
+	}
+	if got := o.LatencyChance(); got != 0.5 {
+		t.Fatalf("latency.chance read as %v", got)
+	}
+	if !o.Drop.Declared() || o.DropChance() != 0.05 {
+		t.Fatalf("drop in its long form read as %+v", o.Drop)
+	}
+	fixed := byName["fixed-latency-with-chance"]
+	if fixed.Latency.Fixed == nil || *fixed.Latency.Fixed != Duration(2*time.Second) || fixed.LatencyChance() != 0.25 {
+		t.Fatalf("a fixed latency with a frequency read as %+v", fixed.Latency)
+	}
+	// The short forms: drop: true is every request, and an effect with no
+	// frequency of its own falls back to the override's legacy probability.
+	full := byName["full"]
+	if !full.Drop.Declared() || full.Drop.Chance != nil {
+		t.Fatalf("drop: true should be the drop with no frequency of its own: %+v", full.Drop)
+	}
+	if full.DropChance() != 0.3 || full.RespondChance() != 0.3 || full.LatencyChance() != 0.3 {
+		t.Fatalf("the legacy probability should be the default of every effect: %+v", full)
+	}
+	// The one without a probability falls back to always.
+	slow := byName["slow-charges"]
+	if slow.LatencyChance() != AlwaysChance || slow.RespondChance() != 0 || slow.DropChance() != 0 {
+		t.Fatalf("an effect with no frequency and no probability should always hold: %+v", slow)
+	}
+}
+
+// drop: false is the same as not declaring the drop at all.
+func TestDropFalseIsTheSameAsAbsent(t *testing.T) {
+	dir := t.TempDir()
+	doc := `schemaVersion: 1
+name: d
+upstream: http://localhost:9000
+match:
+  path: /d/*
+overrides:
+  - name: nothing
+    match:
+      path: /d/x
+    drop: false
+`
+	r, err := ParseRoute("d.yaml", []byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o := r.Overrides[0]; o.Drop.Declared() || o.DropChance() != 0 {
+		t.Fatalf("drop: false should declare nothing: %+v", o.Drop)
+	}
+	writeFiles(t, dir, map[string]string{"d.yaml": doc})
+	_, _, err = loadDir(t, dir)
+	e := singleError(t, err)
+	if !strings.Contains(e.Msg, "declare at least one of respond, latency or drop") {
+		t.Fatalf("an override with only drop: false declares no effect: %+v", e)
+	}
+	// What is not declared is not written back either.
+	out, err := MarshalRoute(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "drop") {
+		t.Fatalf("the drop that was not declared should not be written back:\n%s", out)
+	}
+}
+
 func TestOverrideToggleKeepsFields(t *testing.T) {
 	// Turning an override off and back on preserves all its other fields,
 	// even on the way through the serialized document.

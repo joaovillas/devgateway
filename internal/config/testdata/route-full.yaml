@@ -41,6 +41,24 @@ overrides:
     latency:
       min: 100ms
       max: 500ms
+  - name: per-effect
+    match:
+      path: /api/payments/per-effect
+    respond:
+      status: 503
+      chance: 0.3
+    latency:
+      min: 100ms
+      max: 500ms
+      chance: 0.5
+    drop:
+      chance: 0.05
+  - name: fixed-latency-with-chance
+    match:
+      path: /api/payments/fixed-chance
+    latency:
+      fixed: 2s
+      chance: 0.25
   - name: text
     match:
       path: /api/payments/text

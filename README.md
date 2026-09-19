@@ -17,7 +17,7 @@ Contents: [why](#why-devgateway-exists) · [install](#install) · [quick start](
 
 Mock servers such as MockServer and Smocker let you stand in for a service; chaos tools let you break one. Doing both usually means running two things, learning two vocabularies, and keeping two sets of rules in sync with the same endpoint.
 
-devgateway has a single concept, the **override**: a selection criterion, an optional declared response, and the modifiers `probability`, `latency`, `drop`, `ttl` and `maxApplications`. A mock is an override that always applies. Chaos is the same override with a probability. Slowness is the same override with no declared response. One rule, one document, one place to look.
+devgateway has a single concept, the **override**: a selection criterion, an optional declared response, and the modifiers `latency`, `drop`, `ttl` and `maxApplications`. Each effect carries its own frequency, so "this endpoint fails in 30% of the calls and is always slow" is one rule. A mock is an override that always applies. Chaos is the same override with a frequency on the failure. Slowness is the same override with no declared response. One rule, one document, one place to look.
 
 Two more consequences fall out of that:
 
@@ -117,9 +117,9 @@ overrides:
     match:
       path: /payments/balance
       method: GET
-    probability: 0.3
     respond:
       status: 503
+      chance: 0.3
       body:
         error: unavailable
 ```
@@ -213,7 +213,7 @@ rewriteHost: false           # true: the upstream gets its own host instead of t
 timeout: 5s                  # no response within this time and the client gets a 504
 
 overrides:
-  # Forced response: with no probability, it applies whenever the criteria match.
+  # Forced response: with no frequency, it applies whenever the criteria match.
   - name: charge-declined
     match:
       path: /payments/charges
@@ -227,18 +227,21 @@ overrides:
       body:
         error: card_declined
 
-  # Fails 30% of the lookups; the rest go to the upstream.
+  # Fails 30% of the lookups and is slow in all of them: each effect has its
+  # own frequency, drawn independently. The 70% that are not failed still go
+  # to the upstream — late.
   - name: balance-flaky
     match:
       path: /payments/balance
       method: GET
-    probability: 0.3
     respond:
       status: 503
+      chance: 0.3
       headers:
         Retry-After: "1"
       body:
         error: balance_unavailable
+    latency: 800ms
 
   # Latency only: with no respond, the response comes from the upstream, late.
   - name: lookup-slow
@@ -254,8 +257,8 @@ overrides:
   - name: flaky-network
     match:
       path: /payments/*
-    probability: 0.1
-    drop: true
+    drop:
+      chance: 0.1
     ttl: 10m
     maxApplications: 50
 
@@ -296,12 +299,15 @@ Override:
 | `respond.status` | `200` by default |
 | `respond.headers` | each header is a string or a list (for a repeated header, such as several `Set-Cookie`) |
 | `respond.body` | text, or a YAML structure sent as JSON (with `Content-Type: application/json` inferred) |
-| `probability` | fraction of the selected requests the override applies to; `1.0` by default |
-| `latency` | fixed delay (`2s`) or one drawn from a range (`{min: 200ms, max: 900ms}`) |
-| `drop` | closes the connection with no response |
+| `respond.chance` | fraction of the selected requests that get this response; every one of them by default |
+| `latency` | fixed delay (`2s`), one drawn from a range (`{min: 200ms, max: 900ms}`), or either of those with its own frequency (`{fixed: 2s, chance: 0.3}`, `{min, max, chance}`) |
+| `drop` | closes the connection with no response: `true` for every selected request, `{chance: 0.05}` for a fraction of them |
 | `ttl` | lifetime, counted from when the override was registered |
 | `maxApplications` | number of applications before it expires |
 | `source` | written by the gateway on learned or derived overrides; points at the exchange it came from |
+| `probability` | legacy: still read, now as the default frequency of the effects that declare none. Never written back |
+
+Every frequency is a number between `0.0` and `1.0`, and each one is drawn on its own for every request the override selects, in the fixed order drop, response, delay. An effect that was not drawn is ignored as if it were not declared; a request where none was drawn goes to the upstream untouched.
 
 When more than one override matches, the most specific wins: exact path; then path with segment parameters (among those, the one with more literal segments); then regular expression; then wildcard, longest first; and, on a tie, the one declaring more criteria. Anything still tied is settled by the order in the document. Overrides that are off or expired stay out of that contest.
 
@@ -332,14 +338,15 @@ GATEWAY_HISTORY_BACKEND=sqlite GATEWAY_HISTORY_PATH=ci-history.db devgateway
 
 ## The override: mocking and chaos are the same thing
 
-There is no mocking mechanism and a separate chaos mechanism. There is the override: a selection criterion, a declared response and the modifiers `probability`, `latency`, `drop`, `ttl` and `maxApplications`.
+There is no mocking mechanism and a separate chaos mechanism. There is the override: a selection criterion, a declared response and the modifiers `latency`, `drop`, `ttl` and `maxApplications`, each effect with its own frequency.
 
-- **A mock** is an override with `probability: 1.0` (or with no `probability`): every selected request gets the declared response.
-- **Chaos** is the same override with `probability: 0.3`: 30% get the declared response, and the other 70% go to the upstream as if the override did not exist.
+- **A mock** is an override whose response declares no frequency (or declares `chance: 1.0`): every selected request gets the declared response.
+- **Chaos** is the same override with `respond.chance: 0.3`: 30% get the declared response, and the other 70% go to the upstream as if the override did not exist.
 - **Latency only**: with no `respond`, the override does not intercept; the response comes from the upstream, late.
-- **A drop**: `drop: true` closes the connection with no response.
+- **A drop**: `drop: true` closes the connection with no response, and `drop: {chance: 0.05}` does it on one call in twenty.
+- **One rule, several frequencies**: "fails in 30% of the calls and is always slow" is a `respond.chance: 0.3` next to a `latency` with no frequency — not two overrides on the same path.
 
-The route forwards everything by default; overrides intercept only what they select. In the fixed order of the request path, the gateway first draws whether the override applies, then the drop and the delay, and only then answers (synthesizing, or going to the upstream). The delay is applied with the response ready, just before writing it: that is why injected time and upstream time are measured separately and **add up**. In the history, every exchange carries `timing.upstreamMs`, `timing.injectedMs` and `timing.gatewayMs`, which the panel draws as a waterfall.
+The route forwards everything by default; overrides intercept only what they select. In the fixed order of the request path, the gateway draws each declared effect against its own frequency — drop, response, delay — and only then answers (synthesizing, or going to the upstream). The delay is applied with the response ready, just before writing it: that is why injected time and upstream time are measured separately and **add up**. In the history, every exchange carries `timing.upstreamMs`, `timing.injectedMs` and `timing.gatewayMs`, which the panel draws as a waterfall.
 
 With a `seed` set, each request's draw derives from `(seed, arrival sequence number)`: the same sequence of requests produces the same decisions in another run.
 
@@ -351,7 +358,7 @@ The panel is served on the admin port, embedded in the binary, with no CDN and n
 
 - **Map**: the routes and their upstreams, with recent availability of each upstream, taken from the forwarding attempts themselves (the gateway does not probe anything).
 - **Traffic**: the exchanges as they happen, over a live stream, with filters (route, method, path, status range, intervened or not, time window) and per-exchange detail: request and response, headers, bodies, and the waterfall splitting upstream time from injected time.
-- **Route**: the route, its overrides, and the continuous controls (probability, latency, TTL, applications) next to the YAML document, live and editable. What you change in the controls shows up in the document, and the other way around.
+- **Route**: the route, its overrides, and the continuous controls (frequency, latency, TTL, applications) next to the YAML document, live and editable. What you change in the controls shows up in the document, and the other way around.
 - **Process**: the effective settings with the origin of each value, learning mode, and the history backend, all changeable without a restart.
 
 The detail pane has a simple and an advanced mode. Simple is the default and fits a rule into two lines; a rule using anything beyond path and method is flagged, so nothing is hidden without saying so. Advanced shows everything.
@@ -379,7 +386,7 @@ With `learning.enabled` on, every new combination of method and path that goes t
       at: 2026-09-18T20:04:24.72Z
 ```
 
-Being off, it changes no traffic. It is the starting point for the next move: turn it on, edit the response, or give it a failure probability. Learning writes after the response has been delivered, off the request path.
+Being off, it changes no traffic. It is the starting point for the next move: turn it on, edit the response, or give it a failure frequency. Learning writes after the response has been delivered, off the request path.
 
 The recorded path is generalized: a segment that looks like a record identifier — all digits, a UUID, or alphanumeric with digits and at least 8 characters — becomes a segment parameter (`:id`, `:id2`…), and the rest stays literal. `GET /zip/40415345/json` followed by `GET /zip/01001000/json` produce a single override, `get-zip-id-json`, with path `/zip/:id/json` and the first exchange's response; `/api/users/me` and `/api/users/42` produce two, `/api/users/me` and `/api/users/:id`, because `me` is not an identifier. The heuristic is conservative: `json`, `charge` and `ch_123` stay literal, and an identifier it does not recognize (a slug, say) only costs one extra rule, which you generalize by replacing the segment with `:id`.
 

@@ -114,7 +114,7 @@ func TestDropEndsWithoutResponse(t *testing.T) {
 	// The drop takes precedence over the declared response.
 	o := synth("drop", "/api/*", "never sent")
 	o.Respond.Status = http.StatusServiceUnavailable
-	o.Drop = true
+	o.Drop = config.Drop{On: true}
 	g := capturing(t, recording(), route("payments", up.URL, "/api/*", withOverrides(o)))
 	res, err := http.Get(g.URL + "/api/x")
 	if err == nil {
@@ -145,7 +145,7 @@ func TestDropEndsWithoutResponse(t *testing.T) {
 func TestDropOverHTTP2ResetsStream(t *testing.T) {
 	up, hits := countingUpstream(t, "payments")
 	o := synth("drop", "/api/*", "never sent")
-	o.Drop = true
+	o.Drop = config.Drop{On: true}
 	g := capturing(t, recording(), route("payments", up.URL, "/api/*", withOverrides(o)))
 	srv := httptest.NewUnstartedServer(g.h)
 	srv.EnableHTTP2 = true
@@ -514,7 +514,7 @@ func TestClientCancelDuringSynthesizedDelay(t *testing.T) {
 // the abort mode.
 func TestDropWithoutHijackerAborts(t *testing.T) {
 	o := synth("drop", "/api/*", "never sent")
-	o.Drop = true
+	o.Drop = config.Drop{On: true}
 	g := capturing(t, recording(), route("payments", "", "/api/*", withOverrides(o)))
 	w := httptest.NewRecorder()
 	func() {

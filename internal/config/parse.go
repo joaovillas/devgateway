@@ -133,6 +133,7 @@ func parentField(field string) string {
 
 var (
 	typeLatency  = reflect.TypeFor[Latency]()
+	typeDrop     = reflect.TypeFor[Drop]()
 	typeMatcher  = reflect.TypeFor[Matcher]()
 	typeDuration = reflect.TypeFor[Duration]()
 )
@@ -151,7 +152,9 @@ func checkShape(n *yaml.Node, t reflect.Type, field string, x *nodeIndex, issues
 	case typeDuration:
 		return
 	case typeLatency:
-		t = reflect.TypeFor[latencyRange]()
+		t = reflect.TypeFor[latencyFields]()
+	case typeDrop:
+		t = reflect.TypeFor[dropFields]()
 	case typeMatcher:
 		t = reflect.TypeFor[matcherFields]()
 	}

@@ -64,8 +64,8 @@ Every error response has this body:
 ```json
 {
   "error": "invalid",
-  "message": "routes/payments.yaml: field overrides[0].probability (line 12, column 18): must be between 0.0 and 1.0 (got 1.5)",
-  "field": "overrides[0].probability",
+  "message": "routes/payments.yaml: field overrides[0].respond.chance (line 12, column 18): must be between 0.0 and 1.0 (got 1.5)",
+  "field": "overrides[0].respond.chance",
   "file": "routes/payments.yaml",
   "line": 12,
   "column": 18
@@ -169,9 +169,9 @@ Reading a route wraps the document (`route`, identical to the `config.Route` typ
         "respond": {
           "status": 503,
           "headers": { "Retry-After": "1" },
-          "body": { "error": "unavailable" }
+          "body": { "error": "unavailable" },
+          "chance": 0.3
         },
-        "probability": 0.3,
         "latency": { "min": "100ms", "max": "500ms" },
         "ttl": "10m",
         "maxApplications": 50
@@ -194,9 +194,12 @@ Reading a route wraps the document (`route`, identical to the `config.Route` typ
 
 - `order` is the route's position in the precedence order (0 is the most specific).
 - `state` is the live state of each override, by name (see [live state](#get-apioverridesstate)).
-- Omitted fields follow the document's rules: an absent `enabled` means on, an absent `probability` means `1.0`, an absent `respond.status` means `200`.
+- Omitted fields follow the document's rules: an absent `enabled` means on, an absent frequency means the effect holds on every selected request, an absent `respond.status` means `200`.
 - `match.path` is exact (`/zip/01001000/json`), parameterized (`/zip/:id/json`, where each `:name` matches exactly one non-empty segment) or a suffix wildcard (`/zip/*`); `match.pathRegex` is the regular-expression alternative. A parameter name follows `[A-Za-z_][A-Za-z0-9_]*`, does not repeat within a path and does not share a segment with the wildcard; the error comes back as `422` with `field: "match.path"`. A route's `match.path` does not take parameters. In the precedence order, a parameterized path comes after an exact path and before a regular expression and a wildcard, and between two parameterized paths the one with more literal segments wins.
-- `latency` is either a string (`"2s"`, a fixed delay) or `{ "min", "max" }` (a delay drawn from the range).
+- `latency` is either a string (`"2s"`, a fixed delay), `{ "min", "max" }` (a delay drawn from the range) or the long form with its own frequency: `{ "fixed": "2s", "chance": 0.3 }` or `{ "min", "max", "chance" }`.
+- `drop` is either `true` (every selected request) or `{ "chance": 0.05 }`; `false` is the same as not declaring it.
+- Each effect carries its own frequency, between `0.0` and `1.0`, drawn independently on every selected request: `respond.chance`, `latency.chance` and `drop.chance`. An effect that declares none holds always. A frequency outside the range answers `422` with `field` pointing at it (`overrides[0].respond.chance`).
+- `probability` is legacy: still accepted, it now works as the default frequency of the effects that declare none. New writes do not produce it.
 - A `headers`, `query` or `body` criterion is either a string (equality) or an object with exactly one of `equals`, `regex`, `json`, `contains`.
 - `source` shows up on learned or derived overrides: `{ "kind": "learned" | "derived", "exchange": "<id>", "at": "<instant>", "bodyIncomplete": true }`.
 
@@ -300,7 +303,9 @@ overrides:
       method: POST
     respond:
       status: 503
-    probability: 0.3
+      chance: 0.3
+    latency:
+      fixed: 2s
 ```
 
 Errors: `404`.
@@ -334,10 +339,9 @@ curl -s -X PUT $A/api/routes/payments/document -H 'Content-Type: application/yam
     "name": "flaky",
     "enabled": true,
     "match": { "path": "/api/payments/charge", "method": "POST" },
-    "respond": { "status": 503 },
-    "probability": 0.3,
+    "respond": { "status": 503, "chance": 0.3 },
     "latency": "2s",
-    "drop": false,
+    "drop": { "chance": 0.05 },
     "ttl": "60s",
     "maxApplications": 5
   },
@@ -354,6 +358,8 @@ curl -s -X PUT $A/api/routes/payments/document -H 'Content-Type: application/yam
 ```
 
 `override` is the `config.Override` type. `order` is the override's position in the precedence order within the route. `state` is described under [live state](#get-apioverridesstate).
+
+Each declared effect carries its own frequency, and the three are drawn independently on every request the override selects: this one synthesizes the `503` in 30% of them, delays every one of them by `2s` and drops 5% of the connections. An effect that declares no `chance` holds always; an effect that was not drawn is ignored as if it were not declared, and a request where none was drawn goes to the upstream untouched. An undeclared effect does not show up in the JSON: `latency` and `drop` are absent, not `null`. The legacy `probability` field is still read, as the default frequency of the effects that declare none, and is never written back.
 
 ### `GET /api/routes/{route}/overrides`
 
@@ -381,7 +387,7 @@ Appends an override to the end of the route's declared list. The body is a `conf
 
 ```sh
 curl -s -X POST $A/api/routes/payments/overrides -H 'Content-Type: application/json' \
-  -d '{"name":"flaky","match":{"path":"/api/payments/charge","method":"POST"},"respond":{"status":503},"probability":0.3}'
+  -d '{"name":"flaky","match":{"path":"/api/payments/charge","method":"POST"},"respond":{"status":503,"chance":0.3},"latency":"2s"}'
 ```
 
 ### `PUT /api/routes/{route}/overrides/{override}`
@@ -390,17 +396,19 @@ Replaces the whole override, keeping its position in the declared list. A differ
 
 ```sh
 curl -s -X PUT $A/api/routes/payments/overrides/flaky -H 'Content-Type: application/json' \
-  -d '{"name":"flaky","match":{"path":"/api/payments/charge"},"respond":{"status":500},"probability":0.5}'
+  -d '{"name":"flaky","match":{"path":"/api/payments/charge"},"respond":{"status":500,"chance":0.5}}'
 ```
 
 ### `PATCH /api/routes/{route}/overrides/{override}`
 
 JSON Merge Patch over the override. This is the endpoint behind the continuous controls and the on/off switch. `null` removes a field (`"latency": null`, for instance, takes the delay away).
 
-The API does not turn an override on by itself. The spec asks that adjusting the probability, latency or drop of a disabled override turn it on in the same gesture, and the client is the one who does that, by sending `"enabled": true` along:
+A frequency lives inside its effect, so the patch that changes one names that effect: `{"respond": {"chance": 0.3}}`, `{"latency": {"fixed": "2s", "chance": 0.5}}`, `{"drop": {"chance": 0.05}}`. `{"drop": false}` takes the drop away, and `{"latency": null}` takes the delay away.
+
+The API does not turn an override on by itself. The spec asks that adjusting the frequency, latency or drop of a disabled override turn it on in the same gesture, and the client is the one who does that, by sending `"enabled": true` along:
 
 ```json
-{ "probability": 0.3, "enabled": true }
+{ "respond": { "chance": 0.3 }, "enabled": true }
 ```
 
 On/off by itself:
@@ -413,7 +421,9 @@ Turning it off and back on preserves every other field. Answers `200` with the o
 
 ```sh
 curl -s -X PATCH $A/api/routes/payments/overrides/flaky -H 'Content-Type: application/merge-patch+json' \
-  -d '{"probability":0.3,"enabled":true}'
+  -d '{"respond":{"chance":0.3},"enabled":true}'
+curl -s -X PATCH $A/api/routes/payments/overrides/flaky -H 'Content-Type: application/merge-patch+json' \
+  -d '{"drop":{"chance":0.05}}'
 curl -s -X PATCH $A/api/routes/payments/overrides/flaky -H 'Content-Type: application/merge-patch+json' \
   -d '{"enabled":false}'
 ```
@@ -473,6 +483,8 @@ The response (a draft):
 ```
 
 A JSON body that is valid, complete and whose numbers survive the round trip becomes a structure in `respond.body`. Any other body becomes text, identical to the observed one. A path that cannot be written as an exact path (it holds a literal `*`, or a segment starting with `:`) becomes an anchored `pathRegex`. Deriving does not generalize the path: it replays one specific exchange.
+
+The draft declares no frequency on any effect, so the derived response holds on every request it selects. Turning it into an intermittent failure is a later edit — `respond.chance`, `latency.chance` or `drop.chance` — through the creating `POST` or a `PATCH`.
 
 If the response body was truncated on capture, or the transfer was interrupted, the draft comes out with `source.bodyIncomplete: true` and a warning in `warnings`. Deriving is not refused, and the panel shows the warning before writing. `warnings` also fires when the route already has an override for the same method and path, when the requested `name` is already taken in the route (drafts only), and when the exchange was served by another route.
 

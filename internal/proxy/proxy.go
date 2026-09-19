@@ -97,10 +97,12 @@ func newTransport() *http.Transport {
 
 // ServeHTTP walks the request path in the fixed order laid out by the design:
 // resolve the route (1), open the capture record (2), resolve the most
-// specific enabled override that matches (3), draw for application, drop and
-// delay (4), carry on as if the override did not exist when the application
-// is not drawn (5), synthesize the declared response or forward to the
-// upstream (7), apply the delay between the response being ready and the
+// specific enabled override that matches (3), draw each declared effect
+// against its own frequency, in the fixed order drop, respond and delay (4),
+// ignore the effects that were not drawn and carry on as if the override did
+// not exist when none of them was (5), synthesize the declared response when
+// it was drawn or forward to the upstream (7), apply the delay between the
+// response being ready and the
 // write to the client (8) and close the record with the timings broken down
 // (9), handing the exchange over to learning while it is on. A connection
 // drop (6) ends the request before any response.
@@ -157,8 +159,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 7.
-	if o := dec.Applied(); o != nil && o.Doc.Respond != nil {
+	// Step 7: only when the declared response was among the effects drawn.
+	if dec.Respond {
 		h.synthesize(w, r, route, dec, rec)
 		return
 	}
@@ -193,7 +195,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // between selection and counting, the override ran out because of another
 // concurrent request, it drops out of the selection and the choice is made
 // again, from the same source derived from (seed, sequence), as if it had
-// already been expired on the way in.
+// already been expired on the way in. A request where no effect was drawn
+// costs the override nothing: it is not counted as an application.
 func (h *Handler) decide(snap *config.Snapshot, route *config.CompiledRoute, r **http.Request, rec *capture.Record) override.Decision {
 	q := override.NewRequest(*r)
 	defer func() { *r = q.Request() }()

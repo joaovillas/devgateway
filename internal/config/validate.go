@@ -119,9 +119,19 @@ func validateOverride(base string, o Override) []issue {
 		is = append(is, validateMatcher(base+".match.body", *m.Body)...)
 	}
 
-	if o.Respond == nil && o.Latency == nil && !o.Drop {
+	if o.Respond == nil && o.Latency == nil && !o.Drop.Declared() {
 		add("", "declare at least one of respond, latency or drop")
 	}
+	// Each effect carries its own frequency; probability is the legacy field
+	// that still works as the default of the effects that declare none. Every
+	// one of them is pinned to the field that holds it.
+	checkChance := func(field string, c *float64) {
+		if c != nil && (*c < 0 || *c > 1) {
+			add(field, "must be between 0.0 and 1.0 (got %v)", *c)
+		}
+	}
+	checkChance("probability", o.Probability)
+	checkChance("drop.chance", o.Drop.Chance)
 	if r := o.Respond; r != nil {
 		if r.Status != 0 && (r.Status < 100 || r.Status > 599) {
 			add("respond.status", "status must be between 100 and 599 (got %d)", r.Status)
@@ -134,11 +144,10 @@ func validateOverride(base string, o Override) []issue {
 				add("respond.headers."+k, "declare at least one value")
 			}
 		}
-	}
-	if p := o.Probability; p != nil && (*p < 0 || *p > 1) {
-		add("probability", "must be between 0.0 and 1.0 (got %v)", *p)
+		checkChance("respond.chance", r.Chance)
 	}
 	if l := o.Latency; l != nil {
+		checkChance("latency.chance", l.Chance)
 		switch {
 		case l.Fixed != nil:
 			if *l.Fixed < 0 {

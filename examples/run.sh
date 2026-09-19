@@ -100,7 +100,7 @@ example environment is up (Ctrl+C stops it):
   forced override       curl -si -X POST localhost:8080/payments/charges \
                           -H 'X-Scenario: declined' -d '{"amount":4990}'
   without the override  curl -si -X POST localhost:8080/payments/charges -d '{"amount":4990}'
-  probabilistic (30%)   for i in $(seq 10); do curl -s -o /dev/null -w '%{http_code} ' localhost:8080/payments/balance; done
+  30% of the calls      for i in $(seq 10); do curl -s -o /dev/null -w '%{http_code} ' localhost:8080/payments/balance; done
   latency 200-900 ms    curl -s -w '\n%{time_total}s\n' localhost:8080/payments/charges/ch_1
   SSE                   curl -sN localhost:8080/payments/events
   learning              curl -s localhost:8080/catalog/search?q=mug; cat examples/.run/routes/catalog.yaml

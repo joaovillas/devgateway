@@ -51,23 +51,43 @@ func (d *Duration) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-// Latency is a fixed delay ("2s") or a randomized range ({min, max}).
+// Latency is a fixed delay ("2s") or a randomized range ({min, max}), and
+// may carry its own frequency in the long form ({fixed, chance} or
+// {min, max, chance}). The short form, a bare duration, holds on every
+// selected request.
 type Latency struct {
 	Fixed *Duration `json:"-" yaml:"-"`
 	Min   *Duration `json:"min,omitempty" yaml:"min,omitempty"`
 	Max   *Duration `json:"max,omitempty" yaml:"max,omitempty"`
+	// Chance is how often the delay is injected, between 0.0 and 1.0.
+	// Leaving it out means every selected request.
+	Chance *float64 `json:"chance,omitempty" yaml:"chance,omitempty"`
 }
 
-type latencyRange struct {
-	Min *Duration `json:"min" yaml:"min"`
-	Max *Duration `json:"max" yaml:"max"`
+// latencyFields is the long form of the latency, and the shape the document
+// is checked against.
+type latencyFields struct {
+	Fixed  *Duration `json:"fixed,omitempty" yaml:"fixed,omitempty"`
+	Min    *Duration `json:"min,omitempty" yaml:"min,omitempty"`
+	Max    *Duration `json:"max,omitempty" yaml:"max,omitempty"`
+	Chance *float64  `json:"chance,omitempty" yaml:"chance,omitempty"`
 }
+
+func (l Latency) fields() latencyFields {
+	return latencyFields{Fixed: l.Fixed, Min: l.Min, Max: l.Max, Chance: l.Chance}
+}
+
+// short reports that the latency is a bare duration: a fixed delay with no
+// frequency of its own.
+func (l Latency) short() bool { return l.Fixed != nil && l.Chance == nil }
+
+const latencyShape = "latency must be a duration, such as 2s, a map with min and max, or a map with fixed or min and max plus chance"
 
 func (l Latency) MarshalJSON() ([]byte, error) {
-	if l.Fixed != nil {
+	if l.short() {
 		return json.Marshal(l.Fixed)
 	}
-	return json.Marshal(latencyRange{l.Min, l.Max})
+	return json.Marshal(l.fields())
 }
 
 func (l *Latency) UnmarshalJSON(b []byte) error {
@@ -76,21 +96,21 @@ func (l *Latency) UnmarshalJSON(b []byte) error {
 		*l = Latency{Fixed: &d}
 		return nil
 	}
-	var r latencyRange
+	var f latencyFields
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&r); err != nil {
-		return fmt.Errorf("latency must be a duration, such as \"2s\", or {\"min\", \"max\"}: %v", err)
+	if err := dec.Decode(&f); err != nil {
+		return fmt.Errorf("%s: %v", latencyShape, err)
 	}
-	*l = Latency{Min: r.Min, Max: r.Max}
+	*l = Latency{Fixed: f.Fixed, Min: f.Min, Max: f.Max, Chance: f.Chance}
 	return nil
 }
 
 func (l Latency) MarshalYAML() (any, error) {
-	if l.Fixed != nil {
+	if l.short() {
 		return l.Fixed.String(), nil
 	}
-	return latencyRange{l.Min, l.Max}, nil
+	return l.fields(), nil
 }
 
 func (l *Latency) UnmarshalYAML(n *yaml.Node) error {
@@ -103,13 +123,85 @@ func (l *Latency) UnmarshalYAML(n *yaml.Node) error {
 		return nil
 	}
 	if n.Kind != yaml.MappingNode {
-		return nodeErr(n, "latency must be a duration, such as 2s, or a map with min and max")
+		return nodeErr(n, "%s", latencyShape)
 	}
-	var r latencyRange
-	if err := n.Decode(&r); err != nil {
+	var f latencyFields
+	if err := n.Decode(&f); err != nil {
 		return err
 	}
-	*l = Latency{Min: r.Min, Max: r.Max}
+	*l = Latency{Fixed: f.Fixed, Min: f.Min, Max: f.Max, Chance: f.Chance}
+	return nil
+}
+
+// Drop is the connection-drop effect. In the short form, "drop: true" drops
+// every request the override selects and "drop: false" is the same as not
+// declaring it at all; the long form, "drop: {chance: 0.05}", drops that
+// fraction of them.
+type Drop struct {
+	// On reports that the drop is declared. It carries no field of its own in
+	// the document: the short form is the boolean itself.
+	On bool `json:"-" yaml:"-"`
+	// Chance is how often the connection is dropped, between 0.0 and 1.0.
+	// Leaving it out means every selected request.
+	Chance *float64 `json:"chance,omitempty" yaml:"chance,omitempty"`
+}
+
+// Declared reports whether the override declares the drop.
+func (d Drop) Declared() bool { return d.On }
+
+type dropFields struct {
+	Chance *float64 `json:"chance,omitempty" yaml:"chance,omitempty"`
+}
+
+const dropShape = "drop must be true, false or a map with chance"
+
+func (d Drop) MarshalJSON() ([]byte, error) {
+	if d.Chance == nil {
+		return json.Marshal(d.On)
+	}
+	return json.Marshal(dropFields{Chance: d.Chance})
+}
+
+func (d *Drop) UnmarshalJSON(b []byte) error {
+	var on bool
+	if json.Unmarshal(b, &on) == nil {
+		*d = Drop{On: on}
+		return nil
+	}
+	var f dropFields
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&f); err != nil {
+		return fmt.Errorf("%s: %v", dropShape, err)
+	}
+	*d = Drop{On: true, Chance: f.Chance}
+	return nil
+}
+
+func (d Drop) MarshalYAML() (any, error) {
+	if d.Chance == nil {
+		return d.On, nil
+	}
+	return dropFields{Chance: d.Chance}, nil
+}
+
+func (d *Drop) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind == yaml.ScalarNode {
+		var on bool
+		if err := n.Decode(&on); err != nil {
+			return nodeErr(n, "%s", dropShape)
+		}
+		*d = Drop{On: on}
+		return nil
+	}
+	if n.Kind != yaml.MappingNode {
+		return nodeErr(n, "%s", dropShape)
+	}
+	var f dropFields
+	if err := n.Decode(&f); err != nil {
+		return err
+	}
+	*d = Drop{On: true, Chance: f.Chance}
 	return nil
 }
 
