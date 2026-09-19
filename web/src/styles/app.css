@@ -1276,6 +1276,149 @@ kbd {
   outline-offset: -2px;
 }
 
+/* Opções exclusivas empilhadas, quando a consequência não cabe em uma
+   palavra: uma por linha, separadas por costura de 1px, e a escolhida
+   marcada pelo azul da seleção. */
+.choice {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 100%;
+  min-width: 0;
+  border: 1px solid var(--seam-strong);
+  border-radius: var(--radius);
+}
+.choice__opt {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  text-align: left;
+  color: var(--ink-3);
+  line-height: 1.4;
+}
+.choice__opt + .choice__opt {
+  border-top: 1px solid var(--seam);
+}
+.choice__opt:hover {
+  color: var(--ink-2);
+}
+.choice__opt--on {
+  color: var(--ink);
+  background: var(--panel-raised);
+}
+.choice__opt:focus-visible {
+  outline-offset: -2px;
+}
+.choice__mark {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--seam-strong);
+  border-radius: 50%;
+}
+.choice__opt--on .choice__mark {
+  border-color: var(--override);
+  background: var(--override);
+}
+.choice__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Prévia do encaminhamento: a requisição de exemplo que o app faz e a que o
+   destino recebe dela, em mono, com o que foi inventado sublinhado. */
+.fwd {
+  display: grid;
+  gap: var(--s-1);
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--seam);
+  border-radius: var(--radius);
+  background: var(--ground);
+}
+.fwd__line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+  margin: 0;
+  min-width: 0;
+}
+.fwd__who {
+  flex: none;
+  width: 4.25rem;
+  color: var(--ink-3);
+}
+.fwd__req {
+  min-width: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+/* O que veio da URL do destino, para o resto se ler como o que foi anexado. */
+.fwd__base {
+  color: var(--ink-2);
+}
+.fwd__sep {
+  color: var(--ink-3);
+  white-space: pre;
+}
+.fwd__host {
+  color: var(--ink-2);
+}
+/* Trecho de exemplo: é forma do path, não estado, então repete o tratamento
+   do parâmetro de segmento — tinta secundária e sublinhado de 1px. */
+.fwd__ex {
+  color: var(--ink-2);
+  text-decoration: underline 1px solid var(--ink-3);
+  text-underline-offset: 3px;
+}
+.fwd__note {
+  margin: var(--s-2) 0 0;
+  color: var(--ink-3);
+  max-width: 62ch;
+}
+/* As duas chaves do encaminhamento, com a razão da escolha antes delas. */
+.fwdkeys {
+  display: grid;
+  gap: var(--s-2);
+}
+.fwd__why {
+  margin: 0;
+  padding-left: calc(108px + var(--s-4));
+  color: var(--ink-3);
+  max-width: 72ch;
+}
+/* Estreito: o "seu app"/"destino" passa para cima da requisição, e as
+   escolhas de consequência longa ganham a linha inteira. */
+@media (max-width: 640px) {
+  .fwd__line {
+    display: grid;
+    gap: 0;
+  }
+  .fwd__who {
+    width: auto;
+  }
+  .fwd__why {
+    padding-left: 0;
+  }
+  /* O Host ganha a própria linha, em vez de empurrar o path para a de cima. */
+  .fwd__host {
+    display: block;
+  }
+  .fwd__sep {
+    display: none;
+  }
+  .fwdkeys .row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-1);
+  }
+}
+/* A prévia do modo simples: separada do resumo pela mesma costura das seções. */
+.route__preview {
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--seam);
+}
+
 /* Controle contínuo: trilho de 2px, preenchido até o valor. */
 .cont {
   display: flex;

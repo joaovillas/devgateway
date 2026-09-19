@@ -121,7 +121,8 @@ export function ForwardKeys({
     "o path inteiro, como o seu app mandou"
   );
   return (
-    <>
+    <div className="fwdkeys">
+      {why ? <p className="fwd__why">{why}; mude à vontade</p> : null}
       <Row
         label="o que enviar ao destino"
         hint={
@@ -171,7 +172,6 @@ export function ForwardKeys({
           ]}
         />
       </Row>
-      {why ? <p className="fwd__why">{why}; mude à vontade</p> : null}
-    </>
+    </div>
   );
 }

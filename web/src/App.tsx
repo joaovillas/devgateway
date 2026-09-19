@@ -274,6 +274,7 @@ export function App() {
             onCancelCreate={cancelCreate}
             mode={mode}
             onMode={setMode}
+            trafficPort={status.kind === "ready" ? status.data.ports.traffic : undefined}
           />
         </div>
       </main>

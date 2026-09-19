@@ -16,9 +16,11 @@ import { toApiError, useNow } from "../hooks";
 import { MODE_OPTIONS, type DetailMode } from "../mode";
 import type { MergePatch } from "../patch";
 import type { Selection } from "../selection";
+import { suggest } from "../forward";
 import { destinationText, knownDestinations } from "../services";
 import { usePatchWriter } from "../writer";
-import { DurationField, Row, Segmented, Switch, TextField } from "./Controls";
+import { DurationField, Row, Segmented, TextField } from "./Controls";
+import { ForwardKeys, ForwardPreview } from "./ForwardPreview";
 import { PathText } from "./PathText";
 import { ErrorNote } from "./ErrorNote";
 import { PlusIcon } from "./Icons";
@@ -464,7 +466,7 @@ function RouteDetail({
 function RouteSummary({ res, onAdvanced }: { res: RouteResource; onAdvanced: () => void }) {
   const r = res.route;
   const extras: string[] = [];
-  if (r.stripPrefix) extras.push("remove o prefixo");
+  if (r.stripPrefix) extras.push("só o que vem depois do prefixo");
   if (r.rewriteHost) extras.push("Host do destino");
   if (r.timeout) extras.push(`timeout ${r.timeout}`);
   return (
@@ -629,10 +631,24 @@ function RouteFields({
             size="sm"
             value={v.match.host ?? ""}
             placeholder="qualquer"
+            onDraft={(t) => setTyping((d) => ({ ...d, host: t }))}
             onCommit={(t) => w.change({ match: { host: t.trim() || null } })}
           />
         </Row>
-        <Row label="path" htmlFor={`${ids}-path`} hint="exato, ou curinga de sufixo: /api/x/*">
+        <Row
+          label="path"
+          htmlFor={`${ids}-path`}
+          hint={
+            pathExact ? (
+              <>
+                só este path; use <span className="mono">{preview.path.trim().replace(/\/+$/, "")}/*</span> para tudo
+                abaixo
+              </>
+            ) : (
+              "exato, ou curinga de sufixo: /api/x/*"
+            )
+          }
+        >
           <TextField
             id={`${ids}-path`}
             label="Path de entrada"
@@ -640,6 +656,7 @@ function RouteFields({
             size="sm"
             value={v.match.path ?? ""}
             placeholder="qualquer"
+            onDraft={(t) => setTyping((d) => ({ ...d, path: t }))}
             onCommit={(t) => w.change({ match: { path: t.trim() || null } })}
           />
         </Row>
@@ -656,30 +673,16 @@ function RouteFields({
             size="sm"
             value={v.upstream ?? ""}
             placeholder="http://localhost:9001"
+            onDraft={(t) => setTyping((d) => ({ ...d, upstream: t }))}
             validate={(t) => (t.trim() === "" || /^https?:\/\/.+/.test(t.trim()) ? null : "URL http:// ou https://")}
             onCommit={(t) => text("upstream", t)}
           />
         </Row>
-        <Row label="remove prefixo">
-          <span className="inline">
-            <Switch
-              checked={v.stripPrefix === true}
-              label="Remover o prefixo do path"
-              onChange={(b) => w.change({ stripPrefix: b ? true : null })}
-            />
-            <span className="dim">{v.stripPrefix ? "tira o prefixo da entrada antes de redirecionar" : "redireciona o path inteiro"}</span>
-          </span>
-        </Row>
-        <Row label="reescreve host">
-          <span className="inline">
-            <Switch
-              checked={v.rewriteHost === true}
-              label="Reescrever o Host para o do destino"
-              onChange={(b) => w.change({ rewriteHost: b ? true : null })}
-            />
-            <span className="dim">{v.rewriteHost ? "usa o Host do destino" : "repassa o Host que o seu app mandou"}</span>
-          </span>
-        </Row>
+        <ForwardKeys
+          input={preview}
+          onStripPrefix={(b) => w.change({ stripPrefix: b ? true : null })}
+          onRewriteHost={(b) => w.change({ rewriteHost: b ? true : null })}
+        />
         <Row label="timeout" htmlFor={`${ids}-to`} hint="vazio: sem limite próprio">
           <DurationField
             id={`${ids}-to`}
@@ -689,6 +692,8 @@ function RouteFields({
             onCommit={(d) => w.change({ timeout: d })}
           />
         </Row>
+        <h4 className="form__group">prévia</h4>
+        <ForwardPreview input={preview} />
       </div>
       {w.error ? <ErrorNote error={w.error} onDismiss={w.dismissError} what="A alteração não foi gravada" /> : null}
       {actionError ? <ErrorNote error={actionError} onDismiss={() => setActionError(null)} what="A ação falhou" /> : null}
@@ -834,11 +839,13 @@ const QUICK_DESTINATIONS = 6;
 function NewServiceForm({
   routes,
   upstreams,
+  trafficPort,
   onCreated,
   onCancel,
 }: {
   routes: Load<RouteResource[]>;
   upstreams: Load<UpstreamHealth[]>;
+  trafficPort: number | undefined;
   onCreated: (name: string) => void;
   onCancel: () => void;
 }) {
@@ -848,6 +855,10 @@ function NewServiceForm({
   const [host, setHost] = useState("");
   const [showHost, setShowHost] = useState(false);
   const [dest, setDest] = useState("");
+  // As duas chaves do encaminhamento: enquanto ninguém as toca, elas seguem o
+  // que o destino pede (suggest); tocar em uma congela as duas no que está à
+  // vista, para a sugestão não puxar de volta o que foi escolhido.
+  const [keys, setKeys] = useState<{ stripPrefix: boolean; rewriteHost: boolean } | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [sending, setSending] = useState(false);
   const known = useMemo(
@@ -863,6 +874,11 @@ function NewServiceForm({
   const taken = routes.kind === "ready" && routes.data.some((r) => r.route.name === n);
   const d = dest.trim();
   const destBad = d !== "" && !/^https?:\/\/.+/.test(d);
+  const suggested = suggest(d);
+  const chosen = keys ?? { stripPrefix: suggested?.stripPrefix ?? false, rewriteHost: suggested?.rewriteHost ?? false };
+  const preview = { path, host, destination: d, ...chosen, trafficPort };
+  const p = path.trim();
+  const pathExact = p !== "" && !p.endsWith("/*");
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -874,6 +890,8 @@ function NewServiceForm({
         name: n,
         match: { ...(host.trim() ? { host: host.trim() } : {}), ...(path.trim() ? { path: path.trim() } : {}) },
         ...(d ? { upstream: d } : {}),
+        ...(chosen.stripPrefix ? { stripPrefix: true } : {}),
+        ...(chosen.rewriteHost ? { rewriteHost: true } : {}),
       })
       .then(
         () => onCreated(n),
@@ -919,7 +937,19 @@ function NewServiceForm({
             />
           </Row>
           <h4 className="form__group">entrada</h4>
-          <Row label="path" htmlFor={`${ids}-p`} hint="o path que o seu app chama no gateway; exato ou curinga de sufixo">
+          <Row
+            label="path"
+            htmlFor={`${ids}-p`}
+            hint={
+              pathExact ? (
+                <>
+                  só este path; use <span className="mono">{p.replace(/\/+$/, "")}/*</span> para tudo abaixo
+                </>
+              ) : (
+                "o path que o seu app chama no gateway; exato ou curinga de sufixo"
+              )
+            }
+          >
             <input
               id={`${ids}-p`}
               className="input input--mono input--sm"
@@ -997,6 +1027,14 @@ function NewServiceForm({
               </span>
             </Row>
           ) : null}
+          <ForwardKeys
+            input={preview}
+            why={keys ? null : suggested?.why}
+            onStripPrefix={(b) => setKeys({ ...chosen, stripPrefix: b })}
+            onRewriteHost={(b) => setKeys({ ...chosen, rewriteHost: b })}
+          />
+          <h4 className="form__group">prévia</h4>
+          <ForwardPreview input={preview} />
         </div>
         <p className="hint">
           Gravado em <span className="mono">routes/{n || "nome"}.yaml</span>. As regras de caos vêm depois, no próprio
