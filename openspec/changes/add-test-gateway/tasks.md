@@ -58,6 +58,7 @@
 - [x] 6.11 Implementar o liga/desliga do override, com desligados fora da seleção e da precedência, e verificar pelos três cenários da requirement de override ligado e desligado
 - [x] 6.12 Implementar o modo aprendizado — detecção de método e path desconhecidos após resposta do upstream, geração do override desligado com resposta completa e origem, gravação atômica do documento e reconstrução do snapshot fora do caminho da requisição — e verificar pelos seis cenários da requirement de aprendizado de endpoints
 - [x] 6.13 Implementar parâmetros de segmento no path das regras (`/viacep/:id/json`), com precedência entre exato e expressão regular, e a generalização no aprendizado (detecção de identificadores, conhecimento por casamento, absorção dos aprendidos exatos cobertos), e verificar pelo cenário de path com parâmetro e pelos três cenários novos do aprendizado
+- [ ] 6.14 Trocar a probabilidade única do override pela frequência por efeito (resposta, latência e queda, cada uma com a sua; ausente vale sempre; a do override vale como padrão das que faltam), com sorteio independente e determinístico por efeito, e verificar pelos seis cenários da requirement de frequência de cada efeito
 
 ## 7. API de administração
 
@@ -87,6 +88,7 @@
 - [x] 8.11 Adotar o vocabulário do usuário em toda a interface (seu app, serviço, entrada, destino e regra no lugar de cliente, rota, casamento, upstream e override), mantendo os termos internos só em identificadores, API e arquivos, e verificar pelo cenário da requirement de vocabulário do usuário
 - [x] 8.12 Exibir e editar paths com parâmetros de segmento na interface (os `:id` destacados como parâmetro, aceitos no cadastro e na edição de regra), e verificar criando uma regra `/viacep/:id/json` pela interface
 - [x] 8.13 Implementar o modo simples (padrão) e o modo avançado, com a escolha lembrada e o resumo indicando recursos avançados, e verificar pelos quatro cenários da requirement correspondente
+- [ ] 8.15 Exibir a frequência por efeito no painel ("responde 503 em 30% das chamadas"), sem probabilidade global, e marcar como inativa a regra cujos efeitos estão todos em 0%, e verificar pelos cenários correspondentes
 - [x] 8.14 Enxugar a inspeção de tráfego (colunas essenciais, intervenção junto do status, coluna de serviço só sem filtro, filtros recolhidos com os ativos visíveis), e verificar pelos três cenários da requirement de tráfego enxuto
 
 ## 9. Distribuição e documentação

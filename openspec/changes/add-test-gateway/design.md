@@ -29,7 +29,7 @@ Três restrições moldam todas as decisões abaixo:
 
 ### Override único no lugar de mock e caos
 
-Não existem dois mecanismos. Existe o override: um seletor, uma resposta declarada, e os modificadores `probability`, `latency`, `drop` e `ttl`. Probabilidade `1.0` é resposta forçada; `0.3` é injeção de falha; o que não é sorteado segue para o upstream.
+Não existem dois mecanismos. Existe o override: um seletor e os efeitos `respond`, `latency` e `drop`, cada um com a sua frequência, mais a expiração por `ttl` e por contagem. Responder sempre é resposta forçada; responder em `0.3` é injeção de falha; o que não é sorteado segue para o upstream.
 
 *Por quê:* as ferramentas de referência separam mock de caos, e a separação vaza para o usuário — no MockServer você configura uma expectation numa tela e um chaos profile em outra, para controlar a mesma rota. A distinção é interna, não conceitual: forçar uma resposta é injetar caos com probabilidade máxima. Unificar corta metade da superfície de configuração, metade da UI e a pergunta "isso eu configuro como mock ou como caos?".
 
@@ -50,14 +50,16 @@ Toda requisição na porta de tráfego percorre exatamente esta sequência:
 1. Resolver a rota (host, depois padrão de path mais específico).
 2. Abrir o registro de captura e iniciar a cronometragem.
 3. Resolver o override aplicável: entre os ligados que selecionam a requisição, o mais específico.
-4. Se há override, sortear em ordem fixa — aplicação, queda, atraso — de uma única fonte de aleatoriedade.
-5. Se a aplicação não foi sorteada: seguir para o upstream como se o override não existisse.
+4. Se há override, sortear cada efeito declarado em ordem fixa — queda, resposta, atraso — de uma única fonte de aleatoriedade, cada um com a sua frequência.
+5. Efeito não sorteado é ignorado; sem nenhum sorteado, seguir para o upstream como se o override não existisse.
 6. Se houve queda: encerrar a conexão e fechar o registro.
 7. Se o override declara `respond`: sintetizar a resposta. Caso contrário, encaminhar ao upstream.
 8. Aplicar o atraso sorteado **depois** de a resposta estar pronta e antes de escrevê-la ao cliente — seja ela a do upstream, a sintetizada ou uma resposta de erro do próprio gateway (`501`, `502`, `504`). Se o cliente desiste durante o atraso, nada lhe foi entregue: a troca fica sem status, com a desistência (`client_canceled`) anotada.
 9. Fechar o registro com os tempos decompostos e, com o modo aprendizado ligado, aprender o endpoint fora do caminho da requisição.
 
 *Por quê o atraso no passo 8 e não antes do upstream:* atrasar depois mantém o tempo real do upstream e o tempo injetado como grandezas independentes e diretamente mensuráveis. Atrasar antes obrigaria a subtrair um valor do outro para exibir o waterfall, e a subtração erra sempre que o upstream oscila. O custo é que a latência total passa a ser a soma, e não a máxima — que é justamente o comportamento esperado por quem pede "essa rota demora 2s a mais".
+
+*Por quê uma frequência por efeito:* "esse endpoint falha em 30% das chamadas e está sempre lento" é uma frase só, e com uma probabilidade única do override ela exigiria dois overrides sobre o mesmo path. Sorteando efeito a efeito, cada um responde à pergunta "em quantas chamadas isso acontece?".
 
 *Por quê sortear tudo no passo 4:* o sorteio precisa ser independente do que acontece depois. Se a aplicação fosse decidida só quando o upstream responde, o mesmo seed produziria sequências diferentes conforme a disponibilidade do upstream, e o determinismo iria embora.
 

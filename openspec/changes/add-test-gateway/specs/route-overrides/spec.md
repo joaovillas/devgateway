@@ -100,29 +100,39 @@ Um override que intercepta SHALL responder com o status, os cabeçalhos e o corp
 - **WHEN** um override declara o corpo como estrutura JSON e não declara tipo de conteúdo
 - **THEN** a resposta é serializada como JSON e carrega o tipo de conteúdo correspondente
 
-### Requirement: Probabilidade de aplicação
+### Requirement: Frequência de cada efeito
 
-Um override MAY declarar uma probabilidade entre `0.0` e `1.0`. Quando declarada, o gateway SHALL aplicar o override apenas nessa fração das requisições que ele seleciona; nas demais a requisição MUST seguir para o upstream como se o override não existisse. A ausência do campo MUST equivaler a `1.0`. Valores fora do intervalo MUST ser recusados na validação da configuração.
+Cada efeito declarado por um override — a resposta declarada, a latência e a queda de conexão — MAY declarar sua própria frequência, entre `0.0` e `1.0`, e o gateway SHALL sortear cada efeito de forma independente a cada requisição que o override seleciona. Um efeito sem frequência declarada MUST valer sempre. Um efeito não sorteado MUST ser ignorado como se não estivesse declarado, e uma requisição em que nenhum efeito foi sorteado MUST seguir para o upstream sem alteração. Valores fora do intervalo MUST ser recusados na validação. Para compatibilidade, uma frequência declarada para o override inteiro MUST valer como padrão de todos os seus efeitos que não declaram a própria.
 
-#### Scenario: Probabilidade ausente aplica sempre
+#### Scenario: Efeito sem frequência vale sempre
 
-- **WHEN** um override sem o campo de probabilidade intercepta 20 requisições
-- **THEN** as 20 são respondidas pelo override
+- **WHEN** um override declara uma resposta sem frequência e intercepta 20 requisições
+- **THEN** as 20 são respondidas por ele
 
-#### Scenario: Probabilidade fracionária divide entre override e upstream
+#### Scenario: Cada efeito tem a sua frequência
 
-- **WHEN** um override declara probabilidade `0.3` com seed fixo e chegam 1000 requisições que ele seleciona
-- **THEN** a quantidade respondida pelo override fica dentro da tolerância estatística esperada para 30% e as demais são encaminhadas ao upstream
+- **WHEN** um override declara resposta `503` com frequência `0.3` e latência de `1s` sem frequência, com seed fixo, e chegam 1000 requisições que ele seleciona
+- **THEN** a quantidade respondida com `503` fica dentro da tolerância estatística esperada para 30%, as demais são encaminhadas ao upstream, e todas as 1000 são atrasadas
 
-#### Scenario: Probabilidade zero nunca aplica
+#### Scenario: Queda com frequência própria
 
-- **WHEN** um override declara probabilidade `0.0` e chegam requisições que ele seleciona
-- **THEN** todas são encaminhadas ao upstream
+- **WHEN** um override declara queda com frequência `0.05` e resposta declarada sem frequência, e chegam 1000 requisições que ele seleciona
+- **THEN** cerca de 5% das requisições são derrubadas e as demais recebem a resposta declarada
 
-#### Scenario: Probabilidade fora do intervalo é recusada
+#### Scenario: Frequência zero nunca aplica
 
-- **WHEN** um documento de rota declara probabilidade `1.5` num override
+- **WHEN** um efeito declara frequência `0.0` e chegam requisições que o override seleciona
+- **THEN** esse efeito nunca é aplicado, e os demais efeitos do override seguem valendo
+
+#### Scenario: Frequência fora do intervalo é recusada
+
+- **WHEN** um documento de rota declara frequência `1.5` num efeito
 - **THEN** a configuração é recusada com uma mensagem que aponta o campo inválido
+
+#### Scenario: Frequência do override vale para os efeitos sem a sua
+
+- **WHEN** um override declara frequência `0.3` para si, uma resposta sem frequência própria e uma latência com frequência `1.0`
+- **THEN** a resposta é sorteada em 30% das requisições e a latência é aplicada em todas
 
 ### Requirement: Latência e queda de conexão
 
@@ -179,7 +189,7 @@ Um override MAY declarar um tempo de vida e MAY declarar um número máximo de a
 
 ### Requirement: Determinismo por seed
 
-O gateway SHALL aceitar um seed para as decisões probabilísticas. Com o mesmo seed e a mesma sequência de requisições, o gateway MUST tomar exatamente as mesmas decisões de aplicação de override. Sem seed declarado, o gateway MUST usar uma origem de aleatoriedade não reproduzível.
+O gateway SHALL aceitar um seed para as decisões probabilísticas. Com o mesmo seed e a mesma sequência de requisições, o gateway MUST tomar exatamente as mesmas decisões de aplicação, efeito a efeito, na mesma ordem. Sem seed declarado, o gateway MUST usar uma origem de aleatoriedade não reproduzível.
 
 #### Scenario: Mesmo seed reproduz a mesma sequência
 
