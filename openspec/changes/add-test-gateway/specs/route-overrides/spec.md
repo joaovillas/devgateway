@@ -25,12 +25,17 @@ Uma rota sem nenhum override SHALL encaminhar todas as requisições ao seu upst
 
 ### Requirement: Critérios de seleção do override
 
-Um override SHALL selecionar requisições por path e MAY restringir adicionalmente por método, cabeçalhos, parâmetros de query e corpo. O path MUST aceitar forma exata, curinga de sufixo e expressão regular. Os demais critérios MUST aceitar os operadores de igualdade exata, expressão regular, igualdade JSON e conteúdo de substring. Quando um override declara vários critérios, todos MUST casar.
+Um override SHALL selecionar requisições por path e MAY restringir adicionalmente por método, cabeçalhos, parâmetros de query e corpo. O path MUST aceitar forma exata, curinga de sufixo, parâmetros de segmento (`/viacep/:id/json`, em que cada `:nome` casa exatamente um segmento não vazio) e expressão regular. Os demais critérios MUST aceitar os operadores de igualdade exata, expressão regular, igualdade JSON e conteúdo de substring. Quando um override declara vários critérios, todos MUST casar.
 
 #### Scenario: Path exato
 
 - **WHEN** um override declara o path `/api/payments/bilulu` e chega uma requisição para esse path
 - **THEN** o override casa
+
+#### Scenario: Path com parâmetro de segmento
+
+- **WHEN** um override declara o path `/viacep/:id/json` e chegam requisições para `/viacep/40415345/json` e para `/viacep/40415345/extra/json`
+- **THEN** o override casa com a primeira e não casa com a segunda
 
 #### Scenario: Path com curinga
 
@@ -54,12 +59,17 @@ Um override SHALL selecionar requisições por path e MAY restringir adicionalme
 
 ### Requirement: Precedência por especificidade
 
-Quando mais de um override casa com a mesma requisição, o gateway SHALL aplicar o mais específico. Um path exato MUST prevalecer sobre um curinga, um curinga mais longo MUST prevalecer sobre um mais curto, e entre paths de igual especificidade MUST prevalecer o override com mais critérios declarados. Empates remanescentes MUST ser resolvidos pela ordem de declaração no documento da rota.
+Quando mais de um override casa com a mesma requisição, o gateway SHALL aplicar o mais específico. Um path exato MUST prevalecer sobre um path com parâmetros de segmento, que MUST prevalecer sobre um curinga (entre paths com parâmetros, prevalece o de mais segmentos literais), um curinga mais longo MUST prevalecer sobre um mais curto, e entre paths de igual especificidade MUST prevalecer o override com mais critérios declarados. Empates remanescentes MUST ser resolvidos pela ordem de declaração no documento da rota.
 
 #### Scenario: Path exato vence o curinga
 
 - **WHEN** existem overrides para `/api/payments/*` e para `/api/payments/bilulu`, e chega uma requisição para `/api/payments/bilulu`
 - **THEN** o override de path exato é aplicado
+
+#### Scenario: Parâmetro de segmento entre exato e curinga
+
+- **WHEN** existem overrides para `/viacep/*`, `/viacep/:id/json` e `/viacep/01001000/json`, e chegam requisições para `/viacep/01001000/json` e `/viacep/40415345/json`
+- **THEN** a primeira é atendida pelo override exato e a segunda pelo de parâmetro de segmento
 
 #### Scenario: Curinga mais longo vence o mais curto
 
@@ -216,7 +226,7 @@ Um override SHALL poder ser declarado desligado. Um override desligado MUST NOT 
 
 ### Requirement: Aprendizado de endpoints
 
-O gateway SHALL oferecer um modo aprendizado, desligado por padrão e alterável em tempo de execução. Com o modo desligado, o gateway MUST apenas aplicar a configuração existente, sem gravar nada além do histórico. Com o modo ligado, cada combinação de método e path ainda não conhecida numa rota, cuja requisição foi encaminhada e respondida pelo upstream, MUST ser gravada no documento dessa rota como um override desligado, com critério de path exato e método, e resposta declarada pré-preenchida com o status, todos os cabeçalhos e o corpo observados — excluídos apenas `Date`, `Content-Length` e cabeçalhos hop-by-hop. O override gravado MUST registrar a troca de origem e se o corpo foi truncado na captura. Uma combinação é conhecida quando a rota já possui override, ligado ou desligado, com o mesmo path exato e o mesmo método.
+O gateway SHALL oferecer um modo aprendizado, desligado por padrão e alterável em tempo de execução. Com o modo desligado, o gateway MUST apenas aplicar a configuração existente, sem gravar nada além do histórico. Com o modo ligado, cada combinação de método e path ainda não conhecida numa rota, cuja requisição foi encaminhada e respondida pelo upstream, MUST ser gravada no documento dessa rota como um override desligado, com critério de método e de path generalizado — segmentos que identificam um registro (só dígitos, UUID, ou hexadecimal/alfanumérico com dígitos e ao menos 8 caracteres) substituídos por parâmetros de segmento `:id`, `:id2`… e os demais mantidos literais — e resposta declarada pré-preenchida com o status, todos os cabeçalhos e o corpo observados — excluídos apenas `Date`, `Content-Length` e cabeçalhos hop-by-hop. O override gravado MUST registrar a troca de origem e se o corpo foi truncado na captura. Uma combinação é conhecida quando a rota já possui override, ligado ou desligado, do mesmo método cujo path generalizado é igual ou cujo critério de path casa com a requisição. Ao gravar um override generalizado, os overrides aprendidos anteriormente com path exato que ele cobre MUST ser substituídos por ele, sem duplicar a regra.
 
 #### Scenario: Endpoints novos são aprendidos
 
@@ -242,6 +252,21 @@ O gateway SHALL oferecer um modo aprendizado, desligado por padrão e alterável
 
 - **WHEN** o modo aprendizado está ligado e a requisição é respondida por override, por `404` sem rota ou por `502` do gateway
 - **THEN** nenhum override é aprendido a partir dela
+
+#### Scenario: Identificador vira parâmetro
+
+- **WHEN** o modo aprendizado está ligado e chegam `GET /viacep/40415345/json` e depois `GET /viacep/01001000/json`
+- **THEN** o documento da rota passa a conter um único override desligado com path `/viacep/:id/json`
+
+#### Scenario: Segmento literal preservado
+
+- **WHEN** o modo aprendizado está ligado e chegam `GET /api/users/me` e `GET /api/users/42`
+- **THEN** são aprendidos `/api/users/me` e `/api/users/:id` como overrides distintos
+
+#### Scenario: Aprendido exato é absorvido
+
+- **WHEN** a rota já tem um override aprendido com path `/viacep/40415345/json` e o aprendizado grava `/viacep/:id/json` para o mesmo método
+- **THEN** o override exato aprendido é substituído pelo generalizado e o documento passa a ter um só
 
 #### Scenario: Corpo truncado sinalizado
 

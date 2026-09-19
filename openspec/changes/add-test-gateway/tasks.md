@@ -57,6 +57,7 @@
 - [x] 6.10 Implementar o cabeçalho de identificação da intervenção e a marcação na troca capturada, e verificar pelos dois cenários da requirement de identificação, pelo cenário "Identificação com intervenção" da requirement de identificação do gateway da spec `gateway-routing` (o cliente recebe `X-Gateway: route=payments; override=payments/flaky; intervention=synthesized` quando o override sintetiza a resposta) e pelos três cenários da requirement de distinção da spec `traffic-capture`, e pelo cenário "Filtro por intervenção" da mesma spec com uma troca sintetizada por override real (em 5.3 a troca sintetizada foi registrada pelo caminho da captura, sem o motor de overrides)
 - [x] 6.11 Implementar o liga/desliga do override, com desligados fora da seleção e da precedência, e verificar pelos três cenários da requirement de override ligado e desligado
 - [x] 6.12 Implementar o modo aprendizado — detecção de método e path desconhecidos após resposta do upstream, geração do override desligado com resposta completa e origem, gravação atômica do documento e reconstrução do snapshot fora do caminho da requisição — e verificar pelos seis cenários da requirement de aprendizado de endpoints
+- [ ] 6.13 Implementar parâmetros de segmento no path das regras (`/viacep/:id/json`), com precedência entre exato e expressão regular, e a generalização no aprendizado (detecção de identificadores, conhecimento por casamento, absorção dos aprendidos exatos cobertos), e verificar pelo cenário de path com parâmetro e pelos três cenários novos do aprendizado
 
 ## 7. API de administração
 
@@ -84,6 +85,7 @@
 - [ ] 8.9 Implementar a edição com paridade só por controles — todos os campos de rota, override e processo editáveis na interface, sem exibir o YAML ou JSON dos documentos, com erros de validação junto do controle e valores do ambiente travados — e verificar pelos quatro cenários da requirement de edição com paridade
 - [x] 8.10 Implementar o liga/desliga do override e do modo aprendizado, a distinção dos overrides aprendidos e o acesso à troca de origem, e verificar pelos três cenários da requirement correspondente
 - [x] 8.11 Adotar o vocabulário do usuário em toda a interface (seu app, serviço, entrada, destino e regra no lugar de cliente, rota, casamento, upstream e override), mantendo os termos internos só em identificadores, API e arquivos, e verificar pelo cenário da requirement de vocabulário do usuário
+- [ ] 8.12 Exibir e editar paths com parâmetros de segmento na interface (os `:id` destacados como parâmetro, aceitos no cadastro e na edição de regra), e verificar criando uma regra `/viacep/:id/json` pela interface
 
 ## 9. Distribuição e documentação
 
