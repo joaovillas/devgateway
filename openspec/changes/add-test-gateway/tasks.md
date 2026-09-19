@@ -86,6 +86,8 @@
 - [x] 8.10 Implementar o liga/desliga do override e do modo aprendizado, a distinção dos overrides aprendidos e o acesso à troca de origem, e verificar pelos três cenários da requirement correspondente
 - [x] 8.11 Adotar o vocabulário do usuário em toda a interface (seu app, serviço, entrada, destino e regra no lugar de cliente, rota, casamento, upstream e override), mantendo os termos internos só em identificadores, API e arquivos, e verificar pelo cenário da requirement de vocabulário do usuário
 - [x] 8.12 Exibir e editar paths com parâmetros de segmento na interface (os `:id` destacados como parâmetro, aceitos no cadastro e na edição de regra), e verificar criando uma regra `/viacep/:id/json` pela interface
+- [ ] 8.13 Implementar o modo simples (padrão) e o modo avançado, com a escolha lembrada e o resumo indicando recursos avançados, e verificar pelos quatro cenários da requirement correspondente
+- [ ] 8.14 Enxugar a inspeção de tráfego (colunas essenciais, intervenção junto do status, coluna de serviço só sem filtro, filtros recolhidos com os ativos visíveis), e verificar pelos três cenários da requirement de tráfego enxuto
 
 ## 9. Distribuição e documentação
 

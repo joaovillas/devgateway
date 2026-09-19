@@ -91,6 +91,49 @@ A interface SHALL permitir ajustar probabilidade, latência e queda de conexão 
 - **WHEN** um override é desligado pela interface
 - **THEN** as requisições seguintes voltam a ser encaminhadas ao upstream e o destaque da rota é removido
 
+### Requirement: Modo simples e modo avançado
+
+A interface SHALL oferecer dois modos de detalhe, com o modo simples como padrão. No modo simples, cada regra MUST mostrar apenas liga/desliga, nome, o efeito resumido (status sintetizado, latência ou queda) e a probabilidade; o modo avançado MUST revelar latência, queda, critérios de seleção, resposta declarada, tempo de vida e limite de aplicações, e os campos completos do serviço e do processo. A escolha do modo MUST ser lembrada entre visitas. Uma regra que usa recursos revelados só no avançado MUST continuar indicando isso no modo simples, para que nada fique escondido sem aviso.
+
+#### Scenario: Simples é o padrão
+
+- **WHEN** a interface é aberta pela primeira vez com um serviço selecionado
+- **THEN** cada regra mostra apenas liga/desliga, nome, efeito e probabilidade
+
+#### Scenario: Avançado revela o resto
+
+- **WHEN** o modo avançado é acionado
+- **THEN** latência, queda, critérios, resposta, tempo de vida e limite de aplicações passam a ser editáveis na mesma tela
+
+#### Scenario: Modo lembrado
+
+- **WHEN** o modo avançado é acionado e a página é recarregada
+- **THEN** a interface volta no modo avançado
+
+#### Scenario: Recurso avançado visível no simples
+
+- **WHEN** uma regra declara latência e limite de aplicações e o modo simples está ativo
+- **THEN** a regra indica esses ajustes no resumo, mesmo sem exibir seus controles
+
+### Requirement: Tráfego enxuto
+
+A lista de trocas SHALL mostrar por padrão apenas hora, método, path, status, tempo e a representação temporal, com a intervenção sinalizada junto do status. A coluna do serviço MUST aparecer somente quando a lista não está filtrada por um serviço. Os filtros MUST ficar recolhidos atrás de um único controle, e os filtros ativos MUST permanecer visíveis e removíveis um a um.
+
+#### Scenario: Colunas enxutas
+
+- **WHEN** a inspeção de tráfego é aberta filtrada por um serviço
+- **THEN** a lista mostra hora, método, path, status, tempo e o waterfall, sem a coluna do serviço
+
+#### Scenario: Filtros recolhidos
+
+- **WHEN** a inspeção de tráfego é aberta sem nenhum filtro
+- **THEN** os controles de filtro não ocupam a tela e ficam atrás de um único controle
+
+#### Scenario: Filtro ativo permanece visível
+
+- **WHEN** um filtro de faixa de status é aplicado e o controle de filtros é fechado
+- **THEN** o filtro ativo continua visível e pode ser removido em um gesto
+
 ### Requirement: Edição com paridade aos documentos
 
 A interface SHALL permitir consultar e alterar tudo o que `gateway.json` e os documentos de rota configuram, exclusivamente por meio da API de administração e somente por controles visuais. A interface MUST NOT exibir nem exigir a edição do conteúdo YAML ou JSON dos documentos: eles continuam sendo a fonte de verdade em disco, editáveis no editor do usuário, mas a interface opera sobre os valores. Valores definidos por variável de ambiente MUST aparecer travados, indicando a variável responsável.
