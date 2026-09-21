@@ -3,7 +3,7 @@
 - [x] 1.1 Initialize the Go module and the `cmd/gateway`, `internal/...`, `web/` layout, and verify that `go build ./...` completes on a clean clone
 - [x] 1.2 Commit a minimal `web/dist/index.html` and the `//go:embed all:web/dist` directive, and verify that `go build ./...` completes without the frontend having been built
 - [x] 1.3 Create the `Makefile` (or `Taskfile`) with build, test and lint targets, and verify that each target runs from scratch
-- [ ] 1.4 Set up CI running the build, `go vet` and the tests with `-race`, and verify that the pipeline passes on the first commit
+- [x] 1.4 Set up CI running the build, `go vet` and the tests with `-race`, and verify that the pipeline passes on the first commit
 
 ## 2. Configuration
 
